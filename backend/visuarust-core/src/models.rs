@@ -5,7 +5,7 @@ use rustc_middle::{
     middle::region::ScopeTree,
     mir::{
         BasicBlock, Body, BorrowKind, Local, LocalDecl, Location, Operand, Rvalue, Statement,
-        StatementKind,
+        StatementKind, VarDebugInfoContents,
     },
     ty::{RegionKind, TyKind},
 };
@@ -234,7 +234,7 @@ impl MirAnalyzer {
         > = HashMap::new();
         let locations = facts.location_table.as_ref().unwrap();
         for (loc_idx, locals) in output.var_live_on_entry.iter() {
-            log::info!("var live {:?}", loc_idx);
+            //log::info!("var live {:?}", loc_idx);
             let location = locations.to_location(*loc_idx);
             for local in locals {
                 if local_live_locs.get(local).is_none() {
@@ -282,14 +282,25 @@ impl MirAnalyzer {
             }
         }
 
+        let mut user_vars = HashMap::new();
+        for debug in mir.var_debug_info.iter() {
+            match &debug.value {
+                VarDebugInfoContents::Place(p) => {
+                    user_vars.insert(p.local, debug.source_info.span);
+                }
+                _ => {}
+            }
+        }
+
         // collect declared variables
         let mut decls = Vec::new();
         for (local, decl) in mir.local_decls.iter_enumerated() {
-            let span = Range::from(decl.source_info.span);
+            //let span = Range::from(decl.source_info.span);
             let local_index = local.index();
             let ty = decl.ty.to_string();
             let lives = local_live_spans.get(&local).cloned();
             if decl.is_user_variable() {
+                let span = user_vars.get(&local).cloned().unwrap().into();
                 decls.push(Decl::User {
                     local_index,
                     span,
@@ -347,7 +358,7 @@ impl MirAnalyzer {
                                     BorrowKind::Mut { .. } => true,
                                     _ => false,
                                 };
-                                let regvid = region.as_var();
+                                //let regvid = region.as_var();
                                 //let regvid = regctx.to_region_vid(*region);
                                 //let outlive = regctx.var_infos.get(regvid).map(|v| );
 
@@ -393,6 +404,7 @@ impl MirAnalyzer {
                             rval: rv,
                         });
                     }
+                    StatementKind::Retag(kind, place) => {}
                     _ => {}
                 }
             }
