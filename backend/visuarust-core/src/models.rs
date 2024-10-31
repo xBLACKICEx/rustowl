@@ -95,54 +95,16 @@ impl MirVariables {
     }
 }
 
-/*
-#[derive(Serialize, Clone, Debug)]
-#[serde(rename_all = "snake_case", tag = "type")]
-pub enum Decl {
-    User { index: usize },
-    Other { index: usize },
-}
-
-impl Decl {
-    pub fn from_local_decl(region_scope_tree: &ScopeTree, decl: &LocalDecl) {
-        let range = Range::from(decl.source_info.span);
-        match decl.ty.kind {
-            TyKind::Ref(region, ty, m) => match region.kind {
-                RegionKind::ReLateParam(region) => {
-                    let local = region.scope.as_local().unwrap();
-                    region_scope_tree.var_scope(local);}
-                _ => {}
-            }
-            _ => {}
-        }
-        if decl.is_user_variable() {}
-
-    }
-}
-*/
-
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum Item {
-    Function {
-        span: Range,
-        mir: MirAnalyzer, //decls: Vec,
-    },
+    Function { span: Range, mir: MirAnalyzer },
 }
 
 #[derive(Serialize, Clone, Debug)]
 pub struct CollectedData {
     pub items: Vec<Item>,
 }
-
-/*
-pub(crate) struct DataCollector {
-    locals: HashMap<Local, ()>,
-}
-impl CollectedData {
-    pub(crate) fn collect_local(local: Local) {}
-}
-*/
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
@@ -190,6 +152,7 @@ pub struct MirBasicBlock {
 pub enum Decl {
     User {
         local_index: usize,
+        name: String,
         span: Range,
         ty: String,
         lives: Option<Vec<Range>>,
@@ -210,15 +173,11 @@ impl MirAnalyzer {
         compiler: &'c Compiler,
         facts: &'a BodyWithBorrowckFacts<'tcx>,
     ) -> Self {
-        //let regctx = &facts.region_inference_context;
         let mir = &facts.body;
 
         let af = &**facts.input_facts.as_ref().unwrap();
         let output = PoloniusOutput::compute(af, FromStr::from_str("Hybrid").unwrap(), true);
 
-        //let output = &**facts.output_facts.as_ref().unwrap();
-
-        //let constraints: Vec<_> = regctx.outlives_constraints().collect();
         let source_map = compiler.sess.source_map();
 
         // collect basic blocks
@@ -234,7 +193,6 @@ impl MirAnalyzer {
         > = HashMap::new();
         let locations = facts.location_table.as_ref().unwrap();
         for (loc_idx, locals) in output.var_live_on_entry.iter() {
-            //log::info!("var live {:?}", loc_idx);
             let location = locations.to_location(*loc_idx);
             for local in locals {
                 if local_live_locs.get(local).is_none() {
@@ -286,7 +244,10 @@ impl MirAnalyzer {
         for debug in mir.var_debug_info.iter() {
             match &debug.value {
                 VarDebugInfoContents::Place(p) => {
-                    user_vars.insert(p.local, debug.source_info.span);
+                    user_vars.insert(
+                        p.local,
+                        (debug.source_info.span, debug.name.as_str().to_owned()),
+                    );
                 }
                 _ => {}
             }
@@ -300,10 +261,11 @@ impl MirAnalyzer {
             let ty = decl.ty.to_string();
             let lives = local_live_spans.get(&local).cloned();
             if decl.is_user_variable() {
-                let span = user_vars.get(&local).cloned().unwrap().into();
+                let (span, name) = user_vars.get(&local).cloned().unwrap();
                 decls.push(Decl::User {
                     local_index,
-                    span,
+                    name,
+                    span: Range::from(span),
                     ty,
                     lives,
                 });
@@ -358,35 +320,6 @@ impl MirAnalyzer {
                                     BorrowKind::Mut { .. } => true,
                                     _ => false,
                                 };
-                                //let regvid = region.as_var();
-                                //let regvid = regctx.to_region_vid(*region);
-                                //let outlive = regctx.var_infos.get(regvid).map(|v| );
-
-                                /*
-                                let regionc: Vec<_> = constraints
-                                    .iter()
-                                    .filter(|v| {
-                                        regctx.eval_equal(v.sup, regvid)
-                                            || regctx.eval_equal(v.sub, regvid)
-                                    })
-                                    .collect();
-                                //regionc[0].locations
-                                /*
-                                    for varinfo in regctx.var_infos.iter() {
-                                        varinfo.origin.span()
-                                    }
-                                    let region_constraints: Vec<_> =
-                                        constraints.iter().filter(|v| v.sub == regvid).collect();
-                                */
-                                let min = regionc.iter().map(|v| v.span.lo().0).min();
-                                let max = regionc.iter().map(|v| v.span.hi().0).max();
-                                let outlive = match (min, max) {
-                                    (Some(min), Some(max)) => {
-                                        Some(Range::new(min.into(), max.into()))
-                                    }
-                                    _ => None,
-                                };
-                                */
                                 let local = place.local;
                                 let outlive = None;
                                 Some(MirRval::Borrow {
