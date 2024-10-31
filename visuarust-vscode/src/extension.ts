@@ -31,12 +31,37 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(disposable);
 
-  const lifetimeDecoration = vscode.window.createTextEditorDecorationType({
+  const lifetimeDecorationType = vscode.window.createTextEditorDecorationType({
     light: {
-      textDecoration: "underline 4px darkblue",
+      textDecoration: "underline dotted 4px darkgreen",
     },
     dark: {
-      textDecoration: "underline 4px lightblue",
+      textDecoration: "underline dotted 4px lightgreen",
+    },
+  });
+  const userVarDeclDecorationType =
+    vscode.window.createTextEditorDecorationType({
+      light: {
+        backgroundColor: "lightred",
+      },
+      dark: {
+        backgroundColor: "darkred",
+      },
+    });
+  const mutBorrowDecorationType = vscode.window.createTextEditorDecorationType({
+    light: { backgroundColor: "lightblue" },
+    dark: { backgroundColor: "darkblue" },
+  });
+  const imBorrowDecorationType = vscode.window.createTextEditorDecorationType({
+    light: { backgroundColor: "lightgreen" },
+    dark: { backgroundColor: "darkgreen" },
+  });
+  const moveDecorationType = vscode.window.createTextEditorDecorationType({
+    light: {
+      backgroundColor: "orange",
+    },
+    dark: {
+      backgroundColor: "darkorange",
     },
   });
 
@@ -64,28 +89,99 @@ export function activate(context: vscode.ExtensionContext) {
     }
     console.log("update deco");
     const cursor = editor.document.offsetAt(editor.selection.active);
-    const decorations: vscode.DecorationOptions[] = [];
+    const userVarDeclDecorations: vscode.DecorationOptions[] = [];
+    const lifetimeDecorations: vscode.DecorationOptions[] = [];
+    const mutBorrowDecorations: vscode.DecorationOptions[] = [];
+    const imBorrowDecorations: vscode.DecorationOptions[] = [];
+    const moveDecorations: vscode.DecorationOptions[] = [];
     for (const item of analyzed.items) {
       if (item.type === "function") {
         const mir = item.mir;
-        const local = selectLocal(cursor, mir);
+        const locals = selectLocal(cursor, mir);
         console.log(
-          "selected local is",
-          local,
-          "@",
+          "selected locals are",
+          locals,
+          "in",
           mir.decls.map((v) => v.local_index)
         );
-        const decl = mir.decls.filter((v) => v.local_index === local).at(0);
-        console.log(decl);
-        if (decl?.lives) {
-          for (const live of decl.lives) {
-            decorations.push({
-              range: rangeToRange(editor.document, live),
-              hoverMessage: "lifetime",
+        // get declaration from MIR Local
+        const declFromLocal = (local: number) =>
+          mir.decls.filter((v) => v.local_index === local).at(0);
+        const decls = mir.decls.filter((v) => locals.includes(v.local_index));
+        console.log("target decls:", decls);
+        // check all declaration
+        for (const decl of decls) {
+          if (decl.type === "user") {
+            userVarDeclDecorations.push({
+              range: rangeToRange(editor.document, decl.span),
+              hoverMessage: `declaration of \`${decl.name}\``,
             });
           }
-          editor.setDecorations(lifetimeDecoration, decorations);
+          for (const live of decl.lives || []) {
+            lifetimeDecorations.push({
+              range: rangeToRange(editor.document, live),
+              hoverMessage:
+                decl.type === "user"
+                  ? `lifetime of \`${decl.name}\``
+                  : "lifetime",
+            });
+          }
         }
+        // check all basic blocks
+        for (const bb of mir.basic_blocks) {
+          for (const stmt of bb.statements) {
+            if (stmt.type === "assign") {
+              if (stmt.rval && locals.includes(stmt.rval.target_local_index)) {
+                if (stmt.rval.type === "borrow") {
+                  const borrowFrom = declFromLocal(
+                    stmt.rval.target_local_index
+                  );
+                  if (stmt.rval.mutable) {
+                    mutBorrowDecorations.push({
+                      range: rangeToRange(editor.document, stmt.rval.range),
+                      hoverMessage:
+                        "mutable borrow" +
+                        (borrowFrom?.type === "user"
+                          ? ` of \`${borrowFrom.name}\``
+                          : ""),
+                    });
+                  } else {
+                    imBorrowDecorations.push({
+                      range: rangeToRange(editor.document, stmt.rval.range),
+                      hoverMessage:
+                        "immutable borrow" +
+                        (borrowFrom?.type === "user"
+                          ? ` of \`${borrowFrom.name}\``
+                          : ""),
+                    });
+                  }
+                } else if (stmt.rval.type === "move") {
+                  const movedFrom = declFromLocal(stmt.rval.target_local_index);
+                  const movedTo = declFromLocal(stmt.target_local_index);
+                  moveDecorations.push({
+                    range: rangeToRange(editor.document, stmt.rval.range),
+                    hoverMessage:
+                      "ownership moved" +
+                      (movedFrom?.type === "user"
+                        ? ` from \`${movedFrom.name}\``
+                        : "") +
+                      (movedTo?.type === "user"
+                        ? ` to \`${movedTo.name}\``
+                        : ""),
+                  });
+                }
+              }
+            }
+          }
+        }
+        editor.setDecorations(lifetimeDecorationType, lifetimeDecorations);
+        editor.setDecorations(
+          userVarDeclDecorationType,
+          userVarDeclDecorations
+        );
+        editor.setDecorations(mutBorrowDecorationType, mutBorrowDecorations);
+        editor.setDecorations(imBorrowDecorationType, imBorrowDecorations);
+        editor.setDecorations(moveDecorationType, moveDecorations);
       }
     }
   };

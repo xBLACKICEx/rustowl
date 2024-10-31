@@ -7,6 +7,7 @@ export const zMirDecl = z.union([
   z.object({
     type: z.literal("user"),
     local_index: zIndex,
+    name: z.string(),
     span: zRange,
     ty: z.string(),
     lives: zRange.array().nullish(),
