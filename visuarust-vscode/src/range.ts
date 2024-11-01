@@ -51,7 +51,7 @@ export const excludeRange = (from: Range, ex: Range): Range[] => {
     const r1 = { from: from.from, until: common.from - 1 };
     const r2 = { from: common.until + 1, until: from.until };
     return eliminatedRanges(
-      (r1.from <= r1.until ? [r1] : []).concat(r2.from <= r2.until ? [r2] : [])
+      (r1.from < r1.until ? [r1] : []).concat(r2.from < r2.until ? [r2] : [])
     );
   } else {
     return [from];

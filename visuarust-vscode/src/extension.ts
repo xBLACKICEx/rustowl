@@ -3,8 +3,8 @@
 import * as vscode from "vscode";
 
 import { analyze } from "./api/request";
-import { zCollectedData, zInfer } from "./api/schemas";
-import { selectLocal } from "./analyze";
+import { zCollectedData, zInfer, zRange } from "./api/schemas";
+import { selectLocal, messagesAndRanges } from "./analyze";
 import {
   decideHue,
   resetColor,
@@ -14,6 +14,8 @@ import {
   clearDecoration,
 } from "./decos";
 import { eliminatedRanges, rangeToRange, excludeRange } from "./range";
+
+type Range = zInfer<typeof zRange>;
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -65,6 +67,7 @@ export function activate(context: vscode.ExtensionContext) {
       backgroundColor: "darkorange",
     },
   });
+  const emptyDecorationType = vscode.window.createTextEditorDecorationType({});
 
   let analyzed: zInfer<typeof zCollectedData> | undefined = undefined;
 
@@ -90,24 +93,28 @@ export function activate(context: vscode.ExtensionContext) {
         // get declaration from MIR Local
         const notSelected = userDecls
           .filter((v) => !locals.includes(v.local_index))
-          .map((v) => ({ ...v, lives: eliminatedRanges(v.lives || []) }));
+          .map((v) => ({ ...v, lives: v.lives || [] }));
         const selected = userDecls
           .filter((v) => locals.includes(v.local_index))
-          .map((v) => ({ ...v, lives: eliminatedRanges(v.lives || []) }));
+          .map((v) => ({ ...v, lives: v.lives || [] }));
         const selectedLifetime = eliminatedRanges(
           selected.map((v) => v.lives).flat()
         );
         console.log("not selected vars:", notSelected);
         console.log("selected vars:", selected);
+        console.log(selectedLifetime);
         for (const i in notSelected) {
-          const lives = eliminatedRanges(
-            notSelected[i].lives
-              .map((n) =>
-                selectedLifetime.map((ex) => excludeRange(n, ex)).flat()
-              )
-              .flat()
-          );
-          notSelected[i].lives = lives;
+          let newLives: Range[] = [];
+          for (let j = 0; j < notSelected[i].lives.length; j++) {
+            let newRanges = [notSelected[i].lives[j]];
+            for (const selectedRange of selectedLifetime) {
+              for (let k = 0; k < newRanges.length; k++) {
+                newRanges = excludeRange(newRanges[k], selectedRange);
+              }
+            }
+            newLives = [...newLives, ...newRanges];
+          }
+          notSelected[i].lives = newLives;
         }
         const decls = [...notSelected, ...selected];
         console.log("target decls:", decls);
@@ -118,10 +125,6 @@ export function activate(context: vscode.ExtensionContext) {
           for (const live of decl.lives || []) {
             decoList.push({
               range: rangeToRange(editor.document, live),
-              hoverMessage:
-                decl.type === "user"
-                  ? `lifetime of \`${decl.name}\``
-                  : "lifetime",
             });
           }
           console.log("decolist", decoList);
@@ -148,7 +151,6 @@ export function activate(context: vscode.ExtensionContext) {
           if (decl.type === "user") {
             userVarDeclDecorations.push({
               range: rangeToRange(editor.document, decl.span),
-              hoverMessage: `declaration of \`${decl.name}\``,
             });
           }
         }
@@ -171,6 +173,12 @@ export function activate(context: vscode.ExtensionContext) {
         for (let itemId in analyzed.items) {
           const item = analyzed.items[itemId];
           if (item.type === "function") {
+            // eliminate redundant lives
+            for (const declId in item.mir.decls) {
+              item.mir.decls[declId].lives = item.mir.decls[declId].lives
+                ? eliminatedRanges(item.mir.decls[declId].lives)
+                : null;
+            }
             itemToLocalToDeco[itemId] = {};
             const locals = item.mir.decls
               .filter((v) => v.type === "user")
@@ -186,6 +194,10 @@ export function activate(context: vscode.ExtensionContext) {
             }
           }
         }
+        editor.setDecorations(
+          emptyDecorationType,
+          messagesAndRanges(editor.document, analyzed)
+        );
         // decoration initialize end
       } else {
         vscode.window.showErrorMessage(
@@ -240,20 +252,10 @@ export function activate(context: vscode.ExtensionContext) {
                     if (stmt.rval.mutable) {
                       mutBorrowDecorations.push({
                         range: rangeToRange(editor.document, stmt.rval.range),
-                        hoverMessage:
-                          "mutable borrow" +
-                          (borrowFrom?.type === "user"
-                            ? ` of \`${borrowFrom.name}\``
-                            : ""),
                       });
                     } else {
                       imBorrowDecorations.push({
                         range: rangeToRange(editor.document, stmt.rval.range),
-                        hoverMessage:
-                          "immutable borrow" +
-                          (borrowFrom?.type === "user"
-                            ? ` of \`${borrowFrom.name}\``
-                            : ""),
                       });
                     }
                   }
@@ -262,14 +264,6 @@ export function activate(context: vscode.ExtensionContext) {
                   const movedTo = declFromLocal(stmt.target_local_index);
                   moveDecorations.push({
                     range: rangeToRange(editor.document, stmt.rval.range),
-                    hoverMessage:
-                      "ownership moved" +
-                      (movedFrom?.type === "user"
-                        ? ` from \`${movedFrom.name}\``
-                        : "") +
-                      (movedTo?.type === "user"
-                        ? ` to \`${movedTo.name}\``
-                        : ""),
                   });
                 }
               }

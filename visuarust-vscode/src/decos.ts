@@ -41,12 +41,44 @@ const generateColor = (generated: Color[]) => {
 };
 */
 
-let generatedHue = 0;
-const generateHue = () => {
-  generatedHue += 70;
-  //return generatedHue % 360;
-  return Math.floor(Math.random() * 360);
+// 0 is RED - reserved for error
+let generatedHue: number[] = [0];
+export const resetColor = () => {
+  generatedHue = [0];
 };
+const hueCheck = (hue: number) => (hue < 0 ? 360 + (hue % 360) : hue % 360);
+const hueInRange = (toCheck: number, min: number, max: number) => {
+  const checked = hueCheck(toCheck);
+  const cMin = hueCheck(min);
+  const cMax = hueCheck(max);
+  if (cMax < cMin) {
+    return cMin <= checked || checked <= cMax;
+  } else {
+    return cMin <= checked && checked <= cMax;
+  }
+};
+const generateHue = () => {
+  const generate = () => hueCheck(Math.floor(Math.random() * 360));
+  const threshold = 30;
+  let generated = generate();
+  for (let i = 0; i < 10; i++) {
+    generated = generate();
+    // Don't use error color
+    if (hueInRange(generated, errorHue() - threshold, errorHue() + threshold)) {
+      i--;
+      continue;
+    }
+    if (
+      generatedHue.filter((v) => hueInRange(generated, v - 20, v + 20))
+        .length === 0
+    ) {
+      generatedHue.push(generated);
+      break;
+    }
+  }
+  return generated;
+};
+export const errorHue = () => generatedHue[0];
 
 // Lifetime decoration types
 const decoTypesForLifetime: vscode.TextEditorDecorationType[] = [
@@ -124,10 +156,6 @@ export const applyLifetimeDecoration = (editor: vscode.TextEditor) => {
 
 // Decide what color to use for ID
 let generatedColors: Color[] = [];
-export const resetColor = () => {
-  //generatedColors = [];
-  generatedHue = 0;
-};
 export const decideHue = (numbers: number[]): Record<number, number> => {
   const colorMap: Record<number, number> = {};
   for (const id of numbers) {
