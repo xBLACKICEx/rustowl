@@ -4,7 +4,16 @@ import * as vscode from "vscode";
 
 import { analyze } from "./api/request";
 import { zCollectedData, zInfer } from "./api/schemas";
-import { rangeToRange, selectLocal } from "./analyze";
+import { selectLocal } from "./analyze";
+import {
+  decideHue,
+  resetColor,
+  registerDecorationType,
+  applyDecoration,
+  resetDecorationType,
+  clearDecoration,
+} from "./decos";
+import { eliminatedRanges, rangeToRange, excludeRange } from "./range";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -31,30 +40,22 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(disposable);
 
-  const lifetimeDecorationType = vscode.window.createTextEditorDecorationType({
-    light: {
-      textDecoration: "underline dotted 4px darkgreen",
-    },
-    dark: {
-      textDecoration: "underline dotted 4px lightgreen",
-    },
-  });
   const userVarDeclDecorationType =
     vscode.window.createTextEditorDecorationType({
       light: {
-        backgroundColor: "lightred",
+        backgroundColor: "red",
       },
       dark: {
-        backgroundColor: "darkred",
+        backgroundColor: "crimson",
       },
     });
   const mutBorrowDecorationType = vscode.window.createTextEditorDecorationType({
     light: { backgroundColor: "lightblue" },
-    dark: { backgroundColor: "darkblue" },
+    dark: { backgroundColor: "blue" },
   });
   const imBorrowDecorationType = vscode.window.createTextEditorDecorationType({
     light: { backgroundColor: "lightgreen" },
-    dark: { backgroundColor: "darkgreen" },
+    dark: { backgroundColor: "green" },
   });
   const moveDecorationType = vscode.window.createTextEditorDecorationType({
     light: {
@@ -66,13 +67,126 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   let analyzed: zInfer<typeof zCollectedData> | undefined = undefined;
+
+  let itemToLocalToDeco: Record<number, Record<number, number>> = {};
+  const updateLifetimeDecoration = (editor: vscode.TextEditor) => {
+    if (!analyzed) {
+      return;
+    }
+    //clearDecoration(editor);
+    const cursor = editor.document.offsetAt(editor.selection.active);
+    for (const itemId in analyzed.items) {
+      const item = analyzed.items[itemId];
+      if (item.type === "function") {
+        const mir = item.mir;
+        const locals = selectLocal(cursor, mir);
+        console.log(
+          "selected locals are",
+          locals,
+          "in",
+          mir.decls.map((v) => v.local_index)
+        );
+        const userDecls = mir.decls.filter((v) => v.type === "user");
+        // get declaration from MIR Local
+        const notSelected = userDecls
+          .filter((v) => !locals.includes(v.local_index))
+          .map((v) => ({ ...v, lives: eliminatedRanges(v.lives || []) }));
+        const selected = userDecls
+          .filter((v) => locals.includes(v.local_index))
+          .map((v) => ({ ...v, lives: eliminatedRanges(v.lives || []) }));
+        const selectedLifetime = eliminatedRanges(
+          selected.map((v) => v.lives).flat()
+        );
+        console.log("not selected vars:", notSelected);
+        console.log("selected vars:", selected);
+        for (const i in notSelected) {
+          const lives = eliminatedRanges(
+            notSelected[i].lives
+              .map((n) =>
+                selectedLifetime.map((ex) => excludeRange(n, ex)).flat()
+              )
+              .flat()
+          );
+          notSelected[i].lives = lives;
+        }
+        const decls = [...notSelected, ...selected];
+        console.log("target decls:", decls);
+        // check all declaration
+        for (const decl of decls) {
+          const tyId = itemToLocalToDeco[itemId][decl.local_index];
+          const decoList = [];
+          for (const live of decl.lives || []) {
+            decoList.push({
+              range: rangeToRange(editor.document, live),
+              hoverMessage:
+                decl.type === "user"
+                  ? `lifetime of \`${decl.name}\``
+                  : "lifetime",
+            });
+          }
+          console.log("decolist", decoList);
+          applyDecoration(editor, tyId, decoList);
+        }
+      }
+    }
+  };
+
+  const updateUserVarDeclDecoration = (editor: vscode.TextEditor) => {
+    if (!analyzed) {
+      return;
+    }
+    const cursor = editor.document.offsetAt(editor.selection.active);
+    const userVarDeclDecorations: vscode.DecorationOptions[] = [];
+    for (const itemId in analyzed.items) {
+      const item = analyzed.items[itemId];
+      if (item.type === "function") {
+        const mir = item.mir;
+        const locals = selectLocal(cursor, mir);
+        for (const decl of mir.decls.filter((v) =>
+          locals.includes(v.local_index)
+        )) {
+          if (decl.type === "user") {
+            userVarDeclDecorations.push({
+              range: rangeToRange(editor.document, decl.span),
+              hoverMessage: `declaration of \`${decl.name}\``,
+            });
+          }
+        }
+      }
+    }
+    editor.setDecorations(userVarDeclDecorationType, userVarDeclDecorations);
+  };
+
   const startAnalyze = async (editor: vscode.TextEditor) => {
+    // reset decoration
+    resetColor();
+    resetDecorationType(editor);
     console.log("start analyzing...");
     try {
       const collected = await analyze(editor.document.getText());
       console.log(`analyzed: ${collected.success}`);
       if (collected.success) {
         analyzed = collected.collected;
+        // initialize and generate decorations
+        for (let itemId in analyzed.items) {
+          const item = analyzed.items[itemId];
+          if (item.type === "function") {
+            itemToLocalToDeco[itemId] = {};
+            const locals = item.mir.decls
+              .filter((v) => v.type === "user")
+              .map((v) => v.local_index);
+            const hues = decideHue(locals);
+            for (const local of locals) {
+              const hue = hues[local];
+              itemToLocalToDeco[itemId][local] = registerDecorationType(
+                vscode.window.createTextEditorDecorationType({
+                  textDecoration: `underline dotted 4px hsla(${hue}, 80%, 60%, 0.7)`,
+                })
+              );
+            }
+          }
+        }
+        // decoration initialize end
       } else {
         vscode.window.showErrorMessage(
           `Analyzer works but return compile error`
@@ -83,18 +197,23 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
   };
+
+  // update decorations, on any change (cursor, text...)
   const updateDecorations = (editor: vscode.TextEditor) => {
     if (!analyzed) {
       return;
     }
     console.log("update deco");
+
+    updateLifetimeDecoration(editor);
+    updateUserVarDeclDecoration(editor);
+
     const cursor = editor.document.offsetAt(editor.selection.active);
-    const userVarDeclDecorations: vscode.DecorationOptions[] = [];
-    const lifetimeDecorations: vscode.DecorationOptions[] = [];
     const mutBorrowDecorations: vscode.DecorationOptions[] = [];
     const imBorrowDecorations: vscode.DecorationOptions[] = [];
     const moveDecorations: vscode.DecorationOptions[] = [];
-    for (const item of analyzed.items) {
+    for (const itemId in analyzed.items) {
+      const item = analyzed.items[itemId];
       if (item.type === "function") {
         const mir = item.mir;
         const locals = selectLocal(cursor, mir);
@@ -107,26 +226,7 @@ export function activate(context: vscode.ExtensionContext) {
         // get declaration from MIR Local
         const declFromLocal = (local: number) =>
           mir.decls.filter((v) => v.local_index === local).at(0);
-        const decls = mir.decls.filter((v) => locals.includes(v.local_index));
-        console.log("target decls:", decls);
-        // check all declaration
-        for (const decl of decls) {
-          if (decl.type === "user") {
-            userVarDeclDecorations.push({
-              range: rangeToRange(editor.document, decl.span),
-              hoverMessage: `declaration of \`${decl.name}\``,
-            });
-          }
-          for (const live of decl.lives || []) {
-            lifetimeDecorations.push({
-              range: rangeToRange(editor.document, live),
-              hoverMessage:
-                decl.type === "user"
-                  ? `lifetime of \`${decl.name}\``
-                  : "lifetime",
-            });
-          }
-        }
+
         // check all basic blocks
         for (const bb of mir.basic_blocks) {
           for (const stmt of bb.statements) {
@@ -136,24 +236,26 @@ export function activate(context: vscode.ExtensionContext) {
                   const borrowFrom = declFromLocal(
                     stmt.rval.target_local_index
                   );
-                  if (stmt.rval.mutable) {
-                    mutBorrowDecorations.push({
-                      range: rangeToRange(editor.document, stmt.rval.range),
-                      hoverMessage:
-                        "mutable borrow" +
-                        (borrowFrom?.type === "user"
-                          ? ` of \`${borrowFrom.name}\``
-                          : ""),
-                    });
-                  } else {
-                    imBorrowDecorations.push({
-                      range: rangeToRange(editor.document, stmt.rval.range),
-                      hoverMessage:
-                        "immutable borrow" +
-                        (borrowFrom?.type === "user"
-                          ? ` of \`${borrowFrom.name}\``
-                          : ""),
-                    });
+                  if (borrowFrom?.type === "user") {
+                    if (stmt.rval.mutable) {
+                      mutBorrowDecorations.push({
+                        range: rangeToRange(editor.document, stmt.rval.range),
+                        hoverMessage:
+                          "mutable borrow" +
+                          (borrowFrom?.type === "user"
+                            ? ` of \`${borrowFrom.name}\``
+                            : ""),
+                      });
+                    } else {
+                      imBorrowDecorations.push({
+                        range: rangeToRange(editor.document, stmt.rval.range),
+                        hoverMessage:
+                          "immutable borrow" +
+                          (borrowFrom?.type === "user"
+                            ? ` of \`${borrowFrom.name}\``
+                            : ""),
+                      });
+                    }
                   }
                 } else if (stmt.rval.type === "move") {
                   const movedFrom = declFromLocal(stmt.rval.target_local_index);
@@ -174,11 +276,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
           }
         }
-        editor.setDecorations(lifetimeDecorationType, lifetimeDecorations);
-        editor.setDecorations(
-          userVarDeclDecorationType,
-          userVarDeclDecorations
-        );
+        //editor.setDecorations(lifetimeDecorationType, lifetimeDecorations);
         editor.setDecorations(mutBorrowDecorationType, mutBorrowDecorations);
         editor.setDecorations(imBorrowDecorationType, imBorrowDecorations);
         editor.setDecorations(moveDecorationType, moveDecorations);

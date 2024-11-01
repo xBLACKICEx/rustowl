@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
-import { zIndex, type zInfer, zMir, zRange } from "./api/schemas";
+import { zIndex, type zInfer, zMir, zRange, zMirDecl } from "./api/schemas";
+import { eliminatedRanges } from "./range";
 
 type Mir = zInfer<typeof zMir>;
 type Local = zInfer<typeof zIndex>;
@@ -9,16 +10,13 @@ export type Analyzed = {};
 
 export const analyzeMir = (mir: Mir) => {};
 
-export const rangeToRange = (doc: vscode.TextDocument, range: Range) =>
-  new vscode.Range(doc.positionAt(range.from), doc.positionAt(range.until));
-
 export const selectLocal = (pos: number, mir: Mir): Local[] => {
   const selected: Local[] = [];
   const select = (local: Local, range: Range) => {
-    console.log("select? ", pos, " @ ", range);
     if (pos < range.from || range.until < pos) {
       return undefined;
     }
+    console.log("selected ", pos, " @ ", range);
     selected.push(local);
   };
   console.log("select from position", pos);
@@ -43,4 +41,15 @@ export const selectLocal = (pos: number, mir: Mir): Local[] => {
     }
   }
   return selected;
+};
+
+type DeclLifetimes = Record<zInfer<typeof zIndex>, Range[]>;
+export const calculateDeclsLifetimes = (
+  decls: zInfer<typeof zMirDecl>[]
+): DeclLifetimes => {
+  const res: DeclLifetimes = {};
+  for (const decl of decls) {
+    res[decl.local_index] = decl.lives ? eliminatedRanges(decl.lives) : [];
+  }
+  return res;
 };
