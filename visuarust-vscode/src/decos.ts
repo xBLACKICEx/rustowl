@@ -130,7 +130,7 @@ let lifetimeDecos: [number, vscode.DecorationOptions][] = [];
 export const localDecoration = (
   doc: vscode.TextDocument,
   local: zInfer<typeof zIndex>,
-  range: zInfer<typeof zRange>
+  range: zInfer<typeof zRange>,
 ) => {
   let ty: number | undefined = undefined;
   for (let i = 0; i < lifetimeDecoTypeRecord.length; i++) {
@@ -148,7 +148,7 @@ export const applyLifetimeDecoration = (editor: vscode.TextEditor) => {
   for (let i = 0; i < decoTypesForLifetime.length; i++) {
     editor.setDecorations(
       decoTypesForLifetime[i],
-      lifetimeDecos.filter(([ty, opt]) => ty === i).map(([_ty, opt]) => opt)
+      lifetimeDecos.filter(([ty, opt]) => ty === i).map(([_ty, opt]) => opt),
     );
   }
   lifetimeDecos = [];
@@ -168,7 +168,7 @@ export const decideHue = (numbers: number[]): Record<number, number> => {
 
 let decorationTypes: vscode.TextEditorDecorationType[] = [];
 export const registerDecorationType = (
-  t: vscode.TextEditorDecorationType
+  t: vscode.TextEditorDecorationType,
 ): number => {
   decorationTypes.push(t);
   return decorationTypes.length - 1;
@@ -176,7 +176,7 @@ export const registerDecorationType = (
 export const applyDecoration = (
   editor: vscode.TextEditor,
   tyId: number,
-  opts: vscode.DecorationOptions[]
+  opts: vscode.DecorationOptions[],
 ) => {
   editor.setDecorations(decorationTypes[tyId], opts);
 };

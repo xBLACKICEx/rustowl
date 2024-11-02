@@ -23,7 +23,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Use the console to output diagnostic information (console.log) and errors (console.error)
   // This line of code will only be executed once when your extension is activated
   console.log(
-    'Congratulations, your extension "visuarust-vscode" is now active!'
+    'Congratulations, your extension "visuarust-vscode" is now active!',
   );
 
   // The command has been defined in the package.json file
@@ -35,9 +35,9 @@ export function activate(context: vscode.ExtensionContext) {
       // The code you place here will be executed every time your command is executed
       // Display a message box to the user
       vscode.window.showInformationMessage(
-        "Hello World from visuarust-vscode!"
+        "Hello World from visuarust-vscode!",
       );
-    }
+    },
   );
 
   context.subscriptions.push(disposable);
@@ -45,12 +45,20 @@ export function activate(context: vscode.ExtensionContext) {
   const userVarDeclDecorationType =
     vscode.window.createTextEditorDecorationType({
       light: {
-        backgroundColor: "red",
+        backgroundColor: "yellow",
       },
       dark: {
-        backgroundColor: "crimson",
+        backgroundColor: "yellow",
       },
     });
+  const dropDecorationType = vscode.window.createTextEditorDecorationType({
+    light: {
+      backgroundColor: "red",
+    },
+    dark: {
+      backgroundColor: "crimson",
+    },
+  });
   const mutBorrowDecorationType = vscode.window.createTextEditorDecorationType({
     light: { backgroundColor: "lightblue" },
     dark: { backgroundColor: "blue" },
@@ -87,7 +95,7 @@ export function activate(context: vscode.ExtensionContext) {
           "selected locals are",
           locals,
           "in",
-          mir.decls.map((v) => v.local_index)
+          mir.decls.map((v) => v.local_index),
         );
         const userDecls = mir.decls.filter((v) => v.type === "user");
         // get declaration from MIR Local
@@ -98,7 +106,7 @@ export function activate(context: vscode.ExtensionContext) {
           .filter((v) => locals.includes(v.local_index))
           .map((v) => ({ ...v, lives: v.lives || [] }));
         const selectedLifetime = eliminatedRanges(
-          selected.map((v) => v.lives).flat()
+          selected.map((v) => v.lives).flat(),
         );
         console.log("not selected vars:", notSelected);
         console.log("selected vars:", selected);
@@ -146,7 +154,7 @@ export function activate(context: vscode.ExtensionContext) {
         const mir = item.mir;
         const locals = selectLocal(cursor, mir);
         for (const decl of mir.decls.filter((v) =>
-          locals.includes(v.local_index)
+          locals.includes(v.local_index),
         )) {
           if (decl.type === "user") {
             userVarDeclDecorations.push({
@@ -189,19 +197,19 @@ export function activate(context: vscode.ExtensionContext) {
               itemToLocalToDeco[itemId][local] = registerDecorationType(
                 vscode.window.createTextEditorDecorationType({
                   textDecoration: `underline dotted 4px hsla(${hue}, 80%, 60%, 0.7)`,
-                })
+                }),
               );
             }
           }
         }
         editor.setDecorations(
           emptyDecorationType,
-          messagesAndRanges(editor.document, analyzed)
+          messagesAndRanges(editor.document, analyzed),
         );
         // decoration initialize end
       } else {
         vscode.window.showErrorMessage(
-          `Analyzer works but return compile error`
+          `Analyzer works but return compile error`,
         );
       }
     } catch (err) {
@@ -224,6 +232,7 @@ export function activate(context: vscode.ExtensionContext) {
     const mutBorrowDecorations: vscode.DecorationOptions[] = [];
     const imBorrowDecorations: vscode.DecorationOptions[] = [];
     const moveDecorations: vscode.DecorationOptions[] = [];
+    const dropDecorations: vscode.DecorationOptions[] = [];
     for (const itemId in analyzed.items) {
       const item = analyzed.items[itemId];
       if (item.type === "function") {
@@ -233,7 +242,7 @@ export function activate(context: vscode.ExtensionContext) {
           "selected locals are",
           locals,
           "in",
-          mir.decls.map((v) => v.local_index)
+          mir.decls.map((v) => v.local_index),
         );
         // get declaration from MIR Local
         const declFromLocal = (local: number) =>
@@ -246,7 +255,7 @@ export function activate(context: vscode.ExtensionContext) {
               if (stmt.rval && locals.includes(stmt.rval.target_local_index)) {
                 if (stmt.rval.type === "borrow") {
                   const borrowFrom = declFromLocal(
-                    stmt.rval.target_local_index
+                    stmt.rval.target_local_index,
                   );
                   if (borrowFrom?.type === "user") {
                     if (stmt.rval.mutable) {
@@ -269,11 +278,20 @@ export function activate(context: vscode.ExtensionContext) {
               }
             }
           }
+          if (
+            bb.terminator?.type === "drop" &&
+            locals.includes(bb.terminator.local_index)
+          ) {
+            dropDecorations.push({
+              range: rangeToRange(editor.document, bb.terminator.range),
+            });
+          }
         }
         //editor.setDecorations(lifetimeDecorationType, lifetimeDecorations);
         editor.setDecorations(mutBorrowDecorationType, mutBorrowDecorations);
         editor.setDecorations(imBorrowDecorationType, imBorrowDecorations);
         editor.setDecorations(moveDecorationType, moveDecorations);
+        editor.setDecorations(dropDecorationType, dropDecorations);
       }
     }
   };
@@ -285,7 +303,7 @@ export function activate(context: vscode.ExtensionContext) {
       activeEditor = editor;
     },
     null,
-    context.subscriptions
+    context.subscriptions,
   );
   let timeout: NodeJS.Timeout | undefined = undefined;
   vscode.workspace.onDidChangeTextDocument(
@@ -304,7 +322,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
     },
     null,
-    context.subscriptions
+    context.subscriptions,
   );
   vscode.window.onDidChangeTextEditorSelection(
     (ev) => {
@@ -313,7 +331,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
     },
     null,
-    context.subscriptions
+    context.subscriptions,
   );
 }
 

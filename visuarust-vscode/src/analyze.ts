@@ -52,7 +52,7 @@ export const selectLocal = (pos: number, mir: Mir): Local[] => {
 
 type DeclLifetimes = Record<zInfer<typeof zIndex>, Range[]>;
 export const calculateDeclsLifetimes = (
-  decls: zInfer<typeof zMirDecl>[]
+  decls: zInfer<typeof zMirDecl>[],
 ): DeclLifetimes => {
   const res: DeclLifetimes = {};
   for (const decl of decls) {
@@ -64,7 +64,7 @@ export const calculateDeclsLifetimes = (
 // obtain the list of message and range
 export const messagesAndRanges = (
   doc: vscode.TextDocument,
-  { items }: zInfer<typeof zCollectedData>
+  { items }: zInfer<typeof zCollectedData>,
 ) => {
   const res: vscode.DecorationOptions[] = [];
   const push = (range: Range, hoverMessage: string) => {
@@ -96,7 +96,7 @@ export const messagesAndRanges = (
                     "mutable borrow" +
                       (borrowFrom?.type === "user"
                         ? ` of \`${borrowFrom.name}\``
-                        : "")
+                        : ""),
                   );
                 } else {
                   push(
@@ -104,7 +104,7 @@ export const messagesAndRanges = (
                     "immutable borrow" +
                       (borrowFrom?.type === "user"
                         ? ` of \`${borrowFrom.name}\``
-                        : "")
+                        : ""),
                   );
                 }
               }
@@ -117,10 +117,16 @@ export const messagesAndRanges = (
                   (movedFrom?.type === "user"
                     ? ` from \`${movedFrom.name}\``
                     : "") +
-                  (movedTo?.type === "user" ? ` to \`${movedTo.name}\`` : "")
+                  (movedTo?.type === "user" ? ` to \`${movedTo.name}\`` : ""),
               );
             }
           }
+        }
+      }
+      if (bb.terminator?.type === "drop") {
+        const decl = getDeclFromLocal(bb.terminator.local_index);
+        if (decl?.type === "user") {
+          push(bb.terminator.range, `value of \`${decl.name}\` dropped`);
         }
       }
     }

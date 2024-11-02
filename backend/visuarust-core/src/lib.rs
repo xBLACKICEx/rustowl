@@ -10,8 +10,10 @@ pub extern crate rustc_middle;
 pub extern crate rustc_session;
 pub extern crate rustc_span;
 
+mod analyze;
 pub mod models;
 
+use analyze::MirAnalyzer;
 use models::*;
 use rustc_borrowck::consumers;
 use rustc_hir::{ExprKind, ItemKind};
@@ -19,8 +21,6 @@ use rustc_interface::interface;
 use rustc_middle::mir::{BindingForm, Body, Local, LocalDecl, LocalInfo, LocalKind, StatementKind};
 use rustc_session::config;
 use rustc_span::{FileName, RealFileName};
-use std::env;
-use std::fs;
 use std::path::PathBuf;
 use std::sync::{atomic::AtomicBool, Arc};
 

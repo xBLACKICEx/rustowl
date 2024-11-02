@@ -51,8 +51,13 @@ export const zMirStatement = z.union([
     rval: zMirRval.nullish(),
   }),
 ]);
+export const zMirTerminator = z.union([
+  z.object({ type: z.literal("drop"), local_index: zIndex, range: zRange }),
+  z.object({ type: z.literal("other") }),
+]);
 export const zMirBasicBlock = z.object({
   statements: z.array(zMirStatement),
+  terminator: zMirTerminator.nullish(),
 });
 export const zMir = z.object({
   basic_blocks: z.array(zMirBasicBlock),
