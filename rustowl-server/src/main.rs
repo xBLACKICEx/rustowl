@@ -1,9 +1,9 @@
 #![feature(rustc_private)]
 
 use axum::{routing, serve, Json, Router};
+use rustowl_core::{models::*, run_compiler};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
-use visuarust_core::{models::*, run_compiler};
 
 #[derive(Serialize)]
 pub struct ApiError {

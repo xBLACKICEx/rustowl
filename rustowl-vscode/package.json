@@ -1,6 +1,6 @@
 {
-  "name": "visuarust-vscode",
-  "displayName": "visuarust-vscode",
+  "name": "rustowl-vscode",
+  "displayName": "rustowl-vscode",
   "description": "Visualize ownership and lifetimes in Rust",
   "version": "0.0.1",
   "engines": {
@@ -15,10 +15,6 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
-      {
-        "command": "visuarust-vscode.helloWorld",
-        "title": "Hello World"
-      }
     ]
   },
   "scripts": {

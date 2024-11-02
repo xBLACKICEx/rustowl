@@ -466,6 +466,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f"
 
 [[package]]
+name = "rustowl-core"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "serde",
+]
+
+[[package]]
+name = "rustowl-server"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "log",
+ "rustowl-core",
+ "serde",
+ "simple_logger",
+ "tokio",
+]
+
+[[package]]
 name = "rustversion"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -712,26 +732,6 @@ name = "unicode-ident"
 version = "1.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e91b56cd4cadaeb79bbf1a5645f6b4f8dc5bde8834ad5894a8db35fda9efa1fe"
-
-[[package]]
-name = "visuarust-backend"
-version = "0.1.0"
-dependencies = [
- "axum",
- "log",
- "serde",
- "simple_logger",
- "tokio",
- "visuarust-core",
-]
-
-[[package]]
-name = "visuarust-core"
-version = "0.1.0"
-dependencies = [
- "log",
- "serde",
-]
 
 [[package]]
 name = "wasi"
