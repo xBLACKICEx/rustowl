@@ -2,7 +2,7 @@ import axios from "axios";
 import { zAnalyzeResponse } from "./schemas";
 
 export const analyze = async (code: string) => {
-  const resp = await axios.post("http://localhost:8000/analyze", {
+  const resp = await axios.post("http://localhost:7819/analyze", {
     name: "main.rs",
     code,
   });

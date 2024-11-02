@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 serde.workspace = true
 log.workspace = true
-polonius-engine.workspace = true
 
 [package.metadata.rust-analyzer]
 rustc_private = true

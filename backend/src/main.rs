@@ -75,7 +75,7 @@ async fn main() {
     //run_compiler(&filename, &fs::read_to_string(&filename).unwrap());
     //println!("Hello, world!");
     let router = Router::new().route("/analyze", routing::post(analyze));
-    serve(TcpListener::bind("0.0.0.0:8000").await.unwrap(), router)
-        .await
-        .unwrap();
+    let binded = TcpListener::bind("0.0.0.0:7819").await.unwrap();
+    log::info!("start listening 0.0.0.0:7819");
+    serve(binded, router).await.unwrap();
 }
