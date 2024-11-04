@@ -10,7 +10,7 @@ fn main() {
 use std::sync::{Arc, Mutex};
 
 fn mutex() {
-    let m = Arc::new(Mutex::new());
+    let m = Arc::new(Mutex::new(1));
     let m1 = m.clone();
     let m2 = m.clone();
     if let Ok(locked) = m.lock() {

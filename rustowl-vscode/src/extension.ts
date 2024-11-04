@@ -4,7 +4,12 @@ import * as vscode from "vscode";
 
 import { analyze } from "./api/request";
 import { zCollectedData, zInfer, zRange } from "./api/schemas";
-import { selectLocal, messagesAndRanges } from "./analyze";
+import {
+  selectLocal,
+  messagesAndRanges,
+  localAssigner,
+  traceAssignersRanges,
+} from "./analyze";
 import {
   decideHue,
   resetColor,
@@ -75,10 +80,19 @@ export function activate(context: vscode.ExtensionContext) {
       backgroundColor: "darkorange",
     },
   });
+  const assignerDecorationType = vscode.window.createTextEditorDecorationType({
+    light: {
+      textDecoration: "underline solid 4px darkgreen",
+    },
+    dark: {
+      textDecoration: "underline solid 4px lightgreen",
+    },
+  });
   const emptyDecorationType = vscode.window.createTextEditorDecorationType({});
 
   let analyzed: zInfer<typeof zCollectedData> | undefined = undefined;
 
+  let hues: Record<number, number> = {};
   let itemToLocalToDeco: Record<number, Record<number, number>> = {};
   const updateLifetimeDecoration = (editor: vscode.TextEditor) => {
     if (!analyzed) {
@@ -167,10 +181,13 @@ export function activate(context: vscode.ExtensionContext) {
     editor.setDecorations(userVarDeclDecorationType, userVarDeclDecorations);
   };
 
+  let assignerDecoTypes: Record<number, vscode.TextEditorDecorationType> = {};
+
   const startAnalyze = async (editor: vscode.TextEditor) => {
     // reset decoration
     resetColor();
     resetDecorationType(editor);
+    assignerDecoTypes = {};
     console.log("start analyzing...");
     try {
       const collected = await analyze(editor.document.getText());
@@ -189,9 +206,9 @@ export function activate(context: vscode.ExtensionContext) {
             }
             itemToLocalToDeco[itemId] = {};
             const locals = item.mir.decls
-              .filter((v) => v.type === "user")
+              //.filter((v) => v.type === "user")
               .map((v) => v.local_index);
-            const hues = decideHue(locals);
+            hues = decideHue(locals);
             for (const local of locals) {
               const hue = hues[local];
               itemToLocalToDeco[itemId][local] = registerDecorationType(
@@ -225,6 +242,10 @@ export function activate(context: vscode.ExtensionContext) {
     }
     console.log("update deco");
 
+    for (const deco of Object.values(assignerDecoTypes)) {
+      editor.setDecorations(deco, []);
+    }
+
     updateLifetimeDecoration(editor);
     updateUserVarDeclDecoration(editor);
 
@@ -233,6 +254,7 @@ export function activate(context: vscode.ExtensionContext) {
     const imBorrowDecorations: vscode.DecorationOptions[] = [];
     const moveDecorations: vscode.DecorationOptions[] = [];
     const dropDecorations: vscode.DecorationOptions[] = [];
+    let assigners: vscode.DecorationOptions[] = [];
     for (const itemId in analyzed.items) {
       const item = analyzed.items[itemId];
       if (item.type === "function") {
@@ -287,15 +309,55 @@ export function activate(context: vscode.ExtensionContext) {
             });
           }
         }
+
+        // assigner
+        /*
+        assigners = assigners.concat(
+          locals
+            .map((local) => localAssigner(local, mir))
+            .map((v) => [
+              ...v.terminators
+                .filter((w) => w?.type === "call")
+                .map((w) => w.fn_span),
+              ...v.statements
+                .filter((w) => w.type === "assign" && w.rval)
+                .map((w) => w.range),
+            ])
+            .flat()
+            .map((v) => ({ range: rangeToRange(editor.document, v) }))
+        );
+      }
+      */
+
         //editor.setDecorations(lifetimeDecorationType, lifetimeDecorations);
         editor.setDecorations(mutBorrowDecorationType, mutBorrowDecorations);
         editor.setDecorations(imBorrowDecorationType, imBorrowDecorations);
         editor.setDecorations(moveDecorationType, moveDecorations);
         editor.setDecorations(dropDecorationType, dropDecorations);
+
+        // assigner trace
+        for (const select of locals) {
+          if (!(select in assignerDecoTypes)) {
+            assignerDecoTypes[select] =
+              vscode.window.createTextEditorDecorationType({
+                textDecoration: `underline solid 4px hsla(${hues[select]}, 80%, 60%, 0.7)`,
+              });
+          }
+          const traced = traceAssignersRanges(select, item.mir);
+          console.log("traced", traced);
+          editor.setDecorations(
+            assignerDecoTypes[select],
+            traced.map((v) => ({
+              range: rangeToRange(editor.document, v),
+              hoverMessage: "value traced",
+            })),
+          );
+        }
       }
     }
   };
 
+  // events
   let activeEditor: vscode.TextEditor | undefined =
     vscode.window.activeTextEditor;
   vscode.window.onDidChangeActiveTextEditor(

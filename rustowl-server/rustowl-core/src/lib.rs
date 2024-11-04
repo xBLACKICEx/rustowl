@@ -24,52 +24,6 @@ use rustc_span::{FileName, RealFileName};
 use std::path::PathBuf;
 use std::sync::{atomic::AtomicBool, Arc};
 
-fn get_decl_from_local<'a, 'tcx>(mir: &'a Body<'tcx>, local: Local) -> Option<LocalDecl<'tcx>> {
-    if let Some(decl) = mir.local_decls.get(local) {
-        Some(decl.clone())
-    } else {
-        None
-    }
-}
-
-fn show_span(source: &str, lo: u32, hi: u32) {
-    let lines = source.split("\n");
-    let mut current_line_head = 0;
-    let lo = lo as usize;
-    let hi = hi as usize;
-    for (line, num) in lines.zip(1..) {
-        let line_len = line.as_bytes().len() + 1;
-        if lo <= current_line_head + line_len {
-            let lo = if current_line_head <= lo {
-                lo - current_line_head
-            } else {
-                0
-            };
-            let hi = hi - current_line_head;
-            print!("{:3} | ", num);
-            let mut acc = 0;
-            for ch in line.chars() {
-                let chlen = ch.len_utf8();
-                if lo < acc + chlen {
-                    print!("\x1b[91m");
-                }
-                acc += chlen;
-                if hi < acc {
-                    print!("\x1b[0m");
-                }
-                print!("{}", ch);
-            }
-            println!("");
-        }
-        if hi <= current_line_head + line_len {
-            break;
-        }
-        current_line_head += line_len;
-        print!("\x1b[0m");
-    }
-    print!("\x1b[0m");
-}
-
 pub fn run_compiler(
     name: &str,
     source: &str,
@@ -132,7 +86,7 @@ pub fn run_compiler(
                                 "start borrowck of def_id: {}",
                                 item.owner_id.to_def_id().index.index(),
                             );
-                            let body_cked = consumers::get_body_with_borrowck_facts(
+                            let facts = consumers::get_body_with_borrowck_facts(
                                 ctx,
                                 item.owner_id.def_id,
                                 consumers::ConsumerOptions::PoloniusInputFacts,
@@ -141,7 +95,8 @@ pub fn run_compiler(
                             log::info!("MIR built");
 
                             log::info!("enter MIR analysis");
-                            let mir = MirAnalyzer::analyze(compiler, &body_cked);
+                            let mut analyzer = MirAnalyzer::new(compiler, &facts);
+                            let mir = analyzer.analyze();
                             log::info!("MIR analyzed");
 
                             let item = Item::Function {

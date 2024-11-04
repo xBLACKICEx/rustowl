@@ -10,6 +10,7 @@ pub enum Error {
     LocalIsNotUserVariable,
 }
 
+/// location in source code
 #[derive(Serialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[serde(transparent)]
 pub struct Loc(u32);
@@ -19,6 +20,7 @@ impl From<u32> for Loc {
     }
 }
 
+/// represents range in source code
 #[derive(Serialize, Clone, Copy, Debug)]
 pub struct Range {
     pub from: Loc,
@@ -35,16 +37,7 @@ impl From<Span> for Range {
     }
 }
 
-/*
-impl From<&LocalDecl<'_>> for Range {
-    fn from(decl: &LocalDecl) -> Self {
-        let span = decl.source_info.span;
-        let range = Self::from(span);
-        range
-    }
-}
-*/
-
+/// variable in MIR
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirVariable {
@@ -99,10 +92,6 @@ pub struct CollectedData {
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
-pub enum Region {}
-
-#[derive(Serialize, Clone, Debug)]
-#[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirRval {
     Move {
         target_local_index: usize,
@@ -116,6 +105,7 @@ pub enum MirRval {
     },
 }
 
+/// statement in MIR
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirStatement {
@@ -133,21 +123,31 @@ pub enum MirStatement {
         rval: Option<MirRval>,
     },
 }
+/// terminator in MIR
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirTerminator {
-    Drop { local_index: usize, range: Range },
+    Drop {
+        local_index: usize,
+        range: Range,
+    },
+    Call {
+        destination_local_index: usize,
+        fn_span: Range,
+    },
     Other,
 }
+/// basic block in MIR
 #[derive(Serialize, Clone, Debug)]
 pub struct MirBasicBlock {
     pub statements: Vec<MirStatement>,
     pub terminator: Option<MirTerminator>,
 }
 
+/// declared variable in MIR
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
-pub enum Decl {
+pub enum MirDecl {
     User {
         local_index: usize,
         name: String,
@@ -164,5 +164,5 @@ pub enum Decl {
 #[derive(Serialize, Clone, Debug)]
 pub struct AnalyzedMir {
     pub basic_blocks: Vec<MirBasicBlock>,
-    pub decls: Vec<Decl>,
+    pub decls: Vec<MirDecl>,
 }

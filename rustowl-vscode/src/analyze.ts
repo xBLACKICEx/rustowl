@@ -61,6 +61,51 @@ export const calculateDeclsLifetimes = (
   return res;
 };
 
+export const localAssigner = (local: Local, mir: Mir) => {
+  const statements = mir.basic_blocks
+    .map((bb) =>
+      bb.statements.filter((stmt) => {
+        stmt.type === "assign" && stmt.target_local_index === local;
+      }),
+    )
+    .flat();
+  const terminators = mir.basic_blocks
+    .map((bb) => bb.terminator)
+    .filter((v) => v?.type === "call" && v.destination_local_index === local);
+  return { statements, terminators };
+};
+
+const traceAssigner = (local: Local, mir: Mir): Local[] => {
+  const tmp = localAssigner(local, mir);
+  const assigners = tmp.statements
+    .filter((v) => v.type === "assign")
+    .map((v) =>
+      v.rval?.type === "borrow"
+        ? traceAssigner(v.target_local_index, mir)
+        : [v.rval?.target_local_index],
+    )
+    .flat()
+    .filter((v) => typeof v === "number");
+  return assigners;
+};
+export const traceAssignersRanges = (local: Local, mir: Mir): Range[] => {
+  const tmp = localAssigner(local, mir);
+  const assigners = tmp.statements
+    .filter((v) => v.type === "assign")
+    .map((v) =>
+      v.rval?.type === "borrow"
+        ? [v.rval.range, ...traceAssignersRanges(v.target_local_index, mir)]
+        : v.rval?.type === "move"
+          ? [v.rval.range]
+          : [],
+    )
+    .flat();
+  const terminators = tmp.terminators
+    .filter((v) => v?.type === "call")
+    .map((v) => v.fn_span);
+  return [...assigners, ...terminators];
+};
+
 // obtain the list of message and range
 export const messagesAndRanges = (
   doc: vscode.TextDocument,

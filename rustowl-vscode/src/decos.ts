@@ -10,37 +10,6 @@ export type Color = {
   l: number;
 };
 
-/*
-const generateColor = (generated: Color[]) => {
-  for (let i = 4; i < 9; i++) {
-    for (let j = 4; j < 9; j++) {
-      for (let k = 4; k < 9; k++) {
-        if (i === j && j === k) {
-          continue;
-        }
-        if (
-          Math.abs(i - j) <= 3 ||
-          Math.abs(j - k) <= 3 ||
-          Math.abs(k - i) <= 3
-        ) {
-          continue;
-        }
-        const r = 25 * i;
-        const g = 25 * j;
-        const b = 25 * k;
-        if (
-          0 <
-          generated.filter((v) => v.r === r && v.g === g && v.b === b).length
-        ) {
-          continue;
-        }
-        return { r, g, b };
-      }
-    }
-  }
-};
-*/
-
 // 0 is RED - reserved for error
 let generatedHue: number[] = [0];
 export const resetColor = () => {
