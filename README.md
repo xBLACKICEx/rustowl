@@ -1,8 +1,23 @@
 # RustOwl
 
+Visualize Ownership and Lifetimes on Rust
+
 ## Quick Start
 
-### Install Visual Studio Code (VSCode) extension
+Quick start guide using Docker.
+
+### Prerequisite
+
+- Docker installed, `docker` command is available, and Docker Engine started
+- Visual Studio Code (VSCode) installed
+
+We tested this guide on macOS Sonoma 14.6.1 on arm64 architecture with docker 26.0.0 and VSCode 1.95.1.
+
+### Download VSCode extension
+
+Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/latest/download/rustowl-vscode-0.0.1.vsix).
+
+### Install VSCode extension
 
 Press `Cmd+Shift+P` on macOS or `Ctrl+Shift+P` on other systems to open the command palette in VSCode.
 Type `install vsix` in the command palette, and `Extensions: Install from VSIX...` will appear.

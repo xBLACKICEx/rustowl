@@ -73,6 +73,7 @@ pub struct AliveMessage {
     status: bool,
 }
 async fn alive() -> Json<AliveMessage> {
+    log::info!("alive check received");
     Json(AliveMessage { status: true })
 }
 
