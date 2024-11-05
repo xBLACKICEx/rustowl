@@ -1,5 +1,7 @@
 import { z, ZodSchema } from "zod";
 
+export const zAliveMessage = z.object({ status: z.literal(true) });
+
 export const zIndex = z.number().int();
 export const zLoc = z.number().int();
 export const zRange = z.object({ from: zLoc, until: zLoc });

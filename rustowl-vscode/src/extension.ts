@@ -1,8 +1,8 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
 
-import { analyze } from "./api/request";
+import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
+
+import { analyze, isAlive } from "./api/request";
 import { zCollectedData, zInfer, zRange } from "./api/schemas";
 import {
   selectLocal,
@@ -22,30 +22,45 @@ import { eliminatedRanges, rangeToRange, excludeRange } from "./range";
 
 type Range = zInfer<typeof zRange>;
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
-  // Use the console to output diagnostic information (console.log) and errors (console.error)
-  // This line of code will only be executed once when your extension is activated
-  console.log(
-    'Congratulations, your extension "visuarust-vscode" is now active!',
-  );
+const DOCKER_CONTAINER_NAME = "rustowl-server";
 
-  // The command has been defined in the package.json file
-  // Now provide the implementation of the command with registerCommand
-  // The commandId parameter must match the command field in package.json
-  const disposable = vscode.commands.registerCommand(
-    "visuarust-vscode.helloWorld",
-    () => {
-      // The code you place here will be executed every time your command is executed
-      // Display a message box to the user
+const dockerRun = (): ChildProcessWithoutNullStreams => {
+  return spawn("docker", [
+    "run",
+    "-d",
+    "--rm",
+    "--name",
+    DOCKER_CONTAINER_NAME,
+    "-p",
+    "127.0.0.1:7819:7819",
+    "ghcr.io/cordx56/rustowl:latest",
+  ]);
+};
+const dockerStop = (): ChildProcessWithoutNullStreams => {
+  return spawn("docker", ["stop", DOCKER_CONTAINER_NAME]);
+};
+
+export async function activate(context: vscode.ExtensionContext) {
+  console.log("rustowl activated");
+  let tryDocker = false;
+  const startServer = async () => {
+    if (!(await isAlive()) && tryDocker === false) {
       vscode.window.showInformationMessage(
-        "Hello World from visuarust-vscode!",
+        "starting rustowl-server with Docker..."
       );
-    },
-  );
-
-  context.subscriptions.push(disposable);
+      tryDocker = true;
+      const run = dockerRun();
+      run.on("exit", (code) => {
+        if (code !== 0) {
+          vscode.window.showErrorMessage(
+            `rustowl-server on Docker exited with status code ${code}`
+          );
+        } else {
+          vscode.window.showInformationMessage("rustowl-server started");
+        }
+      });
+    }
+  };
 
   const userVarDeclDecorationType =
     vscode.window.createTextEditorDecorationType({
@@ -109,7 +124,7 @@ export function activate(context: vscode.ExtensionContext) {
           "selected locals are",
           locals,
           "in",
-          mir.decls.map((v) => v.local_index),
+          mir.decls.map((v) => v.local_index)
         );
         const userDecls = mir.decls.filter((v) => v.type === "user");
         // get declaration from MIR Local
@@ -120,7 +135,7 @@ export function activate(context: vscode.ExtensionContext) {
           .filter((v) => locals.includes(v.local_index))
           .map((v) => ({ ...v, lives: v.lives || [] }));
         const selectedLifetime = eliminatedRanges(
-          selected.map((v) => v.lives).flat(),
+          selected.map((v) => v.lives).flat()
         );
         console.log("not selected vars:", notSelected);
         console.log("selected vars:", selected);
@@ -168,7 +183,7 @@ export function activate(context: vscode.ExtensionContext) {
         const mir = item.mir;
         const locals = selectLocal(cursor, mir);
         for (const decl of mir.decls.filter((v) =>
-          locals.includes(v.local_index),
+          locals.includes(v.local_index)
         )) {
           if (decl.type === "user") {
             userVarDeclDecorations.push({
@@ -214,19 +229,19 @@ export function activate(context: vscode.ExtensionContext) {
               itemToLocalToDeco[itemId][local] = registerDecorationType(
                 vscode.window.createTextEditorDecorationType({
                   textDecoration: `underline dotted 4px hsla(${hue}, 80%, 60%, 0.7)`,
-                }),
+                })
               );
             }
           }
         }
         editor.setDecorations(
           emptyDecorationType,
-          messagesAndRanges(editor.document, analyzed),
+          messagesAndRanges(editor.document, analyzed)
         );
         // decoration initialize end
       } else {
         vscode.window.showErrorMessage(
-          `Analyzer works but return compile error`,
+          `Analyzer works but return compile error`
         );
       }
     } catch (err) {
@@ -264,7 +279,7 @@ export function activate(context: vscode.ExtensionContext) {
           "selected locals are",
           locals,
           "in",
-          mir.decls.map((v) => v.local_index),
+          mir.decls.map((v) => v.local_index)
         );
         // get declaration from MIR Local
         const declFromLocal = (local: number) =>
@@ -277,7 +292,7 @@ export function activate(context: vscode.ExtensionContext) {
               if (stmt.rval && locals.includes(stmt.rval.target_local_index)) {
                 if (stmt.rval.type === "borrow") {
                   const borrowFrom = declFromLocal(
-                    stmt.rval.target_local_index,
+                    stmt.rval.target_local_index
                   );
                   if (borrowFrom?.type === "user") {
                     if (stmt.rval.mutable) {
@@ -350,7 +365,7 @@ export function activate(context: vscode.ExtensionContext) {
             traced.map((v) => ({
               range: rangeToRange(editor.document, v),
               hoverMessage: "value traced",
-            })),
+            }))
           );
         }
       }
@@ -365,16 +380,20 @@ export function activate(context: vscode.ExtensionContext) {
       activeEditor = editor;
     },
     null,
-    context.subscriptions,
+    context.subscriptions
   );
   let timeout: NodeJS.Timeout | undefined = undefined;
   vscode.workspace.onDidChangeTextDocument(
     (ev) => {
-      if (ev.document === activeEditor?.document) {
-        analyzed = undefined;
-        if (timeout) {
-          clearTimeout(timeout);
-        }
+      analyzed = undefined;
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      if (
+        ev.document === activeEditor?.document &&
+        activeEditor.document.fileName.endsWith(".rs")
+      ) {
+        startServer();
         timeout = setTimeout(async () => {
           if (activeEditor) {
             await startAnalyze(activeEditor);
@@ -384,7 +403,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
     },
     null,
-    context.subscriptions,
+    context.subscriptions
   );
   vscode.window.onDidChangeTextEditorSelection(
     (ev) => {
@@ -393,9 +412,10 @@ export function activate(context: vscode.ExtensionContext) {
       }
     },
     null,
-    context.subscriptions,
+    context.subscriptions
   );
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+  dockerStop();
+}

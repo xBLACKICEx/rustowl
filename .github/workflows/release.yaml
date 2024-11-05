@@ -10,7 +10,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  release:
+  server:
     runs-on: ubuntu-latest
 
     permissions:
@@ -48,3 +48,27 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  extension:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: yarn install --frozen-locked
+      - name: Create VSIX
+        run: yes | yarn build
+      - name: Release
+        uses: softprops/action-gh-release@2
+        with:
+          body: auto RustOwl update
+          files: rustowl-*.vsix
+          draft: true
