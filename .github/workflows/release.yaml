@@ -74,4 +74,3 @@ jobs:
         with:
           body: auto RustOwl update
           files: rustowl-*.vsix
-          draft: true
