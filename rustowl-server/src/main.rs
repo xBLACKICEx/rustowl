@@ -68,13 +68,20 @@ async fn analyze(req: Json<AnalyzeRequest>) -> Result<Json<AnalyzeResponse>, Jso
     Ok(Json(resp))
 }
 
+#[derive(Serialize)]
+pub struct AliveMessage {
+    status: bool,
+}
+async fn alive() -> Json<AliveMessage> {
+    Json(AliveMessage { status: true })
+}
+
 #[tokio::main]
 async fn main() {
     simple_logger::init().unwrap();
-    //let filename = env::args().nth(1).unwrap();
-    //run_compiler(&filename, &fs::read_to_string(&filename).unwrap());
-    //println!("Hello, world!");
-    let router = Router::new().route("/analyze", routing::post(analyze));
+    let router = Router::new()
+        .route("/analyze", routing::post(analyze))
+        .route("/", routing::get(alive));
     let binded = TcpListener::bind("0.0.0.0:7819").await.unwrap();
     log::info!("start listening 0.0.0.0:7819");
     serve(binded, router).await.unwrap();
