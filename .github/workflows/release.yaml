@@ -67,7 +67,7 @@ jobs:
       - name: Create VSIX
         run: yes | yarn build
       - name: Release
-        uses: softprops/action-gh-release@2
+        uses: softprops/action-gh-release@v2
         with:
           body: auto RustOwl update
           files: rustowl-*.vsix
