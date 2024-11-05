@@ -52,6 +52,9 @@ jobs:
   extension:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: ./rustowl-vscode
     permissions:
       contents: write
 
