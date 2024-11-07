@@ -69,13 +69,11 @@ export function activate(context: vscode.ExtensionContext) {
     }
     vscode.window.showInformationMessage("Installing rustowl-server");
     let installProcess = spawn("./install.sh", {
-      env: { RUSTOWL_VERSION: "vpre" },
       cwd: storagePath,
     });
     installProcess.on("exit", (code) => {
       if (code === 0) {
         serverProcess = spawn("./install.sh", ["run"], {
-          env: { RUSTOWL_VERSION: "vpre" },
           cwd: storagePath,
         });
         vscode.window.showInformationMessage("rustowl-server started");
