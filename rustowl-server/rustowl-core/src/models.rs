@@ -153,12 +153,14 @@ pub enum MirDecl {
         name: String,
         span: Range,
         ty: String,
-        lives: Option<Vec<Range>>,
+        lives: Vec<Range>,
+        must_live_at: Vec<Range>,
     },
     Other {
         local_index: usize,
         ty: String,
-        lives: Option<Vec<Range>>,
+        lives: Vec<Range>,
+        must_live_at: Vec<Range>,
     },
 }
 #[derive(Serialize, Clone, Debug)]

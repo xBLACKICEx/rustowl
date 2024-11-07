@@ -122,16 +122,16 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   const lifetimeDecorationType = vscode.window.createTextEditorDecorationType({
-    textDecoration: "underline solid 4px hsla(125, 80%, 60%, 0.8)",
+    textDecoration: "underline solid 3px hsla(125, 80%, 60%, 0.8)",
   });
   const moveDecorationType = vscode.window.createTextEditorDecorationType({
-    textDecoration: "underline solid 4px hsla(35, 80%, 60%, 0.8)",
+    textDecoration: "underline solid 3px hsla(35, 80%, 60%, 0.8)",
   });
   const imBorrowDecorationType = vscode.window.createTextEditorDecorationType({
-    textDecoration: "underline solid 4px hsla(230, 80%, 60%, 0.8)",
+    textDecoration: "underline solid 3px hsla(230, 80%, 60%, 0.8)",
   });
   const mBorrowDecorationType = vscode.window.createTextEditorDecorationType({
-    textDecoration: "underline solid 4px hsla(300, 80%, 60%, 0.8)",
+    textDecoration: "underline solid 3px hsla(300, 80%, 60%, 0.8)",
   });
   //const emptyDecorationType = vscode.window.createTextEditorDecorationType({});
 
@@ -167,11 +167,13 @@ export function activate(context: vscode.ExtensionContext) {
           .map((v) => ({
             ...v,
             lives: v.lives ? eliminatedRanges(v.lives) : null,
+            must_live_at: eliminatedRanges(v.must_live_at),
           }));
 
         const selectedLives = selectedDecls
           .map(
             (v) =>
+              //v.must_live_at.map((w) => ({
               v.lives?.map((w) => ({
                 range: w,
                 hoverMessage: `lifetime of variable ${v.name}`,

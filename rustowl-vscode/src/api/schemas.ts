@@ -13,12 +13,14 @@ export const zMirDecl = z.union([
     span: zRange,
     ty: z.string(),
     lives: zRange.array().nullish(),
+    must_live_at: zRange.array(),
   }),
   z.object({
     type: z.literal("other"),
     local_index: zIndex,
     ty: z.string(),
     lives: zRange.array().nullish(),
+    must_live_at: zRange.array(),
   }),
 ]);
 export const zMirRval = z.union([
