@@ -30,7 +30,7 @@ jobs:
         run: yes | yarn build
         working-directory: ./rustowl-vscode
       - name: Create server zip
-        run: zip rustowl-server.zip ./rustowl-server/**/*
+        run: zip rustowl-server.zip ./rustowl-server/** ./rustowl-server/**/*
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
