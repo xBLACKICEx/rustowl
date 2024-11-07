@@ -38,6 +38,14 @@ let serverProcess:
   | "installing"
   | undefined = undefined;
 
+const stat = (path: string) => {
+  try {
+    return fs.statSync(path);
+  } catch (_e) {
+    return null;
+  }
+};
+
 export function activate(context: vscode.ExtensionContext) {
   console.log("rustowl activated");
 
@@ -48,12 +56,12 @@ export function activate(context: vscode.ExtensionContext) {
     }
     const storage = context.globalStorageUri;
     const storagePath = storage.fsPath;
-    if (!fs.statSync(storagePath).isDirectory()) {
+    if (!stat(storagePath)?.isDirectory()) {
       fs.mkdirSync(storagePath);
     }
     serverProcess = "installing";
     const installScriptPath = path.join(storagePath, "install.sh");
-    if (!fs.statSync(installScriptPath).isFile()) {
+    if (!stat(installScriptPath)?.isFile()) {
       try {
         const script = await axios.get<string>(
           "https://github.com/cordx56/rustowl/releases/latest/download/install.sh"
