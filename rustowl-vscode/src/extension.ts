@@ -1,11 +1,13 @@
 import * as vscode from "vscode";
 
 import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 import { analyze, isAlive } from "./api/request";
 import { zCollectedData, zInfer, zRange } from "./api/schemas";
 import { selectLocal } from "./analyze";
-import { eliminatedRanges, rangeToRange } from "./range";
+import { eliminatedRanges, rangeToRange, excludeRanges } from "./range";
 
 const DOCKER_CONTAINER_NAME = "rustowl-server";
 
@@ -27,6 +29,19 @@ const dockerStop = (): ChildProcessWithoutNullStreams => {
 
 export function activate(context: vscode.ExtensionContext) {
   console.log("rustowl activated");
+
+  const runServer = () => {
+    const storage = context.storageUri;
+    const storagePath = storage?.fsPath;
+    if (!storagePath) {
+      return;
+    }
+    const execPath = path.join(storagePath, "rustowl-server");
+    if (fs.lstatSync(execPath).isFile()) {
+    } else {
+      vscode.window.showInformationMessage("Installing rustowl-server");
+    }
+  };
 
   // for quick start, automatically starts Docker container
   // 1: not started, 2: starting, 3: started, 4: error
@@ -79,10 +94,14 @@ export function activate(context: vscode.ExtensionContext) {
     if (!analyzed) {
       return;
     }
-    let lifetime: vscode.DecorationOptions[] = [];
-    let moves: vscode.DecorationOptions[] = [];
-    let imBorrows: vscode.DecorationOptions[] = [];
-    let mBorrows: vscode.DecorationOptions[] = [];
+    type DecoInfo = {
+      range: zInfer<typeof zRange>;
+      hoverMessage?: string;
+    };
+    let lifetime: DecoInfo[] = [];
+    let moves: DecoInfo[] = [];
+    let imBorrows: DecoInfo[] = [];
+    let mBorrows: DecoInfo[] = [];
     //clearDecoration(editor);
     const cursor = editor.document.offsetAt(editor.selection.active);
     for (const itemId in analyzed.items) {
@@ -106,7 +125,7 @@ export function activate(context: vscode.ExtensionContext) {
           .map(
             (v) =>
               v.lives?.map((w) => ({
-                range: rangeToRange(editor.document, w),
+                range: w,
                 hoverMessage: `lifetime of variable ${v.name}`,
               })) || []
           )
@@ -118,14 +137,18 @@ export function activate(context: vscode.ExtensionContext) {
           // start generating decorations for statements
           for (const stmt of bb.statements) {
             if (stmt.type === "assign") {
-              if (locals.includes(stmt.target_local_index) && stmt.rval) {
+              if (
+                stmt.rval &&
+                (locals.includes(stmt.target_local_index) ||
+                  locals.includes(stmt.rval.target_local_index))
+              ) {
                 if (stmt.rval.type === "move") {
                   const movedFrom = getDeclFromLocal(
                     stmt.rval.target_local_index
                   );
                   const movedTo = getDeclFromLocal(stmt.target_local_index);
                   moves.push({
-                    range: rangeToRange(editor.document, stmt.rval.range),
+                    range: stmt.rval.range,
                     hoverMessage:
                       "ownership moved" +
                       (movedFrom?.type === "user"
@@ -141,7 +164,7 @@ export function activate(context: vscode.ExtensionContext) {
                   );
                   if (stmt.rval.mutable) {
                     mBorrows.push({
-                      range: rangeToRange(editor.document, stmt.rval.range),
+                      range: stmt.rval.range,
                       hoverMessage:
                         "mutable borrow" +
                         (borrowFrom?.type === "user"
@@ -150,7 +173,7 @@ export function activate(context: vscode.ExtensionContext) {
                     });
                   } else {
                     imBorrows.push({
-                      range: rangeToRange(editor.document, stmt.rval.range),
+                      range: stmt.rval.range,
                       hoverMessage:
                         "immutable borrow" +
                         (borrowFrom?.type === "user"
@@ -171,7 +194,7 @@ export function activate(context: vscode.ExtensionContext) {
                   bb.terminator.destination_local_index
                 );
                 moves.push({
-                  range: rangeToRange(editor.document, bb.terminator.fn_span),
+                  range: bb.terminator.fn_span,
                   hoverMessage:
                     "value from function call" +
                     (dest?.type === "user" ? ` to \`${dest.name}\`` : ""),
@@ -185,10 +208,46 @@ export function activate(context: vscode.ExtensionContext) {
         // end basic blocks
       }
     }
-    editor.setDecorations(lifetimeDecorationType, lifetime);
-    editor.setDecorations(moveDecorationType, moves);
-    editor.setDecorations(imBorrowDecorationType, imBorrows);
-    editor.setDecorations(mBorrowDecorationType, mBorrows);
+    lifetime = lifetime
+      .map((v) =>
+        excludeRanges(
+          v.range,
+          mBorrows
+            .map((w) => w.range)
+            .concat(
+              imBorrows.map((w) => w.range),
+              moves.map((w) => w.range)
+            )
+        ).map((w) => ({ ...v, range: w }))
+      )
+      .flat();
+    moves = moves
+      .map((v) =>
+        excludeRanges(
+          v.range,
+          mBorrows.map((w) => w.range).concat(imBorrows.map((w) => w.range))
+        ).map((w) => ({ ...v, range: w }))
+      )
+      .flat();
+    imBorrows = imBorrows
+      .map((v) =>
+        excludeRanges(
+          v.range,
+          mBorrows.map((w) => w.range)
+        ).map((w) => ({ ...v, range: w }))
+      )
+      .flat();
+
+    const decoInfoMap = (info: DecoInfo[]): vscode.DecorationOptions[] => {
+      return info.map((v) => ({
+        range: rangeToRange(editor.document, v.range),
+        hoverMessage: v.hoverMessage,
+      }));
+    };
+    editor.setDecorations(lifetimeDecorationType, decoInfoMap(lifetime));
+    editor.setDecorations(moveDecorationType, decoInfoMap(moves));
+    editor.setDecorations(imBorrowDecorationType, decoInfoMap(imBorrows));
+    editor.setDecorations(mBorrowDecorationType, decoInfoMap(mBorrows));
   };
   const resetDecoration = (editor: vscode.TextEditor) => {
     editor.setDecorations(lifetimeDecorationType, []);
