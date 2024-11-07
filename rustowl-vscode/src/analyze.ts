@@ -23,7 +23,7 @@ export const selectLocal = (pos: number, mir: Mir): Local[] => {
     if (pos < range.from || range.until < pos) {
       return undefined;
     }
-    console.log("selected ", pos, " @ ", range);
+    console.log("selected ", local, " @ ", range);
     selected.push(local);
   };
   console.log("select from position", pos);

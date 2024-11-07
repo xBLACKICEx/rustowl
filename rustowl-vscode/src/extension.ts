@@ -1,6 +1,10 @@
 import * as vscode from "vscode";
 
-import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
+import {
+  spawn,
+  ChildProcessWithoutNullStreams,
+  ChildProcess,
+} from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -27,20 +31,60 @@ const dockerStop = (): ChildProcessWithoutNullStreams => {
   return spawn("docker", ["stop", DOCKER_CONTAINER_NAME]);
 };
 
+let serverProcess:
+  | ChildProcessWithoutNullStreams
+  | "running"
+  | "installing"
+  | undefined = undefined;
+
 export function activate(context: vscode.ExtensionContext) {
   console.log("rustowl activated");
 
-  const runServer = () => {
+  const runServer = async () => {
+    if (await isAlive()) {
+      serverProcess = "running";
+      return;
+    }
     const storage = context.storageUri;
     const storagePath = storage?.fsPath;
     if (!storagePath) {
       return;
     }
-    const execPath = path.join(storagePath, "rustowl-server");
-    if (fs.lstatSync(execPath).isFile()) {
-    } else {
-      vscode.window.showInformationMessage("Installing rustowl-server");
+    serverProcess = "installing";
+    const installScriptPath = path.join(storagePath, "install.sh");
+    if (!fs.statSync(installScriptPath).isFile()) {
+      try {
+        const script = await fetch(
+          "https://github.com/cordx56/rustowl/releases/latest/download/install.sh"
+        );
+        fs.writeFileSync(
+          installScriptPath,
+          Buffer.from(await script.arrayBuffer())
+        );
+      } catch (_e) {
+        vscode.window.showInformationMessage(
+          "installing rustowl-server failed"
+        );
+      }
     }
+    vscode.window.showInformationMessage("Installing rustowl-server");
+    let installProcess = spawn("./install.sh", {
+      env: { RUSTOWL_VERSION: "vpre" },
+      cwd: storagePath,
+    });
+    installProcess.on("exit", (code) => {
+      if (code === 0) {
+        serverProcess = spawn("./install.sh", ["run"], {
+          env: { RUSTOWL_VERSION: "vpre" },
+          cwd: storagePath,
+        });
+        vscode.window.showInformationMessage("rustowl-server started");
+      } else {
+        vscode.window.showInformationMessage(
+          "installing rustowl-server failed"
+        );
+      }
+    });
   };
 
   // for quick start, automatically starts Docker container
@@ -308,13 +352,9 @@ export function activate(context: vscode.ExtensionContext) {
         }
         timeout = setTimeout(async () => {
           if (activeEditor) {
-            const serverStatus = await startServer();
-            if (serverStatus === "starting") {
-              vscode.window.showInformationMessage(
-                "Waiting for Docker container to start"
-              );
-              return;
-            } else if (serverStatus === "started") {
+            if (serverProcess === undefined) {
+              await runServer();
+            } else if (serverProcess !== "installing") {
               await startAnalyze(activeEditor);
               updateDecoration(activeEditor);
             }
@@ -337,5 +377,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-  dockerStop();
+  if (serverProcess instanceof ChildProcess) {
+    serverProcess.kill();
+  }
 }

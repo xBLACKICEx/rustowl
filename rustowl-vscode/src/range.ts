@@ -60,11 +60,14 @@ export const excludeRange = (from: Range, ex: Range): Range[] => {
 
 export const excludeRanges = (from: Range, exclude: Range[]): Range[] => {
   let fr = { ...from };
-  let ex = eliminatedRanges(exclude);
-  let newFr: Range[] = [];
+  let newFr = [fr];
 
-  for (let j = 0; j < ex.length; j++) {
-    newFr = newFr.concat(excludeRange(fr, ex[j]));
+  for (let j = 0; j < exclude.length; j++) {
+    for (let i = 0; i < newFr.length; i++) {
+      const tmp = excludeRange(newFr[i], exclude[j]);
+      newFr.splice(i, 1);
+      newFr = newFr.concat(tmp);
+    }
   }
   return eliminatedRanges(newFr);
 };
