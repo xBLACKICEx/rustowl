@@ -48,8 +48,8 @@ export function activate(context: vscode.ExtensionContext) {
     }
     const storage = context.globalStorageUri;
     const storagePath = storage.fsPath;
-    if (!storagePath) {
-      return;
+    if (!fs.statSync(storagePath).isDirectory()) {
+      fs.mkdirSync(storagePath);
     }
     serverProcess = "installing";
     const installScriptPath = path.join(storagePath, "install.sh");
