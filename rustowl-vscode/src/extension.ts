@@ -7,6 +7,7 @@ import {
 } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import axios from "axios";
 
 import { analyze, isAlive } from "./api/request";
 import { zCollectedData, zInfer, zRange } from "./api/schemas";
@@ -54,13 +55,10 @@ export function activate(context: vscode.ExtensionContext) {
     const installScriptPath = path.join(storagePath, "install.sh");
     if (!fs.statSync(installScriptPath).isFile()) {
       try {
-        const script = await fetch(
+        const script = await axios.get<string>(
           "https://github.com/cordx56/rustowl/releases/latest/download/install.sh"
         );
-        fs.writeFileSync(
-          installScriptPath,
-          Buffer.from(await script.arrayBuffer())
-        );
+        fs.writeFileSync(installScriptPath, await script.data);
       } catch (_e) {
         vscode.window.showInformationMessage(
           "installing rustowl-server failed"
@@ -350,9 +348,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
         timeout = setTimeout(async () => {
           if (activeEditor) {
-            if (serverProcess === undefined) {
-              await runServer();
-            } else if (serverProcess !== "installing") {
+            if (serverProcess !== "installing") {
               await startAnalyze(activeEditor);
               updateDecoration(activeEditor);
             }
@@ -372,6 +368,10 @@ export function activate(context: vscode.ExtensionContext) {
     null,
     context.subscriptions
   );
+
+  if (serverProcess === undefined) {
+    runServer();
+  }
 }
 
 export function deactivate() {
