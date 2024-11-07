@@ -45,8 +45,8 @@ export function activate(context: vscode.ExtensionContext) {
       serverProcess = "running";
       return;
     }
-    const storage = context.storageUri;
-    const storagePath = storage?.fsPath;
+    const storage = context.globalStorageUri;
+    const storagePath = storage.fsPath;
     if (!storagePath) {
       return;
     }
