@@ -1,8 +1,8 @@
 #!/bin/bash
 
-export RUSTUP_HOME="$(pwd)/rustup"
-export CARGO_HOME="$(pwd)/cargo"
-export PATH="$CARGO_HOME/bin:$PATH"
+RUSTUP_HOME="$(pwd)/rustup"
+CARGO_HOME="$(pwd)/cargo"
+PATH="$CARGO_HOME/bin:$PATH"
 
 function install_rust() {
     mkdir -p rustup
@@ -14,10 +14,10 @@ function install_rust() {
 function install_rustowl() {
     rm -rf "./rustowl-*"
     curl -L "https://github.com/cordx56/rustowl/releases/latest/download/rustowl-server.zip" > rustowl-server.zip
-    unzip rustowl.zip
+    unzip rustowl-server.zip
 }
 
-export RUSTOWL_SERVER_PATH="$(pwd)/rustowl-server"
+RUSTOWL_SERVER_PATH="$(pwd)/rustowl-server"
 
 function run() {
     cd "$RUSTOWL_SERVER_PATH" && cargo run --release
