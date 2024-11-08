@@ -12,14 +12,14 @@ export const zMirDecl = z.union([
     name: z.string(),
     span: zRange,
     ty: z.string(),
-    lives: zRange.array().nullish(),
+    lives: zRange.array(),
     must_live_at: zRange.array(),
   }),
   z.object({
     type: z.literal("other"),
     local_index: zIndex,
     ty: z.string(),
-    lives: zRange.array().nullish(),
+    lives: zRange.array(),
     must_live_at: zRange.array(),
   }),
 ]);

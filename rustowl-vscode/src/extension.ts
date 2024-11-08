@@ -12,7 +12,12 @@ import axios from "axios";
 import { analyze, isAlive } from "./api/request";
 import { zCollectedData, zInfer, zRange } from "./api/schemas";
 import { selectLocal } from "./analyze";
-import { eliminatedRanges, rangeToRange, excludeRanges } from "./range";
+import {
+  commonRanges,
+  eliminatedRanges,
+  rangeToRange,
+  excludeRanges,
+} from "./range";
 
 const DOCKER_CONTAINER_NAME = "rustowl-server";
 
@@ -133,6 +138,9 @@ export function activate(context: vscode.ExtensionContext) {
   const mBorrowDecorationType = vscode.window.createTextEditorDecorationType({
     textDecoration: "underline solid 3px hsla(300, 80%, 60%, 0.8)",
   });
+  const outLiveDecorationType = vscode.window.createTextEditorDecorationType({
+    textDecoration: "underline solid 3px hsla(0, 80%, 60%, 0.8)",
+  });
   //const emptyDecorationType = vscode.window.createTextEditorDecorationType({});
 
   let analyzed: zInfer<typeof zCollectedData> | undefined = undefined;
@@ -150,6 +158,7 @@ export function activate(context: vscode.ExtensionContext) {
     let moves: DecoInfo[] = [];
     let imBorrows: DecoInfo[] = [];
     let mBorrows: DecoInfo[] = [];
+    let outLives: DecoInfo[] = [];
     //clearDecoration(editor);
     const cursor = editor.document.offsetAt(editor.selection.active);
     for (const itemId in analyzed.items) {
@@ -166,21 +175,50 @@ export function activate(context: vscode.ExtensionContext) {
           .filter((v) => locals.includes(v.local_index))
           .map((v) => ({
             ...v,
-            lives: v.lives ? eliminatedRanges(v.lives) : null,
+            lives: eliminatedRanges(v.lives),
             must_live_at: eliminatedRanges(v.must_live_at),
           }));
 
-        const selectedLives = selectedDecls
-          .map(
-            (v) =>
-              //v.must_live_at.map((w) => ({
-              v.lives?.map((w) => ({
-                range: w,
-                hoverMessage: `lifetime of variable ${v.name}`,
-              })) || []
+        console.log(selectedDecls);
+
+        const selectedDeclsWithCanLive = selectedDecls.map((v) => ({
+          ...v,
+          canLive: commonRanges(v.lives, v.must_live_at),
+        }));
+        const selectedLives = selectedDeclsWithCanLive
+          .map((v) =>
+            v.canLive.map((w) => ({
+              ...v,
+              lives: w,
+            }))
           )
           .flat();
-        lifetime = lifetime.concat(selectedLives);
+        const selectedLiveDecos = selectedLives.map((v) =>
+          //v.must_live_at.map((w) => ({
+          ({
+            range: v.lives,
+            hoverMessage: `lifetime of variable \`${v.name}\``,
+          })
+        );
+        lifetime = lifetime.concat(selectedLiveDecos);
+
+        outLives = outLives.concat(
+          selectedDeclsWithCanLive
+            .map((v) =>
+              v.must_live_at
+                .map((w) => excludeRanges(w, v.canLive))
+                .flat()
+                .map((w) => ({
+                  ...v,
+                  outLives: w,
+                }))
+                .map((v) => ({
+                  range: v.outLives,
+                  hoverMessage: `reference of variable \`${v.name}\` outlives it's lifetime`,
+                }))
+            )
+            .flat()
+        );
 
         // start generating decorations for basic blocks
         for (const bb of mir.basic_blocks) {
@@ -298,12 +336,14 @@ export function activate(context: vscode.ExtensionContext) {
     editor.setDecorations(moveDecorationType, decoInfoMap(moves));
     editor.setDecorations(imBorrowDecorationType, decoInfoMap(imBorrows));
     editor.setDecorations(mBorrowDecorationType, decoInfoMap(mBorrows));
+    editor.setDecorations(outLiveDecorationType, decoInfoMap(outLives));
   };
   const resetDecoration = (editor: vscode.TextEditor) => {
     editor.setDecorations(lifetimeDecorationType, []);
     editor.setDecorations(moveDecorationType, []);
     editor.setDecorations(imBorrowDecorationType, []);
     editor.setDecorations(mBorrowDecorationType, []);
+    editor.setDecorations(outLiveDecorationType, []);
   };
 
   const startAnalyze = async (editor: vscode.TextEditor) => {

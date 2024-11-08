@@ -218,8 +218,8 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
     /// obtain map from local id to living range
     fn lives(&self) -> HashMap<Local, Vec<Range>> {
         let mut local_live_locs = HashMap::new();
-        //for (loc_idx, locals) in self.output.var_live_on_entry.iter() {
         for (loc_idx, locals) in self.output.var_drop_live_on_entry.iter() {
+            //for (loc_idx, locals) in self.output.var_drop_live_on_entry.iter() {
             let location = self.location_table.to_location(*loc_idx);
             for local in locals {
                 let insert = match local_live_locs.get_mut(local) {
@@ -313,6 +313,7 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
     fn collect_decls(&self) -> Vec<MirDecl> {
         let user_vars = self.collect_user_vars();
         let lives = self.lives();
+        let local_loan = self.local_loan();
         let must_live_at = self.local_must_lives_at();
         self.body
             .local_decls
@@ -321,6 +322,7 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
                 let local_index = local.index();
                 let ty = decl.ty.to_string();
                 let lives = lives.get(&local).cloned().unwrap_or(Vec::new());
+                let loan_live_at = local_loan.get(&local).cloned().unwrap_or(Vec::new());
                 let must_live_at = must_live_at.get(&local).cloned().unwrap_or(Vec::new());
                 if decl.is_user_variable() {
                     let (span, name) = user_vars.get(&local).cloned().unwrap();
@@ -442,47 +444,27 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
     }
 
     fn local_loan(&self) -> HashMap<Local, Vec<Range>> {
-        let mut res = HashMap::new();
-        for (local, locations) in self.local_loan_live_at.iter() {
-            let mut starts = Vec::new();
-            let mut mids = Vec::new();
-            for rich in locations {
-                match rich {
-                    RichLocation::Start(l) => {
-                        starts.push((l.block, l.statement_index));
-                    }
-                    RichLocation::Mid(l) => {
-                        mids.push((l.block, l.statement_index));
-                    }
-                }
-            }
-            Self::sort_locs(&mut starts);
-            Self::sort_locs(&mut mids);
-            let s = starts
+        HashMap::from_iter(
+            self.local_loan_live_at
                 .iter()
-                .zip(mids.iter())
-                .filter_map(|(s, m)| {
-                    let sr = self.stmt_location_to_range(s.0, s.1);
-                    let mr = self.stmt_location_to_range(m.0, m.1);
-                    match (sr, mr) {
-                        (Some(s), Some(m)) => Some(Range::new(s.from, m.until)),
-                        _ => None,
-                    }
-                })
-                .collect();
-            res.insert(*local, s);
-        }
-        res
+                .map(|(local, rich)| (*local, self.rich_locations_to_ranges(&rich))),
+        )
     }
 
-    fn erase_superset(mut ranges: Vec<Range>) -> Vec<Range> {
+    fn erase_superset(mut ranges: Vec<Range>, erase_subset: bool) -> Vec<Range> {
         let mut len = ranges.len();
         let mut i = 0;
         while i < len {
             let mut j = i + 1;
             while j < len {
-                if (ranges[j].from <= ranges[i].from && ranges[i].until < ranges[j].until)
-                    || (ranges[j].from < ranges[i].from && ranges[i].until <= ranges[j].until)
+                if !erase_subset
+                    && ((ranges[j].from <= ranges[i].from && ranges[i].until < ranges[j].until)
+                        || (ranges[j].from < ranges[i].from && ranges[i].until <= ranges[j].until))
+                {
+                    ranges.remove(j);
+                } else if erase_subset
+                    && ((ranges[i].from <= ranges[j].from && ranges[j].until < ranges[i].until)
+                        || (ranges[i].from < ranges[j].from && ranges[j].until <= ranges[i].until))
                 {
                     ranges.remove(j);
                 } else {
@@ -498,10 +480,20 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
         HashMap::from_iter(self.local_super_regions.iter().map(|(local, regions)| {
             (
                 *local,
-                Self::erase_superset(self.rich_locations_to_ranges(regions)),
+                Self::erase_superset(self.rich_locations_to_ranges(regions), false),
             )
         }))
     }
+    /*
+    fn local_can_lives_at(&self) -> HashMap<Local, Vec<Range>> {
+        HashMap::from_iter(self.local_super_regions.iter().map(|(local, regions)| {
+            (
+                *local,
+                Self::erase_superset(self.rich_locations_to_ranges(regions), true),
+            )
+        }))
+    }
+    */
 
     /// analyze MIR to get JSON-serializable, TypeScript friendly representation
     pub fn analyze<'a>(&mut self) -> AnalyzedMir {

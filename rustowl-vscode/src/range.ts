@@ -18,6 +18,21 @@ export const commonRange = (r1: Range, r2: Range): Range | null => {
   return { from, until };
 };
 
+export const commonRanges = (s1: Range[], s2: Range[]): Range[] => {
+  let res = [];
+  let r1 = s1.concat();
+  let r2 = s2.concat();
+  for (let i = 0; i < s1.length; i++) {
+    for (let j = i + 1; j < r2.length; j++) {
+      const common = commonRange(r1[i], r2[j]);
+      if (common) {
+        res.push(common);
+      }
+    }
+  }
+  return res;
+};
+
 export const mergeRange = (r1: Range, r2: Range): Range | null => {
   const common = commonRange(r1, r2);
   if (common) {
