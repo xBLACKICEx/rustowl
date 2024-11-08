@@ -300,9 +300,10 @@ export function activate(context: vscode.ExtensionContext) {
       .map((v) =>
         excludeRanges(
           v.range,
-          mBorrows
+          outLives
             .map((w) => w.range)
             .concat(
+              mBorrows.map((w) => w.range),
               imBorrows.map((w) => w.range),
               moves.map((w) => w.range)
             )
@@ -313,7 +314,12 @@ export function activate(context: vscode.ExtensionContext) {
       .map((v) =>
         excludeRanges(
           v.range,
-          mBorrows.map((w) => w.range).concat(imBorrows.map((w) => w.range))
+          outLives
+            .map((w) => w.range)
+            .concat(
+              mBorrows.map((w) => w.range),
+              imBorrows.map((w) => w.range)
+            )
         ).map((w) => ({ ...v, range: w }))
       )
       .flat();
@@ -321,7 +327,15 @@ export function activate(context: vscode.ExtensionContext) {
       .map((v) =>
         excludeRanges(
           v.range,
-          mBorrows.map((w) => w.range)
+          outLives.map((w) => w.range).concat(mBorrows.map((w) => w.range))
+        ).map((w) => ({ ...v, range: w }))
+      )
+      .flat();
+    mBorrows = mBorrows
+      .map((v) =>
+        excludeRanges(
+          v.range,
+          outLives.map((w) => w.range)
         ).map((w) => ({ ...v, range: w }))
       )
       .flat();
