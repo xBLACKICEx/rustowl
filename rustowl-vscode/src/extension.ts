@@ -189,14 +189,14 @@ export function activate(context: vscode.ExtensionContext) {
           .map((v) =>
             v.canLive.map((w) => ({
               ...v,
-              lives: w,
+              canLive: w,
             }))
           )
           .flat();
         const selectedLiveDecos = selectedLives.map((v) =>
           //v.must_live_at.map((w) => ({
           ({
-            range: v.lives,
+            range: v.canLive,
             hoverMessage: `lifetime of variable \`${v.name}\``,
           })
         );
@@ -206,7 +206,7 @@ export function activate(context: vscode.ExtensionContext) {
           selectedDeclsWithCanLive
             .map((v) =>
               v.must_live_at
-                .map((w) => excludeRanges(w, v.canLive))
+                .map((w) => excludeRanges(w, v.lives))
                 .flat()
                 .map((w) => ({
                   ...v,
