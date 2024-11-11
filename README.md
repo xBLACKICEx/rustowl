@@ -86,3 +86,9 @@ A new VSCode window with the extension enabled will appear.
 Open `rustowl-vscode/sample.rs` in the new VSCode window.
 
 When you make changes to Rust files, annotations indicating the movement of ownership and lifetimes will appear in the editor.
+
+
+## Note
+
+In this tool, due to the limitations of VSCode's decoration specifications, characters with descenders, such as g or parentheses, may occasionally not display underlines properly.
+Additionally, we observed that the `println!` macro sometimes produces extra output, though this does not affect usability in any significant way.

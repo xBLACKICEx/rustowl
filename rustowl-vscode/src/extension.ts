@@ -141,7 +141,7 @@ export function activate(context: vscode.ExtensionContext) {
   const outLiveDecorationType = vscode.window.createTextEditorDecorationType({
     textDecoration: "underline solid 3px hsla(0, 80%, 60%, 0.8)",
   });
-  //const emptyDecorationType = vscode.window.createTextEditorDecorationType({});
+  const emptyDecorationType = vscode.window.createTextEditorDecorationType({});
 
   let analyzed: zInfer<typeof zCollectedData> | undefined = undefined;
 
@@ -159,6 +159,7 @@ export function activate(context: vscode.ExtensionContext) {
     let imBorrows: DecoInfo[] = [];
     let mBorrows: DecoInfo[] = [];
     let outLives: DecoInfo[] = [];
+    let messages: DecoInfo[] = [];
     //clearDecoration(editor);
     const cursor = editor.document.offsetAt(editor.selection.active);
     for (const itemId in analyzed.items) {
@@ -194,29 +195,31 @@ export function activate(context: vscode.ExtensionContext) {
           .flat();
         lifetime = lifetime.concat(selectedLiveDecos);
 
+        const outliveList = selectedDecls
+          .map((v) =>
+            v.must_live_at
+              .map((w) =>
+                // if there are drop range,
+                // it's type may be implemented `Drop`
+                v.drop
+                  ? excludeRanges(w, v.drop_range)
+                  : excludeRanges(w, v.lives)
+              )
+              .flat()
+              .map((w) => ({
+                ...v,
+                outLives: w,
+              }))
+              .map((v) => ({
+                range: v.outLives,
+                hoverMessage: `variable \`${v.name}\` outlives it's lifetime`,
+              }))
+          )
+          .flat();
         outLives = outLives.concat(
-          selectedDecls
-            .map((v) =>
-              v.must_live_at
-                .map((w) =>
-                  // if there are drop range,
-                  // it's type may be implemented `Drop`
-                  v.drop.length > 0
-                    ? excludeRanges(w, v.drop)
-                    : excludeRanges(w, v.lives)
-                )
-                .flat()
-                .map((w) => ({
-                  ...v,
-                  outLives: w,
-                }))
-                .map((v) => ({
-                  range: v.outLives,
-                  hoverMessage: `variable \`${v.name}\` outlives it's lifetime`,
-                }))
-            )
-            .flat()
+          outliveList.map((v) => ({ range: v.range }))
         );
+        messages = messages.concat(outliveList);
 
         // start generating decorations for basic blocks
         for (const bb of mir.basic_blocks) {
@@ -294,6 +297,7 @@ export function activate(context: vscode.ExtensionContext) {
         // end basic blocks
       }
     }
+    messages = messages.concat(lifetime);
     lifetime = lifetime
       .map((v) =>
         excludeRanges(
@@ -305,9 +309,10 @@ export function activate(context: vscode.ExtensionContext) {
               imBorrows.map((w) => w.range),
               moves.map((w) => w.range)
             )
-        ).map((w) => ({ ...v, range: w }))
+        ).map((w) => ({ range: w }))
       )
       .flat();
+    messages = messages.concat(moves);
     moves = moves
       .map((v) =>
         excludeRanges(
@@ -318,23 +323,25 @@ export function activate(context: vscode.ExtensionContext) {
               mBorrows.map((w) => w.range),
               imBorrows.map((w) => w.range)
             )
-        ).map((w) => ({ ...v, range: w }))
+        ).map((w) => ({ range: w }))
       )
       .flat();
+    messages = messages.concat(imBorrows);
     imBorrows = imBorrows
       .map((v) =>
         excludeRanges(
           v.range,
           outLives.map((w) => w.range).concat(mBorrows.map((w) => w.range))
-        ).map((w) => ({ ...v, range: w }))
+        ).map((w) => ({ range: w }))
       )
       .flat();
+    messages = messages.concat(mBorrows);
     mBorrows = mBorrows
       .map((v) =>
         excludeRanges(
           v.range,
           outLives.map((w) => w.range)
-        ).map((w) => ({ ...v, range: w }))
+        ).map((w) => ({ range: w }))
       )
       .flat();
 
@@ -349,6 +356,7 @@ export function activate(context: vscode.ExtensionContext) {
     editor.setDecorations(imBorrowDecorationType, decoInfoMap(imBorrows));
     editor.setDecorations(mBorrowDecorationType, decoInfoMap(mBorrows));
     editor.setDecorations(outLiveDecorationType, decoInfoMap(outLives));
+    editor.setDecorations(emptyDecorationType, decoInfoMap(messages));
   };
   const resetDecoration = (editor: vscode.TextEditor) => {
     editor.setDecorations(lifetimeDecorationType, []);

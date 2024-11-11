@@ -58,7 +58,7 @@ pub struct MirAnalyzer<'c, 'tcx> {
     compiler: &'c Compiler,
     location_table: &'c LocationTable,
     facts: &'c BodyWithBorrowckFacts<'tcx>,
-    //input: PoloniusInput,
+    input: PoloniusInput,
     output_insensitive: PoloniusOutput,
     output_datafrog: PoloniusOutput,
     bb_map: HashMap<BasicBlock, BasicBlockData<'tcx>>,
@@ -81,7 +81,7 @@ pub struct MirAnalyzer<'c, 'tcx> {
 impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
     /// initialize analyzer
     pub fn new(compiler: &'c Compiler, facts: &'c BodyWithBorrowckFacts<'tcx>) -> Self {
-        let af = &**facts.input_facts.as_ref().unwrap();
+        let input = *facts.input_facts.as_ref().unwrap().clone();
         let location_table = facts.location_table.as_ref().unwrap();
 
         // local -> all borrows on that local
@@ -103,11 +103,14 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
         log::info!("start re-computing borrow check with dump: true");
         // compute insensitive
         // it may include invalid region, which can be used at showing wrong region
-        let output_insensitive =
-            PoloniusOutput::compute(af, polonius_engine::Algorithm::LocationInsensitive, true);
+        let output_insensitive = PoloniusOutput::compute(
+            &input,
+            polonius_engine::Algorithm::LocationInsensitive,
+            true,
+        );
         // compute accurate region, which may eliminate invalid region
         let output_datafrog =
-            PoloniusOutput::compute(af, polonius_engine::Algorithm::DatafrogOpt, true);
+            PoloniusOutput::compute(&input, polonius_engine::Algorithm::DatafrogOpt, true);
         log::info!("borrow check finished");
 
         //let local_loan_live: HashMap<Local, >
@@ -224,7 +227,6 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
         }
         */
         //}
-        let input = *facts.input_facts.as_ref().unwrap().clone();
 
         let mut region_borrow_issue = HashMap::new();
         let mut borrow_region_issue = HashMap::new();
@@ -446,7 +448,7 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
             compiler,
             location_table,
             facts,
-            //input,
+            input,
             output_insensitive,
             output_datafrog,
             bb_map,
@@ -609,7 +611,7 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
         //println!("{:?}", can_live_at);
         //println!("{:?}", self.region_locations);
         //let invalid = self.local_invalid();
-        let drop = self.drop_range();
+        let drop_range = self.drop_range();
         self.facts
             .body
             .local_decls
@@ -623,7 +625,8 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
                 //let lives = can_live_at.get(&local).cloned().unwrap_or(Vec::new());
                 //let lives = self.local_live(local);
                 let lives = lives.get(&local).cloned().unwrap_or(Vec::new());
-                let drop = drop.get(&local).cloned().unwrap_or(Vec::new());
+                let drop = self.is_drop(local);
+                let drop_range = drop_range.get(&local).cloned().unwrap_or(Vec::new());
                 //println!("{:?}: {:?}", local, self.collect_borrow_recursive(local));
                 if decl.is_user_variable() {
                     let (span, name) = user_vars.get(&local).cloned().unwrap();
@@ -635,6 +638,7 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
                         lives,
                         must_live_at,
                         drop,
+                        drop_range,
                         //can_live_at,
                     }
                 } else {
@@ -644,6 +648,7 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
                         lives,
                         must_live_at,
                         drop,
+                        drop_range,
                         //can_live_at,
                     }
                 }
@@ -1035,6 +1040,15 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
                 ),
             )
         }))
+    }
+
+    fn is_drop(&self, local: Local) -> bool {
+        for (drop_local, _) in self.input.var_dropped_at.iter() {
+            if *drop_local == local {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// analyze MIR to get JSON-serializable, TypeScript friendly representation

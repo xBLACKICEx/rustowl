@@ -14,7 +14,8 @@ export const zMirDecl = z.union([
     ty: z.string(),
     lives: zRange.array(),
     must_live_at: zRange.array(),
-    drop: zRange.array(),
+    drop: z.boolean(),
+    drop_range: zRange.array(),
     //can_live_at: zRange.array(),
   }),
   z.object({
@@ -23,7 +24,8 @@ export const zMirDecl = z.union([
     ty: z.string(),
     lives: zRange.array(),
     must_live_at: zRange.array(),
-    drop: zRange.array(),
+    drop: z.boolean(),
+    drop_range: zRange.array(),
     //can_live_at: zRange.array(),
   }),
 ]);
