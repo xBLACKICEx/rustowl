@@ -181,32 +181,30 @@ export function activate(context: vscode.ExtensionContext) {
 
         console.log(selectedDecls);
 
-        const selectedDeclsWithCanLive = selectedDecls.map((v) => ({
-          ...v,
-          canLive: v.lives, //commonRanges(v.lives, v.drop),
-        }));
-        const selectedLives = selectedDeclsWithCanLive
+        const selectedLiveDecos = selectedDecls
           .map((v) =>
-            v.canLive.map((w) => ({
-              ...v,
-              canLive: w,
-            }))
+            //v.must_live_at.map((w) => ({
+            v.lives
+              .map((w) => ({
+                range: w,
+                hoverMessage: `lifetime of variable \`${v.name}\``,
+              }))
+              .flat()
           )
           .flat();
-        const selectedLiveDecos = selectedLives.map((v) =>
-          //v.must_live_at.map((w) => ({
-          ({
-            range: v.canLive,
-            hoverMessage: `lifetime of variable \`${v.name}\``,
-          })
-        );
         lifetime = lifetime.concat(selectedLiveDecos);
 
         outLives = outLives.concat(
-          selectedDeclsWithCanLive
+          selectedDecls
             .map((v) =>
               v.must_live_at
-                .map((w) => excludeRanges(w, v.canLive))
+                .map((w) =>
+                  // if there are drop range,
+                  // it's type may be implemented `Drop`
+                  v.drop.length > 0
+                    ? excludeRanges(w, v.drop)
+                    : excludeRanges(w, v.lives)
+                )
                 .flat()
                 .map((w) => ({
                   ...v,
@@ -214,7 +212,7 @@ export function activate(context: vscode.ExtensionContext) {
                 }))
                 .map((v) => ({
                   range: v.outLives,
-                  hoverMessage: `reference of variable \`${v.name}\` outlives it's lifetime`,
+                  hoverMessage: `variable \`${v.name}\` outlives it's lifetime`,
                 }))
             )
             .flat()
