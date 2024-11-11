@@ -439,13 +439,21 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions
   );
 
+  if (dockerStatus === "not started") {
+    startServer();
+  }
+  /*
   if (serverProcess === undefined) {
     runServer();
   }
+  */
 }
 
 export function deactivate() {
+  dockerStop();
+  /*
   if (serverProcess instanceof ChildProcess) {
     serverProcess.kill();
   }
+    */
 }
