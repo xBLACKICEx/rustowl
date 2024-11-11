@@ -1,5 +1,6 @@
 #![feature(rustc_private)]
 
+pub extern crate polonius_engine;
 pub extern crate rustc_borrowck;
 pub extern crate rustc_driver;
 pub extern crate rustc_errors;
@@ -21,6 +22,7 @@ use rustc_interface::interface;
 use rustc_middle::mir::{BindingForm, Body, Local, LocalDecl, LocalInfo, LocalKind, StatementKind};
 use rustc_session::config;
 use rustc_span::{FileName, RealFileName};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{atomic::AtomicBool, Arc};
 
@@ -50,7 +52,7 @@ pub fn run_compiler(
         output_dir: None,
         output_file: None,
         file_loader: None,
-        lint_caps: rustc_hash::FxHashMap::default(),
+        lint_caps: HashMap::default(),
         register_lints: None,
         override_queries: None,
         registry: rustc_driver::diagnostics_registry(),

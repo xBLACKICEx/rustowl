@@ -183,7 +183,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         const selectedDeclsWithCanLive = selectedDecls.map((v) => ({
           ...v,
-          canLive: commonRanges(v.lives, v.must_live_at),
+          canLive: v.lives, //commonRanges(v.lives, v.drop),
         }));
         const selectedLives = selectedDeclsWithCanLive
           .map((v) =>
@@ -206,7 +206,7 @@ export function activate(context: vscode.ExtensionContext) {
           selectedDeclsWithCanLive
             .map((v) =>
               v.must_live_at
-                .map((w) => excludeRanges(w, v.lives))
+                .map((w) => excludeRanges(w, v.canLive))
                 .flat()
                 .map((w) => ({
                   ...v,

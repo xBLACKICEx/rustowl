@@ -1,7 +1,9 @@
 use crate::models::*;
 use crate::AnalyzedMir;
+use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::{
-    BodyWithBorrowckFacts, BorrowIndex, LocationTable, PoloniusOutput, RichLocation,
+    BodyWithBorrowckFacts, BorrowIndex, LocationTable, PoloniusInput, PoloniusOutput, RichLocation,
+    RustcFacts,
 };
 use rustc_interface::interface::Compiler;
 use rustc_middle::{
@@ -13,16 +15,68 @@ use rustc_middle::{
 };
 use rustc_span::Span;
 use std::collections::{BTreeSet, HashMap, LinkedList};
-use std::str::FromStr;
+use std::hash::Hash;
+
+type Borrow = <RustcFacts as FactTypes>::Loan;
+type Region = <RustcFacts as FactTypes>::Origin;
+
+trait Append<K, V>
+where
+    K: Hash + Eq + Clone,
+{
+    fn append(&mut self, key: &K, value: V);
+}
+impl<K, V> Append<K, V> for HashMap<K, Vec<V>>
+where
+    K: Hash + Eq + Clone,
+{
+    fn append(&mut self, key: &K, value: V) {
+        if let Some(v) = self.get_mut(key) {
+            v.push(value);
+        } else {
+            self.insert(key.clone(), vec![value]);
+        }
+    }
+}
+impl<K, V> Append<K, V> for HashMap<K, BTreeSet<V>>
+where
+    K: Hash + Eq + Clone,
+    V: Ord,
+{
+    fn append(&mut self, key: &K, value: V) {
+        if let Some(v) = self.get_mut(key) {
+            v.insert(value);
+        } else {
+            let mut set = BTreeSet::new();
+            set.insert(value);
+            self.insert(key.clone(), set);
+        }
+    }
+}
 
 pub struct MirAnalyzer<'c, 'tcx> {
     compiler: &'c Compiler,
     location_table: &'c LocationTable,
-    body: Body<'tcx>,
-    output: PoloniusOutput,
+    facts: &'c BodyWithBorrowckFacts<'tcx>,
+    //input: PoloniusInput,
+    output_insensitive: PoloniusOutput,
+    output_datafrog: PoloniusOutput,
     bb_map: HashMap<BasicBlock, BasicBlockData<'tcx>>,
-    local_loan_live_at: HashMap<Local, Vec<RichLocation>>,
-    local_super_regions: HashMap<Local, Vec<RichLocation>>,
+    //local_loan_live_at: HashMap<Local, Vec<RichLocation>>,
+    //local_super_regions: HashMap<Local, Vec<RichLocation>>,
+    //region_locations: HashMap<Region, Vec<RichLocation>>,
+    local_borrows: HashMap<Local, Vec<BorrowIndex>>,
+    borrow_locals: HashMap<Borrow, Local>,
+    /*
+    local_must_regions: HashMap<Local, BTreeSet<Region>>,
+    local_actual_regions: HashMap<Local, BTreeSet<Region>>,
+    borrow_regions: HashMap<BorrowIndex, BTreeSet<Region>>, //origin_live_at: HashMap<Region, Locb
+    local_regions: HashMap<Local, BTreeSet<Region>>,
+    local_actual_locations: HashMap<Local, Vec<RichLocation>>,
+    local_borrow_regions: HashMap<Local, BTreeSet<Region>>,
+    borrow_local_def: HashMap<BorrowIndex, Local>,
+    local_invalid_locations: HashMap<Local, Vec<RichLocation>>,
+    */
 }
 impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
     /// initialize analyzer
@@ -31,7 +85,7 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
         let location_table = facts.location_table.as_ref().unwrap();
 
         // local -> all borrows on that local
-        let local_borrow: HashMap<Local, Vec<BorrowIndex>> = HashMap::from_iter(
+        let local_borrows: HashMap<Local, Vec<BorrowIndex>> = HashMap::from_iter(
             facts
                 .borrow_set
                 .local_map
@@ -40,26 +94,25 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
                     (*local, borrow_idc.iter().map(|v| v.clone()).collect())
                 }),
         );
-        let mut borrow_idx_local = HashMap::new();
-        for (local, borrow_idc) in local_borrow.iter() {
+        let mut borrow_locals = HashMap::new();
+        for (local, borrow_idc) in local_borrows.iter() {
             for borrow_idx in borrow_idc {
-                let locals = match borrow_idx_local.get_mut(borrow_idx) {
-                    Some(v) => v,
-                    None => {
-                        borrow_idx_local.insert(*borrow_idx, Vec::new());
-                        borrow_idx_local.get_mut(borrow_idx).unwrap()
-                    }
-                };
-                locals.push(*local);
+                borrow_locals.insert(*borrow_idx, *local);
             }
         }
-        let body = facts.body.clone();
         log::info!("start re-computing borrow check with dump: true");
-        let output = PoloniusOutput::compute(af, FromStr::from_str("Hybrid").unwrap(), true);
+        // compute insensitive
+        // it may include invalid region, which can be used at showing wrong region
+        let output_insensitive =
+            PoloniusOutput::compute(af, polonius_engine::Algorithm::LocationInsensitive, true);
+        // compute accurate region, which may eliminate invalid region
+        let output_datafrog =
+            PoloniusOutput::compute(af, polonius_engine::Algorithm::DatafrogOpt, true);
         log::info!("borrow check finished");
 
         //let local_loan_live: HashMap<Local, >
         //println!("{:?}", output);
+        /*
         let mut local_loan_live_at = HashMap::new();
         for (location_idx, borrow_idc) in output.loan_live_at.iter() {
             let location = location_table.to_location(*location_idx);
@@ -78,6 +131,7 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
                 }
             }
         }
+        */
 
         // local's living range in provided source code
 
@@ -94,73 +148,296 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
         */
 
         // locations that region includes
-        let mut region_idx_locations = HashMap::new();
+        /*
+        let mut region_locations = HashMap::new();
+        let mut region_locations_idc: HashMap<_, BTreeSet<_>> = HashMap::new();
         for (location_idx, region_idc) in output.origin_live_on_entry.iter() {
             for region_idx in region_idc {
-                let insert = match region_idx_locations.get_mut(region_idx) {
+                let insert = match region_locations.get_mut(region_idx) {
                     Some(v) => v,
                     None => {
-                        region_idx_locations.insert(*region_idx, Vec::new());
-                        region_idx_locations.get_mut(region_idx).unwrap()
+                        region_locations.insert(*region_idx, Vec::new());
+                        region_locations.get_mut(region_idx).unwrap()
                     }
                 };
                 insert.push(location_table.to_location(*location_idx).clone());
+                region_locations_idc.append(region_idx, *location_idx);
             }
         }
 
-        // to know the regions that the region[i] :> for all locals
-        // this must hold
-        let mut local_idx_super_region_idc = HashMap::new();
+        // compute regions where the local must be live
+        let mut local_must_regions = HashMap::new();
         for (region_idx, borrow_idc) in output.origin_contains_loan_anywhere.iter() {
             for borrow_idx in borrow_idc {
-                if let Some(locals) = borrow_idx_local.get(borrow_idx) {
-                    for local in locals {
-                        let insert = match local_idx_super_region_idc.get_mut(local) {
-                            Some(v) => v,
-                            None => {
-                                local_idx_super_region_idc.insert(*local, BTreeSet::new());
-                                local_idx_super_region_idc.get_mut(local).unwrap()
-                            }
-                        };
-                        insert.insert(region_idx);
+                if let Some(local) = borrow_locals.get(borrow_idx) {
+                    local_must_regions.append(local, *region_idx);
+                }
+            }
+        }
+        //let mut local_super_regions = HashMap::new();
+
+        let mut local_locations: HashMap<_, BTreeSet<_>> = HashMap::new();
+        for (location, locals) in output.var_live_on_entry.iter() {
+            for local in locals {
+                local_locations.append(local, *location);
+            }
+        }
+        /*
+        for (location, locals) in output.var_drop_live_on_entry.iter() {
+            for local in locals {
+                local_locations.append(local, *location);
+            }
+        }
+        */
+        let mut local_regions_may_included: HashMap<_, BTreeSet<_>> = HashMap::new();
+        for (local, locations) in local_locations.iter() {
+            for location in locations {
+                if let Some(regions) = output.origin_live_on_entry.get(location) {
+                    for region in regions {
+                        local_regions_may_included.append(local, *region);
                     }
                 }
             }
         }
 
-        let mut local_super_regions = HashMap::new();
-        for (local_idx, super_idc) in local_idx_super_region_idc.iter() {
-            local_super_regions.insert(*local_idx, Vec::new());
-            let insert = local_super_regions.get_mut(local_idx).unwrap();
-            for super_idx in super_idc {
-                if let Some(locations) = region_idx_locations.get(&super_idx) {
-                    insert.extend_from_slice(locations);
+        //println!("loan: {:?}", output.loan_live_at);
+        //println!("subset_anywhere: {:?}", output.subset_anywhere);
+
+        //for (local, regions) in local_must_regions.iter() {
+        /*
+        let mut error_subset = Vec::new();
+        let mut ok_subset = Vec::new();
+        for (outer, inners) in output.subset_anywhere.iter() {
+            for inner in inners {
+                match (
+                    region_locations_idc.get(outer),
+                    region_locations_idc.get(inner),
+                ) {
+                    (Some(o), Some(i)) => if !i.is_subset(o) {
+                        error_subset.push((outer, inner));
+                    } else {
+                        ok_subset
+                    },
+                    _ => {}
                 }
             }
         }
+        */
+        //}
+        let input = *facts.input_facts.as_ref().unwrap().clone();
+
+        let mut region_borrow_issue = HashMap::new();
+        let mut borrow_region_issue = HashMap::new();
+        for (region, borrow, _) in input.loan_issued_at.iter() {
+            region_borrow_issue.insert(*region, *borrow);
+            borrow_region_issue.insert(*borrow, *region);
+        }
+        let mut borrow_issued_at = HashMap::new();
+        for (_, borrow, location) in input.loan_issued_at.iter() {
+            borrow_issued_at.insert(*borrow, *location);
+        }
+        let mut local_defined_at = HashMap::new();
+        for (local, location) in input.var_defined_at.iter() {
+            local_defined_at.insert(*location, *local);
+        }
+        let mut borrow_local_def = HashMap::new();
+        for (borrow, location) in borrow_issued_at.iter() {
+            if let Some(local) = local_defined_at.get(location) {
+                borrow_local_def.insert(*borrow, *local);
+            }
+        }
+
+        let mut local_borrow_regions = HashMap::new();
+        for (local, borrows) in local_borrows.iter() {
+            let regions = borrows
+                .iter()
+                .filter_map(|v| borrow_region_issue.get(v).cloned())
+                .collect();
+            local_borrow_regions.insert(*local, regions);
+        }
+        //println!("{:?}", local_borrow_regions);
+
+        let mut local_live_at = HashMap::new();
+        for (location, locals) in output.var_live_on_entry.iter() {
+            for local in locals {
+                let insert = match local_live_at.get_mut(local) {
+                    Some(v) => v,
+                    None => {
+                        local_live_at.insert(*local, BTreeSet::new());
+                        local_live_at.get_mut(local).unwrap()
+                    }
+                };
+                insert.insert(*location);
+            }
+        }
+
+        // for (location, regions) in output.origin_live_on_entry.iter() {}
+        let mut borrow_live = HashMap::new();
+        //for (region, location) in region_locations_idc.iter() {
+        for (borrow, local) in borrow_local_def.iter() {
+            //if let Some(borrow) = region_borrow_issue.get(region) {
+            if let Some(locations) = local_live_at.get(local) {
+                borrow_live.insert(*borrow, locations.clone());
+            }
+        }
+
+        let mut local_live_with_borrow = local_live_at.clone();
+        for (borrow, borrow_live_at) in borrow_live.iter() {
+            if let Some(local) = borrow_locals.get(borrow) {
+                if let Some(live) = local_live_with_borrow.get_mut(local) {
+                    let union = live.union(borrow_live_at);
+                    *live = union.cloned().collect();
+                }
+            }
+        }
+        let local_actual_locations =
+            HashMap::from_iter(local_live_with_borrow.iter().map(|(local, locations)| {
+                (
+                    *local,
+                    locations
+                        .into_iter()
+                        .map(|location| location_table.to_location(*location).clone())
+                        .collect(),
+                )
+            }));
+
+        for (location, region) in output.origin_live_on_entry.iter() {}
+
+        /*
+        let mut local_regions: HashMap<_, BTreeSet<_>> = HashMap::new();
+        for (local, borrows) in local_borrows.iter() {
+            for borrow in borrows {
+                if let Some(region) = borrow_issue_region.get(borrow) {
+                    local_regions.append(local, *region);
+                }
+            }
+        }
+        */
+
+        let mut valid_subset = Vec::new();
+        for (outer, inners) in output.subset_anywhere.iter() {
+            if let Some(outer_locations) = region_locations_idc.get(outer) {
+                for inner in inners {
+                    if let Some(inner_locations) = region_locations_idc.get(inner) {
+                        if inner_locations.is_subset(outer_locations) {
+                            valid_subset.push((*outer, *inner));
+                        }
+                    }
+                }
+            }
+        }
+
+        //println!("{:?}", valid_subset);
+        let mut local_regions = HashMap::new();
+        for (outer, inner) in valid_subset.iter() {
+            if let Some(borrow) = region_borrow_issue.get(outer) {
+                if let Some(local) = borrow_locals.get(borrow) {
+                    local_regions.append(local, *outer);
+                    local_regions.append(local, *inner);
+                }
+            }
+        }
+
+        let mut local_invalid: HashMap<_, Vec<_>> = HashMap::new();
+        /*
+        for (location, region_borrows) in output.origin_contains_loan_at.iter() {
+            for (region, borrows) in region_borrows {
+                for borrow in borrows {
+                    if let Some(local) = borrow_locals.get(borrow) {
+                        local_invalid.append(local, *location);
+                    }
+                }
+            }
+        }
+        */
+        for (location, borrows) in output.loan_live_at.iter() {
+            for borrow in borrows {
+                if let Some(local) = borrow_locals.get(borrow) {
+                    local_invalid.append(local, *location);
+                }
+            }
+        }
+        let local_invalid_locations: HashMap<_, Vec<_>> =
+            HashMap::from_iter(local_invalid.iter().map(|(local, locations)| {
+                (
+                    *local,
+                    locations
+                        .iter()
+                        .map(|v| location_table.to_location(*v))
+                        .collect(),
+                )
+            }));
+        println!("{local_invalid_locations:?}");
+
+        //println!("{:?}", input.loan_invalidated_at);
+
+        /*
+        // compute actual regions where the local is live
+        let mut actual_region_borrows = HashMap::new();
+        for (location, regions) in output.origin_live_on_entry.iter() {
+            if let Some(region_borrows) = output.origin_contains_loan_at.get(location) {
+                for region in regions {
+                    if let Some(borrows) = region_borrows.get(region) {
+                        let insert = match actual_region_borrows.get_mut(region) {
+                            Some(v) => v,
+                            None => {
+                                actual_region_borrows.insert(*region, BTreeSet::new());
+                                actual_region_borrows.get_mut(region).unwrap()
+                            }
+                        };
+                        insert.extend(borrows.clone());
+                    }
+                }
+            }
+        }
+        for (location, locals) in output.var_live_on_entry.iter() {
+            if let Some(loan_at) = output.origin_contains_loan_at.get(location) {
+                for local in locals {
+                    if let Some(borrow) = local_borrows(local) {
+                        for (region, borrows) in loan_at.iter() {}
+                    }
+                }
+            }
+        }
+        let mut local_actual_regions = HashMap::new();
+        for (region, borrows) in actual_region_borrows.iter() {
+            for borrow in borrows {
+                if let Some(local) = borrow_locals.get(borrow) {
+                    local_actual_regions.append(local, *region);
+                }
+            }
+        }
+        */
+
+        //for (location_idx, region_idc) in output.origin_live_on_entry.iter() {}
 
         // all subset that must hold
         // borrows lives in mapped region indices
         // regions must includes all borrows, their key
-        // region :> borrow[i] must hold
-        let mut borrow_idx_region_idc = HashMap::new();
+        // region: borrow[i] must hold
+        let mut borrow_regions = HashMap::new();
         for (region_id, borrow_idc) in output.origin_contains_loan_anywhere.iter() {
             for borrow_idx in borrow_idc.iter() {
-                let insert = match borrow_idx_region_idc.get_mut(borrow_idx) {
+                let insert = match borrow_regions.get_mut(borrow_idx) {
                     Some(v) => v,
                     None => {
-                        borrow_idx_region_idc.insert(*borrow_idx, BTreeSet::new());
-                        borrow_idx_region_idc.get_mut(borrow_idx).unwrap()
+                        borrow_regions.insert(*borrow_idx, BTreeSet::new());
+                        borrow_regions.get_mut(borrow_idx).unwrap()
                     }
                 };
                 insert.insert(*region_id);
             }
         }
+        */
+
+        //for (location, region_borrows) in output.origin_contains_loan_at.iter() {}
+
         // mapped regions must includes locals living
         //for (sup, subs) in output.subset_anywhere.iter() {}
 
         // build basic blocks map
-        let bb_map = body
+        let bb_map = facts
+            .body
             .basic_blocks
             .iter_enumerated()
             .map(|(b, d)| (b, d.clone()))
@@ -168,11 +445,22 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
         Self {
             compiler,
             location_table,
-            body,
-            output,
+            facts,
+            //input,
+            output_insensitive,
+            output_datafrog,
             bb_map,
-            local_loan_live_at,
-            local_super_regions,
+            //local_must_regions,
+            //local_actual_regions: HashMap::new(),
+            local_borrows,
+            borrow_locals,
+            //region_locations,
+            //borrow_regions,
+            //local_regions,
+            //local_actual_locations,
+            //local_borrow_regions,
+            //borrow_local_def,
+            //local_invalid_locations,
         }
     }
 
@@ -216,9 +504,10 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
     }
 
     /// obtain map from local id to living range
-    fn lives(&self) -> HashMap<Local, Vec<Range>> {
+    fn drop_range(&self) -> HashMap<Local, Vec<Range>> {
         let mut local_live_locs = HashMap::new();
-        for (loc_idx, locals) in self.output.var_drop_live_on_entry.iter() {
+        for (loc_idx, locals) in self.output_datafrog.var_drop_live_on_entry.iter() {
+            //for (loc_idx, locals) in self.output.var_live_on_entry.iter() {
             //for (loc_idx, locals) in self.output.var_drop_live_on_entry.iter() {
             let location = self.location_table.to_location(*loc_idx);
             for local in locals {
@@ -297,7 +586,8 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
 
     /// collect user defined variables from debug info in MIR
     fn collect_user_vars(&self) -> HashMap<Local, (Span, String)> {
-        self.body
+        self.facts
+            .body
             .var_debug_info
             .iter()
             .filter_map(|debug| match &debug.value {
@@ -312,18 +602,29 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
     /// collect declared variables in MIR body
     fn collect_decls(&self) -> Vec<MirDecl> {
         let user_vars = self.collect_user_vars();
-        let lives = self.lives();
-        let local_loan = self.local_loan();
-        let must_live_at = self.local_must_lives_at();
-        self.body
+        let lives = self.get_accurate_live();
+        //let local_loan = self.local_loan();
+        let must_live_at = self.get_must_live();
+        //let can_live_at = self.local_actually_live_at();
+        //println!("{:?}", can_live_at);
+        //println!("{:?}", self.region_locations);
+        //let invalid = self.local_invalid();
+        let drop = self.drop_range();
+        self.facts
+            .body
             .local_decls
             .iter_enumerated()
             .map(|(local, decl)| {
                 let local_index = local.index();
                 let ty = decl.ty.to_string();
-                let lives = lives.get(&local).cloned().unwrap_or(Vec::new());
-                let loan_live_at = local_loan.get(&local).cloned().unwrap_or(Vec::new());
+                //let lives = lives.get(&local).cloned().unwrap_or(Vec::new());
+                //let loan_live_at = local_loan.get(&local).cloned().unwrap_or(Vec::new());
                 let must_live_at = must_live_at.get(&local).cloned().unwrap_or(Vec::new());
+                //let lives = can_live_at.get(&local).cloned().unwrap_or(Vec::new());
+                //let lives = self.local_live(local);
+                let lives = lives.get(&local).cloned().unwrap_or(Vec::new());
+                let drop = drop.get(&local).cloned().unwrap_or(Vec::new());
+                //println!("{:?}: {:?}", local, self.collect_borrow_recursive(local));
                 if decl.is_user_variable() {
                     let (span, name) = user_vars.get(&local).cloned().unwrap();
                     MirDecl::User {
@@ -333,6 +634,8 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
                         ty,
                         lives,
                         must_live_at,
+                        drop,
+                        //can_live_at,
                     }
                 } else {
                     MirDecl::Other {
@@ -340,6 +643,8 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
                         ty,
                         lives,
                         must_live_at,
+                        drop,
+                        //can_live_at,
                     }
                 }
             })
@@ -443,14 +748,6 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
             .collect()
     }
 
-    fn local_loan(&self) -> HashMap<Local, Vec<Range>> {
-        HashMap::from_iter(
-            self.local_loan_live_at
-                .iter()
-                .map(|(local, rich)| (*local, self.rich_locations_to_ranges(&rich))),
-        )
-    }
-
     fn erase_superset(mut ranges: Vec<Range>, erase_subset: bool) -> Vec<Range> {
         let mut len = ranges.len();
         let mut i = 0;
@@ -476,13 +773,55 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
         }
         ranges
     }
-    fn local_must_lives_at(&self) -> HashMap<Local, Vec<Range>> {
-        HashMap::from_iter(self.local_super_regions.iter().map(|(local, regions)| {
+    /*
+    fn local_must_live_at(&self) -> HashMap<Local, Vec<Range>> {
+        HashMap::from_iter(self.local_must_regions.iter().map(|(local, regions)| {
             (
                 *local,
-                Self::erase_superset(self.rich_locations_to_ranges(regions), false),
+                Self::erase_superset(
+                    self.rich_locations_to_ranges(
+                        &regions
+                            .into_iter()
+                            .filter_map(|v| self.region_locations.get(v).cloned())
+                            .flatten()
+                            .collect::<Vec<_>>(),
+                    ),
+                    false,
+                ),
             )
         }))
+    }
+    fn local_invalid(&self) -> HashMap<Local, Vec<Range>> {
+        HashMap::from_iter(
+            self.local_invalid_locations
+                .iter()
+                .map(|(local, richs)| (*local, self.rich_locations_to_ranges(richs))),
+        )
+    }
+    fn local_actually_live_at(&self) -> HashMap<Local, Vec<Range>> {
+        HashMap::from_iter(
+            self.local_actual_locations
+                .iter()
+                .map(|(local, richs)| (*local, self.rich_locations_to_ranges(richs))),
+        )
+        /*
+        //HashMap::from_iter(self.local_regions.iter().map(|(local, regions)| {
+        HashMap::from_iter(self.local_borrow_regions.iter().map(|(local, regions)| {
+            (
+                *local,
+                Self::erase_superset(
+                    self.rich_locations_to_ranges(
+                        &regions
+                            .into_iter()
+                            .filter_map(|v| self.region_locations.get(v).cloned())
+                            .flatten()
+                            .collect::<Vec<_>>(),
+                    ),
+                    false,
+                ),
+            )
+        }))
+        */
     }
     /*
     fn local_can_lives_at(&self) -> HashMap<Local, Vec<Range>> {
@@ -494,6 +833,209 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
         }))
     }
     */
+
+    fn borrows_recursive(&self, local: Local) -> BTreeSet<Borrow> {
+        let mut new = BTreeSet::new();
+        if let Some(borrows) = self.local_borrows.get(&local) {
+            for borrow in borrows {
+                new.insert(*borrow);
+                if let Some(local) = self.borrow_local_def.get(borrow) {
+                    new.extend(self.borrows_recursive(*local));
+                }
+            }
+        }
+        new
+    }
+    fn collect_borrow_recursive(&self, local: Local) -> BTreeSet<Local> {
+        let mut new = BTreeSet::new();
+        new.insert(local);
+        if let Some(borrows) = self.local_borrows.get(&local) {
+            for borrow in borrows {
+                if let Some(local) = self.borrow_local_def.get(borrow) {
+                    new.extend(self.collect_borrow_recursive(*local));
+                }
+            }
+        }
+        new
+    }
+    fn local_live(&self, local: Local) -> Vec<Range> {
+        let mut richs = Vec::new();
+        for borrow in self.borrows_recursive(local).iter() {
+            if let Some(regions) = self.borrow_regions.get(borrow) {
+                for region in regions {
+                    if let Some(locs) = self.region_locations.get(region) {
+                        richs.extend_from_slice(locs);
+                    }
+                }
+            }
+        }
+        self.rich_locations_to_ranges(&richs)
+        /*
+        for local in self.collect_borrow_recursive(local) {
+            if let Some(regions) = self.local_borrow_regions.get(&local) {
+                for region in regions {
+                    if let Some(locations) = self.region_locations.get(region) {
+                        richs.extend_from_slice(locations);
+                    }
+                }
+            }
+        }
+        */
+        /*
+        let mut local_live_on = BTreeSet::new();
+        for local in self.collect_borrow_recursive(local) {
+            for (location, locals) in self.output.var_live_on_entry.iter() {
+                if locals.contains(&local) {
+                    local_live_on.insert(*location);
+                }
+            }
+        }
+        */
+        /*
+        let richs: Vec<_> = local_live_on
+            .iter()
+            .map(|v| self.location_table.to_location(*v))
+            .collect();
+        */
+    }
+    /*
+    fn get_computed_var_lifetime(&self) {
+        // borrow to container regions
+        // local to their origins
+        self.local_super_regions;
+        let mut local_live_at = HashMap::new();
+        for (location, locals) in self.output.var_live_on_entry.iter() {
+            for local in locals {
+                let insert = match local_live_at.get_mut(local) {
+                    Some(v) => v,
+                    None => {
+                        local_live_at.insert(*local, BTreeSet::new());
+                        local_live_at.get_mut(local).unwrap()
+                    }
+                };
+                insert.insert(*location);
+            }
+        }
+        let local_borrow = &self.facts.borrow_set.local_map;
+        let local_live_at = HashMap::new();
+        for (local, origin) in local_origin.iter() {
+            if let Some(locations) = local_live_at.get(local) {}
+        }
+        self.output.origin_contains_loan_anywhere
+    }
+    */
+    */
+
+    fn get_accurate_live(&self) -> HashMap<Local, Vec<Range>> {
+        let output = &self.output_datafrog;
+        let mut local_loan_live_at = HashMap::new();
+        for (location_idx, borrow_idc) in output.loan_live_at.iter() {
+            let location = self.location_table.to_location(*location_idx);
+            for borrow_idx in borrow_idc {
+                if let Some(local) = self.borrow_locals.get(borrow_idx) {
+                    let locations = match local_loan_live_at.get_mut(local) {
+                        Some(v) => v,
+                        None => {
+                            local_loan_live_at.insert(*local, Vec::new());
+                            local_loan_live_at.get_mut(local).unwrap()
+                        }
+                    };
+                    locations.push(location);
+                }
+            }
+        }
+        HashMap::from_iter(
+            local_loan_live_at
+                .iter()
+                .map(|(local, rich)| (*local, self.rich_locations_to_ranges(rich))),
+        )
+        /*
+        let mut local_live_locs = HashMap::new();
+        for (loc_idx, locals) in self.output_datafrog.var_live_on_entry.iter() {
+            //for (loc_idx, locals) in self.output.var_drop_live_on_entry.iter() {
+            let location = self.location_table.to_location(*loc_idx);
+            for local in locals {
+                let insert = match local_live_locs.get_mut(local) {
+                    Some(v) => v,
+                    None => {
+                        local_live_locs.insert(*local, Vec::new());
+                        local_live_locs.get_mut(local).unwrap()
+                    }
+                };
+                insert.push(location);
+            }
+        }
+        HashMap::from_iter(
+            local_live_locs
+                .into_iter()
+                .map(|(local, richs)| (local, self.rich_locations_to_ranges(&richs))),
+        )
+            */
+    }
+
+    fn get_must_live(&self) -> HashMap<Local, Vec<Range>> {
+        self.live_range_from_region(&self.output_insensitive)
+    }
+
+    fn live_range_from_region(&self, output: &PoloniusOutput) -> HashMap<Local, Vec<Range>> {
+        //let output = &self.output_insensitive;
+        let mut region_locations = HashMap::new();
+        let mut region_locations_idc: HashMap<_, BTreeSet<_>> = HashMap::new();
+        for (location_idx, region_idc) in output.origin_live_on_entry.iter() {
+            for region_idx in region_idc {
+                let insert = match region_locations.get_mut(region_idx) {
+                    Some(v) => v,
+                    None => {
+                        region_locations.insert(*region_idx, Vec::new());
+                        region_locations.get_mut(region_idx).unwrap()
+                    }
+                };
+                insert.push(self.location_table.to_location(*location_idx).clone());
+                region_locations_idc.append(region_idx, *location_idx);
+            }
+        }
+
+        // compute regions where the local must be live
+        let mut local_must_regions: HashMap<Local, BTreeSet<Region>> = HashMap::new();
+        for (region_idx, borrow_idc) in output.origin_contains_loan_anywhere.iter() {
+            for borrow_idx in borrow_idc {
+                if let Some(local) = self.borrow_locals.get(borrow_idx) {
+                    local_must_regions.append(local, *region_idx);
+                }
+            }
+        }
+        let mut region_locations = HashMap::new();
+        //let mut region_locations_idc: HashMap<_, BTreeSet<_>> = HashMap::new();
+        for (location_idx, region_idc) in output.origin_live_on_entry.iter() {
+            for region_idx in region_idc {
+                let insert = match region_locations.get_mut(region_idx) {
+                    Some(v) => v,
+                    None => {
+                        region_locations.insert(*region_idx, Vec::new());
+                        region_locations.get_mut(region_idx).unwrap()
+                    }
+                };
+                insert.push(self.location_table.to_location(*location_idx).clone());
+                //region_locations_idc.append(region_idx, *location_idx);
+            }
+        }
+
+        HashMap::from_iter(local_must_regions.iter().map(|(local, regions)| {
+            (
+                *local,
+                Self::erase_superset(
+                    self.rich_locations_to_ranges(
+                        &regions
+                            .into_iter()
+                            .filter_map(|v| region_locations.get(v).cloned())
+                            .flatten()
+                            .collect::<Vec<_>>(),
+                    ),
+                    false,
+                ),
+            )
+        }))
+    }
 
     /// analyze MIR to get JSON-serializable, TypeScript friendly representation
     pub fn analyze<'a>(&mut self) -> AnalyzedMir {
