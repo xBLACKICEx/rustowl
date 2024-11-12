@@ -24,6 +24,11 @@ Type `install vsix` in the command palette, and `Extensions: Install from VSIX..
 Click it and select the downloaded `.vsix` file.
 The extension will then be installed.
 
+After installation, the extension will automatically start the RustOwl server with Docker when you open and edit any Rust program.
+The first time, it may take a while to download the Docker image.
+
+We provide several simple Rust programs for observing the visualization in the `example` directory.
+
 ## Build manually
 
 Here, we describe manual install instructions from source code.
