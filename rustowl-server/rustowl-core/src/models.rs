@@ -1,5 +1,5 @@
-use rustc_span::{source_map::SourceMap, Span};
-use serde::{Deserialize, Serialize};
+use rustc_span::Span;
+use serde::Serialize;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
@@ -156,7 +156,6 @@ pub enum MirDecl {
         lives: Vec<Range>,
         drop: bool,
         drop_range: Vec<Range>,
-        //can_live_at: Vec<Range>,
         must_live_at: Vec<Range>,
     },
     Other {
@@ -165,7 +164,6 @@ pub enum MirDecl {
         lives: Vec<Range>,
         drop: bool,
         drop_range: Vec<Range>,
-        //can_live_at: Vec<Range>,
         must_live_at: Vec<Range>,
     },
 }

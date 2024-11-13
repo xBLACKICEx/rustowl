@@ -17,9 +17,8 @@ pub mod models;
 use analyze::MirAnalyzer;
 use models::*;
 use rustc_borrowck::consumers;
-use rustc_hir::{ExprKind, ItemKind};
+use rustc_hir::ItemKind;
 use rustc_interface::interface;
-use rustc_middle::mir::{BindingForm, Body, Local, LocalDecl, LocalInfo, LocalKind, StatementKind};
 use rustc_session::config;
 use rustc_span::{FileName, RealFileName};
 use std::collections::HashMap;
@@ -83,7 +82,7 @@ pub fn run_compiler(
                 for item_id in ctx.hir().items() {
                     let item = ctx.hir().item(item_id);
                     match item.kind {
-                        ItemKind::Fn(fnsig, _, fnbid) => {
+                        ItemKind::Fn(fnsig, _, _fnbid) => {
                             log::info!(
                                 "start borrowck of def_id: {}",
                                 item.owner_id.to_def_id().index.index(),
