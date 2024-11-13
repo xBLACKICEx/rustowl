@@ -8,7 +8,7 @@ Quick start guide using Docker.
 
 ### Prerequisite
 
-- Docker installed, `docker` command is available, and Docker Engine started
+- Docker installed, `docker` command available, and Docker Engine started
 - Visual Studio Code (VSCode) installed
 
 We tested this guide on macOS Sonoma 14.6.1 on arm64 architecture with docker 26.0.0 and VSCode 1.95.1.
@@ -90,7 +90,7 @@ A new VSCode window with the extension enabled will appear.
 
 Open `rustowl-vscode/sample.rs` in the new VSCode window.
 
-When you make changes to Rust files, annotations indicating the movement of ownership and lifetimes will appear in the editor.
+When you make changes to Rust files, decoration indicating the movement of ownership and lifetimes will appear in the editor.
 
 
 ## Note
