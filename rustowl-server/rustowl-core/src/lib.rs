@@ -17,108 +17,128 @@ pub mod models;
 use analyze::MirAnalyzer;
 use models::*;
 use rustc_borrowck::consumers;
-use rustc_hir::ItemKind;
+use rustc_driver::{Callbacks, Compilation, RunCompiler};
+use rustc_hir::{def_id::LocalDefId, ItemKind};
 use rustc_interface::interface;
+use rustc_middle::{query::queries::mir_borrowck::ProvidedValue, ty::TyCtxt, util::Providers};
 use rustc_session::config;
-use rustc_span::{FileName, RealFileName};
 use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{atomic::AtomicBool, Arc, LazyLock, Mutex};
 
-pub fn run_compiler(
-    name: &str,
-    source: &str,
-) -> Result<CollectedData, (Error, Option<CollectedData>)> {
-    let path = PathBuf::from(name);
-    let config = interface::Config {
-        opts: config::Options {
-            debuginfo: config::DebugInfo::Full,
-            error_format: config::ErrorOutputType::Json {
-                pretty: true,
-                json_rendered: rustc_errors::emitter::HumanReadableErrorType::Default,
-                color_config: rustc_errors::ColorConfig::Auto,
-            },
-            unstable_opts: config::UnstableOptions {
-                polonius: config::Polonius::Legacy,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        input: config::Input::Str {
-            name: FileName::Real(RealFileName::LocalPath(path.clone())),
-            input: source.to_owned(),
-        },
-        output_dir: None,
-        output_file: None,
-        file_loader: None,
-        lint_caps: HashMap::default(),
-        register_lints: None,
-        override_queries: None,
-        registry: rustc_driver::diagnostics_registry(),
-        crate_cfg: vec![],
-        crate_check_cfg: vec![],
-        expanded_args: vec![],
-        hash_untracked_state: None,
-        ice_file: None,
-        locale_resources: rustc_driver::DEFAULT_LOCALE_RESOURCES.to_owned(),
-        make_codegen_backend: None,
-        psess_created: None,
-        using_internal_features: Arc::new(AtomicBool::new(true)),
-    };
-    log::info!("compiler configured; start to compile");
-    interface::run_compiler(config, |compiler| {
-        log::info!("interface::run_compiler called");
-        compiler.enter(|queries| {
-            println!("{}", compiler.sess.opts.unstable_opts.nll_facts);
-            compiler.sess.source_map();
-            log::info!("compiler.enter called");
-            let Ok(mut gcx) = queries.global_ctxt() else {
-                log::warn!("unknown error");
-                return Err((Error::UnknownError, None));
-            };
-            let collected = gcx.enter(|ctx| {
-                let mut items = Vec::new();
-                log::info!("gcx.enter called");
-                for item_id in ctx.hir().items() {
-                    let item = ctx.hir().item(item_id);
-                    match item.kind {
-                        ItemKind::Fn(fnsig, _, _fnbid) => {
-                            log::info!(
-                                "start borrowck of def_id: {}",
-                                item.owner_id.to_def_id().index.index(),
-                            );
-                            let facts = consumers::get_body_with_borrowck_facts(
-                                ctx,
-                                item.owner_id.def_id,
-                                consumers::ConsumerOptions::PoloniusInputFacts,
-                            );
-                            log::info!("borrowck finished");
-                            log::info!("MIR built");
+pub struct RustcCallback;
+impl Callbacks for RustcCallback {}
 
+thread_local! {
+    static MIRS: LazyLock<Mutex<HashMap<LocalDefId, consumers::BodyWithBorrowckFacts<'static>>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+}
+
+fn override_queries(_session: &rustc_session::Session, local: &mut Providers) {
+    local.mir_borrowck = mir_borrowck;
+}
+fn mir_borrowck<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> ProvidedValue<'tcx> {
+    log::info!("start borrowck of def_id: {def_id:?}");
+    let facts = consumers::get_body_with_borrowck_facts(
+        tcx,
+        def_id,
+        consumers::ConsumerOptions::PoloniusOutputFacts,
+    );
+    MIRS.with(|v| {
+        v.lock()
+            .unwrap()
+            .insert(def_id, unsafe { std::mem::transmute(facts) })
+    });
+    log::info!("borrowck finished");
+    log::info!("MIR built");
+
+    let mut providers = Providers::default();
+    rustc_borrowck::provide(&mut providers);
+    let original_mir_borrowck = providers.mir_borrowck;
+    original_mir_borrowck(tcx, def_id)
+}
+
+pub struct AnalyzerCallback {
+    path: String,
+}
+impl AnalyzerCallback {
+    pub fn new() -> Self {
+        Self {
+            path: "".to_owned(),
+        }
+    }
+}
+impl Callbacks for AnalyzerCallback {
+    fn config(&mut self, config: &mut interface::Config) {
+        config.opts.unstable_opts.mir_opt_level = Some(0);
+        config.opts.unstable_opts.polonius = config::Polonius::Next;
+        config.override_queries = Some(override_queries);
+        self.path.push_str(
+            &*config
+                .input
+                .source_name()
+                .display(rustc_span::FileNameDisplayPreference::Local)
+                .to_string_lossy(),
+        );
+    }
+    fn after_analysis<'tcx>(
+        &mut self,
+        compiler: &interface::Compiler,
+        queries: &'tcx rustc_interface::Queries<'tcx>,
+    ) -> Compilation {
+        //println!("{}", compiler.sess.opts.unstable_opts.nll_facts);
+        //compiler.sess.source_map();
+        log::info!("compiler.enter called");
+        let Ok(mut gcx) = queries.global_ctxt() else {
+            log::warn!("unknown error");
+            panic!();
+            //return Err((Error::UnknownError, None));
+        };
+        gcx.enter(|ctx| {
+            let mut items = Vec::new();
+            log::info!("gcx.enter called");
+            for item_id in ctx.hir().items() {
+                let item = ctx.hir().item(item_id);
+                match item.kind {
+                    ItemKind::Fn(fnsig, _, _fnbid) => {
+                        let mir = MIRS.with(|facts| {
+                            let facts = facts.lock().unwrap();
+                            let facts = facts.get(&item.owner_id.def_id).unwrap();
                             log::info!("enter MIR analysis");
                             let mut analyzer = MirAnalyzer::new(compiler, &facts);
                             let mir = analyzer.analyze();
                             log::info!("MIR analyzed");
+                            mir
+                        });
 
-                            let item = Item::Function {
-                                span: Range::from(fnsig.span),
-                                mir,
-                            };
-                            items.push(item);
-                        }
-                        _ => {}
+                        let item = Item::Function {
+                            span: Range::from(fnsig.span),
+                            mir,
+                        };
+                        items.push(item);
                     }
+                    _ => {}
                 }
-                let collected = CollectedData { items };
-                if 0 < ctx.dcx().err_count() {
-                    ctx.dcx().reset_err_count();
-                    Err((Error::UnknownError, Some(collected)))
-                } else {
-                    Ok(collected)
-                }
+            }
+            let collected = File { items };
+            log::info!("print collected data");
+            let workspace = Workspace(HashMap::from([(self.path.clone(), collected)]));
+            println!("{}", serde_json::to_string(&workspace).unwrap());
+        });
+        Compilation::Continue
+    }
+}
+
+pub fn run_compiler(args: &[String]) -> i32 {
+    for arg in args {
+        if arg == "-vV" {
+            return rustc_driver::catch_with_exit_code(|| {
+                RunCompiler::new(&args, &mut RustcCallback).run()
             });
-            log::info!("returning collected data");
-            collected
-        })
+        }
+    }
+    rustc_driver::catch_with_exit_code(|| {
+        RunCompiler::new(&args, &mut AnalyzerCallback::new())
+            .set_using_internal_features(Arc::new(AtomicBool::new(true)))
+            .run()
     })
 }

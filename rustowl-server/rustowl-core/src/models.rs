@@ -1,6 +1,7 @@
 use rustc_span::Span;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
 pub enum Error {
@@ -11,7 +12,7 @@ pub enum Error {
 }
 
 /// location in source code
-#[derive(Serialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[serde(transparent)]
 pub struct Loc(u32);
 impl From<u32> for Loc {
@@ -21,7 +22,7 @@ impl From<u32> for Loc {
 }
 
 /// represents range in source code
-#[derive(Serialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct Range {
     pub from: Loc,
     pub until: Loc,
@@ -38,7 +39,7 @@ impl From<Span> for Range {
 }
 
 /// variable in MIR
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirVariable {
     User {
@@ -53,7 +54,7 @@ pub enum MirVariable {
     },
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(transparent)]
 pub struct MirVariables(HashMap<usize, MirVariable>);
 impl MirVariables {
@@ -79,18 +80,22 @@ impl MirVariables {
     }
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum Item {
     Function { span: Range, mir: AnalyzedMir },
 }
 
-#[derive(Serialize, Clone, Debug)]
-pub struct CollectedData {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct File {
     pub items: Vec<Item>,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(transparent)]
+pub struct Workspace(pub HashMap<String, File>);
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirRval {
     Move {
@@ -106,7 +111,7 @@ pub enum MirRval {
 }
 
 /// statement in MIR
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirStatement {
     StorageLive {
@@ -124,7 +129,7 @@ pub enum MirStatement {
     },
 }
 /// terminator in MIR
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirTerminator {
     Drop {
@@ -138,14 +143,14 @@ pub enum MirTerminator {
     Other,
 }
 /// basic block in MIR
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MirBasicBlock {
     pub statements: Vec<MirStatement>,
     pub terminator: Option<MirTerminator>,
 }
 
 /// declared variable in MIR
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirDecl {
     User {
@@ -167,7 +172,7 @@ pub enum MirDecl {
         must_live_at: Vec<Range>,
     },
 }
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AnalyzedMir {
     pub basic_blocks: Vec<MirBasicBlock>,
     pub decls: Vec<MirDecl>,
