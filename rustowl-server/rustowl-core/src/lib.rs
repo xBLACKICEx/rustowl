@@ -18,43 +18,68 @@ use analyze::MirAnalyzer;
 use models::*;
 use rustc_borrowck::consumers;
 use rustc_driver::{Callbacks, Compilation, RunCompiler};
-use rustc_hir::{def_id::LocalDefId, ItemKind};
+use rustc_hir::def_id::LocalDefId;
 use rustc_interface::interface;
 use rustc_middle::{query::queries::mir_borrowck::ProvidedValue, ty::TyCtxt, util::Providers};
-use rustc_session::config;
+use rustc_session::{config, EarlyDiagCtxt};
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::{atomic::AtomicBool, Arc, LazyLock, Mutex};
+use std::sync::{atomic::AtomicBool, Arc};
+use tokio::{runtime::Builder, task::JoinSet};
 
 pub struct RustcCallback;
 impl Callbacks for RustcCallback {}
 
+/*
+static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
+    Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(8)
+        .thread_stack_size(1024 * 1024 * 1024)
+        .build()
+        .unwrap()
+});
+static ANALYZE: LazyLock<Mutex<JoinSet<MirAnalyzer<'static, 'static>>>> =
+    LazyLock::new(|| Mutex::new(JoinSet::new()));
+*/
+
 thread_local! {
-    static MIRS: LazyLock<Mutex<HashMap<LocalDefId, consumers::BodyWithBorrowckFacts<'static>>>> =
-        LazyLock::new(|| Mutex::new(HashMap::new()));
+    static BODIES: RefCell<Vec<consumers::BodyWithBorrowckFacts<'static>>> = RefCell::new(Vec::new());
 }
 
 fn override_queries(_session: &rustc_session::Session, local: &mut Providers) {
     local.mir_borrowck = mir_borrowck;
 }
 fn mir_borrowck<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> ProvidedValue<'tcx> {
-    log::info!("start borrowck of def_id: {def_id:?}");
+    log::info!("start borrowck of {def_id:?}");
     let facts = consumers::get_body_with_borrowck_facts(
         tcx,
         def_id,
         consumers::ConsumerOptions::PoloniusOutputFacts,
     );
-    MIRS.with(|v| {
-        v.lock()
-            .unwrap()
-            .insert(def_id, unsafe { std::mem::transmute(facts) })
+    BODIES.with(|b| b.borrow_mut().push(unsafe { std::mem::transmute(facts) }));
+    //log::info!("borrowck finished");
+
+    /*
+    log::info!("start analyze of {def_id:?}");
+    let analyzer = MirAnalyzer::new(unsafe { std::mem::transmute(&tcx) }, unsafe {
+        std::mem::transmute(&facts)
     });
-    log::info!("borrowck finished");
-    log::info!("MIR built");
+    ANALYZE.lock().unwrap().spawn_on(analyzer, RUNTIME.handle());
+    */
+    /*
+    let task = spawn(move || {
+        let analyzed = analyzer.join().unwrap().analyze();
+        log::info!("analyze of {def_id:?} finished");
+        analyzed
+        //println!("{}", serde_json::to_string(&analyzed).unwrap());
+    });
+    */
+    //ANALYZE.lock().unwrap().push(task);
 
     let mut providers = Providers::default();
     rustc_borrowck::provide(&mut providers);
-    let original_mir_borrowck = providers.mir_borrowck;
-    original_mir_borrowck(tcx, def_id)
+    (providers.mir_borrowck)(tcx, def_id)
 }
 
 pub struct AnalyzerCallback {
@@ -71,7 +96,9 @@ impl Callbacks for AnalyzerCallback {
     fn config(&mut self, config: &mut interface::Config) {
         config.opts.unstable_opts.mir_opt_level = Some(0);
         config.opts.unstable_opts.polonius = config::Polonius::Next;
+        config.opts.incremental = None;
         config.override_queries = Some(override_queries);
+        config.make_codegen_backend = None;
         self.path.push_str(
             &*config
                 .input
@@ -80,64 +107,61 @@ impl Callbacks for AnalyzerCallback {
                 .to_string_lossy(),
         );
     }
+
     fn after_analysis<'tcx>(
         &mut self,
-        compiler: &interface::Compiler,
+        _compiler: &interface::Compiler,
         queries: &'tcx rustc_interface::Queries<'tcx>,
     ) -> Compilation {
-        //println!("{}", compiler.sess.opts.unstable_opts.nll_facts);
-        //compiler.sess.source_map();
-        log::info!("compiler.enter called");
-        let Ok(mut gcx) = queries.global_ctxt() else {
-            log::warn!("unknown error");
-            panic!();
-            //return Err((Error::UnknownError, None));
-        };
-        gcx.enter(|ctx| {
-            let mut items = Vec::new();
-            log::info!("gcx.enter called");
-            for item_id in ctx.hir().items() {
-                let item = ctx.hir().item(item_id);
-                match item.kind {
-                    ItemKind::Fn(fnsig, _, _fnbid) => {
-                        let mir = MIRS.with(|facts| {
-                            let facts = facts.lock().unwrap();
-                            let facts = facts.get(&item.owner_id.def_id).unwrap();
-                            log::info!("enter MIR analysis");
-                            let mut analyzer = MirAnalyzer::new(compiler, &facts);
-                            let mir = analyzer.analyze();
-                            log::info!("MIR analyzed");
-                            mir
-                        });
-
-                        let item = Item::Function {
-                            span: Range::from(fnsig.span),
-                            mir,
-                        };
-                        items.push(item);
-                    }
-                    _ => {}
-                }
+        let rt = Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(8)
+            .thread_stack_size(1024 * 1024 * 1024)
+            .build()
+            .unwrap();
+        let mut set = JoinSet::new();
+        let collected = queries.global_ctxt().unwrap().enter(|tcx| {
+            let bodies = BODIES.take();
+            for i in 0..bodies.len() {
+                let task = MirAnalyzer::new(unsafe { std::mem::transmute(&tcx) }, unsafe {
+                    std::mem::transmute(&bodies[i])
+                });
+                set.spawn_on(task, rt.handle());
+                //set.spawn_on(async move { task.await.analyze() }, rt.handle());
             }
-            let collected = File { items };
-            log::info!("print collected data");
-            let workspace = Workspace(HashMap::from([(self.path.clone(), collected)]));
-            println!("{}", serde_json::to_string(&workspace).unwrap());
+            rt.block_on(async move {
+                let mut items = Vec::new();
+                while let Some(analyzed) = set.join_next().await {
+                    items.push(analyzed.unwrap().analyze())
+                }
+                let collected = File { items };
+                collected
+            })
         });
+        let workspace = Workspace(HashMap::from([(self.path.clone(), collected)]));
+        log::info!("print collected data of {}", self.path);
+        println!("{}", serde_json::to_string(&workspace).unwrap());
         Compilation::Continue
     }
 }
 
-pub fn run_compiler(args: &[String]) -> i32 {
+pub fn run_compiler() -> i32 {
+    let ctxt = EarlyDiagCtxt::new(config::ErrorOutputType::default());
+    let args = rustc_driver::args::raw_args(&ctxt).unwrap();
+    let args = &args[1..];
     for arg in args {
-        if arg == "-vV" {
-            return rustc_driver::catch_with_exit_code(|| {
-                RunCompiler::new(&args, &mut RustcCallback).run()
-            });
+        if arg == "-vV" || arg.starts_with("--print") {
+            let mut callback = RustcCallback;
+            let mut runner = RunCompiler::new(&args, &mut callback);
+            runner.set_make_codegen_backend(None);
+            return rustc_driver::catch_with_exit_code(|| runner.run());
         }
     }
+    let mut callback = AnalyzerCallback::new();
+    let mut runner = RunCompiler::new(&args, &mut callback);
+    runner.set_make_codegen_backend(None);
     rustc_driver::catch_with_exit_code(|| {
-        RunCompiler::new(&args, &mut AnalyzerCallback::new())
+        runner
             .set_using_internal_features(Arc::new(AtomicBool::new(true)))
             .run()
     })

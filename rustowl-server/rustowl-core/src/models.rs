@@ -1,7 +1,6 @@
 use rustc_span::Span;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
 pub enum Error {
@@ -88,7 +87,7 @@ pub enum Item {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct File {
-    pub items: Vec<Item>,
+    pub items: Vec<AnalyzedMir>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -5,14 +5,21 @@ use rustc_borrowck::consumers::{
     BodyWithBorrowckFacts, BorrowIndex, LocationTable, PoloniusInput, PoloniusOutput, RichLocation,
     RustcFacts,
 };
-use rustc_interface::interface::Compiler;
-use rustc_middle::mir::{
-    BasicBlock, BasicBlockData, BorrowKind, Local, Operand, Rvalue, StatementKind, TerminatorKind,
-    VarDebugInfoContents,
+use rustc_middle::{
+    mir::{
+        BasicBlock, BasicBlockData, BasicBlocks, Body, BorrowKind, Local, Operand, Rvalue,
+        StatementKind, TerminatorKind, VarDebugInfoContents,
+    },
+    ty::TyCtxt,
 };
-use rustc_span::Span;
+use rustc_span::{source_map::SourceMap, Span};
 use std::collections::{BTreeSet, HashMap};
+use std::future::Future;
 use std::hash::Hash;
+use std::pin::Pin;
+
+pub type MirAnalyzeFuture<'c, 'tcx> =
+    Pin<Box<dyn Future<Output = MirAnalyzer<'c, 'tcx>> + Send + Sync>>;
 
 type Borrow = <RustcFacts as FactTypes>::Loan;
 type Region = <RustcFacts as FactTypes>::Origin;
@@ -52,21 +59,29 @@ where
 }
 
 pub struct MirAnalyzer<'c, 'tcx> {
-    compiler: &'c Compiler,
     location_table: &'c LocationTable,
-    facts: &'c BodyWithBorrowckFacts<'tcx>,
+    body: Body<'tcx>,
     input: PoloniusInput,
     output_insensitive: PoloniusOutput,
     output_datafrog: PoloniusOutput,
     bb_map: HashMap<BasicBlock, BasicBlockData<'tcx>>,
     //local_borrows: HashMap<Local, Vec<BorrowIndex>>,
     borrow_locals: HashMap<Borrow, Local>,
+    basic_blocks: Vec<MirBasicBlock>,
 }
-impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
+impl<'c, 'tcx> MirAnalyzer<'c, 'tcx>
+where
+    'c: 'static,
+    'tcx: 'static,
+{
     /// initialize analyzer
-    pub fn new(compiler: &'c Compiler, facts: &'c BodyWithBorrowckFacts<'tcx>) -> Self {
+    pub fn new(
+        tcx: &'c TyCtxt<'tcx>,
+        facts: &'c BodyWithBorrowckFacts<'tcx>,
+    ) -> MirAnalyzeFuture<'c, 'tcx> {
         let input = *facts.input_facts.as_ref().unwrap().clone();
         let location_table = facts.location_table.as_ref().unwrap();
+        let body = facts.body.clone();
 
         // local -> all borrows on that local
         let local_borrows: HashMap<Local, Vec<BorrowIndex>> = HashMap::from_iter(
@@ -84,18 +99,6 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
                 borrow_locals.insert(*borrow_idx, *local);
             }
         }
-        log::info!("start re-computing borrow check with dump: true");
-        // compute insensitive
-        // it may include invalid region, which can be used at showing wrong region
-        let output_insensitive = PoloniusOutput::compute(
-            &input,
-            polonius_engine::Algorithm::LocationInsensitive,
-            true,
-        );
-        // compute accurate region, which may eliminate invalid region
-        let output_datafrog =
-            PoloniusOutput::compute(&input, polonius_engine::Algorithm::DatafrogOpt, true);
-        log::info!("borrow check finished");
 
         // build basic blocks map
         let bb_map = facts
@@ -104,17 +107,34 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
             .iter_enumerated()
             .map(|(b, d)| (b, d.clone()))
             .collect();
-        Self {
-            compiler,
-            location_table,
-            facts,
-            input,
-            output_insensitive,
-            output_datafrog,
-            bb_map,
-            //local_borrows,
-            borrow_locals,
-        }
+        let basic_blocks = Self::basic_blocks(&facts.body.basic_blocks, tcx.sess.source_map());
+
+        Box::pin(async move {
+            log::info!("start re-computing borrow check with dump: true");
+            // compute insensitive
+            // it may include invalid region, which can be used at showing wrong region
+            let output_insensitive = PoloniusOutput::compute(
+                &input,
+                polonius_engine::Algorithm::LocationInsensitive,
+                true,
+            );
+            // compute accurate region, which may eliminate invalid region
+            let output_datafrog =
+                PoloniusOutput::compute(&input, polonius_engine::Algorithm::DatafrogOpt, true);
+            log::info!("borrow check finished");
+
+            Self {
+                location_table,
+                body,
+                input,
+                output_insensitive,
+                output_datafrog,
+                bb_map,
+                //local_borrows,
+                borrow_locals,
+                basic_blocks,
+            }
+        })
     }
 
     fn sort_locs(v: &mut Vec<(BasicBlock, usize)>) {
@@ -181,8 +201,7 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
 
     /// collect user defined variables from debug info in MIR
     fn collect_user_vars(&self) -> HashMap<Local, (Span, String)> {
-        self.facts
-            .body
+        self.body
             .var_debug_info
             .iter()
             .filter_map(|debug| match &debug.value {
@@ -200,8 +219,7 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
         let lives = self.get_accurate_live();
         let must_live_at = self.get_must_live();
         let drop_range = self.drop_range();
-        self.facts
-            .body
+        self.body
             .local_decls
             .iter_enumerated()
             .map(|(local, decl)| {
@@ -238,19 +256,19 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
     }
 
     /// collect and translate basic blocks
-    fn basic_blocks(&self) -> Vec<MirBasicBlock> {
-        self.bb_map
-            .iter()
+    fn basic_blocks(
+        basic_blocks: &'c BasicBlocks<'static>,
+        source_map: &'c SourceMap,
+    ) -> Vec<MirBasicBlock> {
+        basic_blocks
+            .iter_enumerated()
+            .map(|(b, d)| (b, d.clone()))
             .map(|(_bb, bb_data)| {
                 let statements = bb_data
                     .statements
                     .iter()
                     .filter_map(|statement| {
-                        if !statement
-                            .source_info
-                            .span
-                            .is_visible(self.compiler.sess.source_map())
-                        {
+                        if !statement.source_info.span.is_visible(source_map) {
                             return None;
                         }
                         match &statement.kind {
@@ -453,9 +471,9 @@ impl<'c, 'tcx> MirAnalyzer<'c, 'tcx> {
     }
 
     /// analyze MIR to get JSON-serializable, TypeScript friendly representation
-    pub fn analyze<'a>(&mut self) -> AnalyzedMir {
+    pub fn analyze(self) -> AnalyzedMir {
         let decls = self.collect_decls();
-        let basic_blocks = self.basic_blocks();
+        let basic_blocks = self.basic_blocks;
 
         AnalyzedMir {
             basic_blocks,
