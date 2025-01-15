@@ -19,6 +19,16 @@ impl From<u32> for Loc {
         Self(value)
     }
 }
+impl std::ops::Sub for Loc {
+    type Output = Loc;
+    fn sub(self, rhs: Self) -> Self::Output {
+        if self.0 < rhs.0 {
+            0.into()
+        } else {
+            Loc::from(self.0 - rhs.0)
+        }
+    }
+}
 
 /// represents range in source code
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
@@ -29,6 +39,22 @@ pub struct Range {
 impl Range {
     pub fn new(from: Loc, until: Loc) -> Self {
         Self { from, until }
+    }
+    /*
+    pub fn from_source_info(body: &Body<'_>, source_info: SourceInfo) -> Self {
+        let scope = Range::from(body.source_scopes.get(source_info.scope).unwrap().span);
+        let wide = Range::from(source_info.span);
+        Range::new(
+            Loc::from(wide.from - scope.from),
+            Loc::from(wide.until - scope.from),
+        )
+    }
+    */
+    pub fn offset(self, offset: u32) -> Self {
+        Self {
+            from: self.from - Loc::from(offset),
+            until: self.until - Loc::from(offset),
+        }
     }
 }
 impl From<Span> for Range {

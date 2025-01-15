@@ -83,7 +83,8 @@ export const zItem = z.object({
   span: zRange,
   mir: zMir,
 });
-export const zCollectedData = z.object({ items: z.array(zItem) });
+export const zCollectedData = z.object({ items: z.array(zMir) });
+export const zWorkspace = z.record(zCollectedData);
 export const zAnalyzeSuccess = z.object({
   success: z.literal(true),
   compile_error: z.boolean(),

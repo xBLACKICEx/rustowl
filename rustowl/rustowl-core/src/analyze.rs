@@ -12,7 +12,7 @@ use rustc_middle::{
     },
     ty::TyCtxt,
 };
-use rustc_span::{source_map::SourceMap, Span};
+use rustc_span::source_map::SourceMap;
 use std::collections::{BTreeSet, HashMap};
 use std::future::Future;
 use std::hash::Hash;
@@ -59,6 +59,8 @@ where
 }
 
 pub struct MirAnalyzer<'c, 'tcx> {
+    filename: String,
+    offset: u32,
     location_table: &'c LocationTable,
     body: Body<'tcx>,
     input: PoloniusInput,
@@ -76,6 +78,8 @@ where
 {
     /// initialize analyzer
     pub fn new(
+        filename: String,
+        offset: u32,
         tcx: &'c TyCtxt<'tcx>,
         facts: &'c BodyWithBorrowckFacts<'tcx>,
     ) -> MirAnalyzeFuture<'c, 'tcx> {
@@ -107,7 +111,8 @@ where
             .iter_enumerated()
             .map(|(b, d)| (b, d.clone()))
             .collect();
-        let basic_blocks = Self::basic_blocks(&facts.body.basic_blocks, tcx.sess.source_map());
+        let basic_blocks =
+            Self::basic_blocks(offset, &facts.body.basic_blocks, tcx.sess.source_map());
 
         Box::pin(async move {
             log::info!("start re-computing borrow check with dump: true");
@@ -124,6 +129,8 @@ where
             log::info!("borrow check finished");
 
             Self {
+                filename,
+                offset,
                 location_table,
                 body,
                 input,
@@ -145,7 +152,7 @@ where
             .get(&bb)
             .map(|bb| bb.statements.get(stmt_index))
             .flatten()
-            .map(|stmt| stmt.source_info.span.into())
+            .map(|stmt| Range::from(stmt.source_info.span).offset(self.offset))
     }
     fn rich_locations_to_ranges(&self, locations: &[RichLocation]) -> Vec<Range> {
         let mut starts = Vec::new();
@@ -200,14 +207,17 @@ where
     }
 
     /// collect user defined variables from debug info in MIR
-    fn collect_user_vars(&self) -> HashMap<Local, (Span, String)> {
+    fn collect_user_vars(&self) -> HashMap<Local, (Range, String)> {
         self.body
             .var_debug_info
             .iter()
             .filter_map(|debug| match &debug.value {
                 VarDebugInfoContents::Place(place) => Some((
                     place.local,
-                    (debug.source_info.span, debug.name.as_str().to_owned()),
+                    (
+                        Range::from(debug.source_info.span).offset(self.offset),
+                        debug.name.as_str().to_owned(),
+                    ),
                 )),
                 _ => None,
             })
@@ -257,6 +267,7 @@ where
 
     /// collect and translate basic blocks
     fn basic_blocks(
+        offset: u32,
         basic_blocks: &'c BasicBlocks<'static>,
         source_map: &'c SourceMap,
     ) -> Vec<MirBasicBlock> {
@@ -274,11 +285,11 @@ where
                         match &statement.kind {
                             StatementKind::StorageLive(local) => Some(MirStatement::StorageLive {
                                 target_local_index: local.index(),
-                                range: Range::from(statement.source_info.span),
+                                range: Range::from(statement.source_info.span).offset(offset),
                             }),
                             StatementKind::StorageDead(local) => Some(MirStatement::StorageDead {
                                 target_local_index: local.index(),
-                                range: Range::from(statement.source_info.span),
+                                range: Range::from(statement.source_info.span).offset(offset),
                             }),
                             StatementKind::Assign(ref v) => {
                                 let (place, rval) = &**v;
@@ -290,7 +301,8 @@ where
                                             let local = p.local;
                                             Some(MirRval::Move {
                                                 target_local_index: local.index(),
-                                                range: Range::from(statement.source_info.span),
+                                                range: Range::from(statement.source_info.span)
+                                                    .offset(offset),
                                             })
                                         }
                                         _ => None,
@@ -304,7 +316,8 @@ where
                                         let outlive = None;
                                         Some(MirRval::Borrow {
                                             target_local_index: local.index(),
-                                            range: Range::from(statement.source_info.span),
+                                            range: Range::from(statement.source_info.span)
+                                                .offset(offset),
                                             mutable,
                                             outlive,
                                         })
@@ -313,7 +326,7 @@ where
                                 };
                                 Some(MirStatement::Assign {
                                     target_local_index,
-                                    range: Range::from(statement.source_info.span),
+                                    range: Range::from(statement.source_info.span).offset(offset),
                                     rval: rv,
                                 })
                             }
@@ -328,7 +341,7 @@ where
                         .map(|terminator| match &terminator.kind {
                             TerminatorKind::Drop { place, .. } => MirTerminator::Drop {
                                 local_index: place.local.index(),
-                                range: terminator.source_info.span.into(),
+                                range: Range::from(terminator.source_info.span).offset(offset),
                             },
                             TerminatorKind::Call {
                                 destination,
@@ -471,13 +484,16 @@ where
     }
 
     /// analyze MIR to get JSON-serializable, TypeScript friendly representation
-    pub fn analyze(self) -> AnalyzedMir {
+    pub fn analyze(self) -> (String, AnalyzedMir) {
         let decls = self.collect_decls();
         let basic_blocks = self.basic_blocks;
 
-        AnalyzedMir {
-            basic_blocks,
-            decls,
-        }
+        (
+            self.filename,
+            AnalyzedMir {
+                basic_blocks,
+                decls,
+            },
+        )
     }
 }

@@ -44,7 +44,7 @@ static ANALYZE: LazyLock<Mutex<JoinSet<MirAnalyzer<'static, 'static>>>> =
 */
 
 thread_local! {
-    static BODIES: RefCell<Vec<consumers::BodyWithBorrowckFacts<'static>>> = RefCell::new(Vec::new());
+    static BODIES: RefCell<Vec<(String, u32, consumers::BodyWithBorrowckFacts<'static>)>> = RefCell::new(Vec::new());
 }
 
 fn override_queries(_session: &rustc_session::Session, local: &mut Providers) {
@@ -57,7 +57,22 @@ fn mir_borrowck<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> ProvidedValue<'t
         def_id,
         consumers::ConsumerOptions::PoloniusOutputFacts,
     );
-    BODIES.with(|b| b.borrow_mut().push(unsafe { std::mem::transmute(facts) }));
+    let source_map = tcx.sess.source_map();
+    let filename = source_map.span_to_filename(facts.body.span);
+
+    let source_file = source_map.get_source_file(&filename).unwrap();
+    let offset = source_file.start_pos.0;
+
+    let filename = filename
+        .display(rustc_span::FileNameDisplayPreference::Local)
+        .to_string_lossy()
+        .to_string();
+
+    //let filename = tcx.hir().def_path(def_id).to_filename_friendly_no_crate();
+    BODIES.with(|b| {
+        b.borrow_mut()
+            .push((filename, offset, unsafe { std::mem::transmute(facts) }))
+    });
     //log::info!("borrowck finished");
 
     /*
@@ -123,22 +138,33 @@ impl Callbacks for AnalyzerCallback {
         let collected = queries.global_ctxt().unwrap().enter(|tcx| {
             let bodies = BODIES.take();
             for i in 0..bodies.len() {
-                let task = MirAnalyzer::new(unsafe { std::mem::transmute(&tcx) }, unsafe {
-                    std::mem::transmute(&bodies[i])
-                });
+                let task = MirAnalyzer::new(
+                    bodies[i].0.clone(),
+                    bodies[i].1,
+                    unsafe { std::mem::transmute(&tcx) },
+                    unsafe { std::mem::transmute(&bodies[i].2) },
+                );
                 set.spawn_on(task, rt.handle());
                 //set.spawn_on(async move { task.await.analyze() }, rt.handle());
             }
+            let mut files = HashMap::new();
             rt.block_on(async move {
-                let mut items = Vec::new();
                 while let Some(analyzed) = set.join_next().await {
-                    items.push(analyzed.unwrap().analyze())
+                    let analyze = analyzed.unwrap();
+                    let (filename, analyzed) = analyze.analyze();
+                    let File { items: push } = match files.get_mut(&filename) {
+                        Some(v) => v,
+                        None => {
+                            files.insert(filename.clone(), File { items: Vec::new() });
+                            files.get_mut(&filename).unwrap()
+                        }
+                    };
+                    push.push(analyzed);
                 }
-                let collected = File { items };
-                collected
+                files
             })
         });
-        let workspace = Workspace(HashMap::from([(self.path.clone(), collected)]));
+        let workspace = Workspace(collected);
         log::info!("print collected data of {}", self.path);
         println!("{}", serde_json::to_string(&workspace).unwrap());
         Compilation::Continue
@@ -152,8 +178,7 @@ pub fn run_compiler() -> i32 {
     for arg in args {
         if arg == "-vV" || arg.starts_with("--print") {
             let mut callback = RustcCallback;
-            let mut runner = RunCompiler::new(&args, &mut callback);
-            runner.set_make_codegen_backend(None);
+            let runner = RunCompiler::new(&args, &mut callback);
             return rustc_driver::catch_with_exit_code(|| runner.run());
         }
     }

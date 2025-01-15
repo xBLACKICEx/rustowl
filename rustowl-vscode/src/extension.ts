@@ -10,7 +10,7 @@ import * as path from "node:path";
 import axios from "axios";
 
 import { analyze, isAlive } from "./api/request";
-import { zCollectedData, zInfer, zRange } from "./api/schemas";
+import { zWorkspace, zCollectedData, zInfer, zRange } from "./api/schemas";
 import { selectLocal } from "./analyze";
 import {
   commonRanges,
@@ -143,13 +143,20 @@ export function activate(context: vscode.ExtensionContext) {
   });
   const emptyDecorationType = vscode.window.createTextEditorDecorationType({});
 
-  let analyzed: zInfer<typeof zCollectedData> | undefined = undefined;
+  let analyzed: zInfer<typeof zWorkspace> | undefined = undefined;
 
   // update decoration
   const updateDecoration = (editor: vscode.TextEditor) => {
-    if (!analyzed) {
+    let filepath = editor.document.fileName;
+    const wsPath = vscode.workspace.workspaceFolders![0].uri.path;
+    if (filepath.startsWith(wsPath)) {
+      filepath = filepath.slice(wsPath.length + 1);
+    }
+    const thisFile = analyzed?.[filepath];
+    if (!thisFile) {
       return;
     }
+    console.log(filepath);
     type DecoInfo = {
       range: zInfer<typeof zRange>;
       hoverMessage?: string;
@@ -162,140 +169,132 @@ export function activate(context: vscode.ExtensionContext) {
     let messages: DecoInfo[] = [];
     //clearDecoration(editor);
     const cursor = editor.document.offsetAt(editor.selection.active);
-    for (const itemId in analyzed.items) {
-      const item = analyzed.items[itemId];
-      if (item.type === "function") {
-        const mir = item.mir;
+    for (const itemId in thisFile.items) {
+      const mir = thisFile.items[itemId];
+      const getDeclFromLocal = (local: number) =>
+        mir.decls.filter((v) => v.local_index === local).at(0);
 
-        const getDeclFromLocal = (local: number) =>
-          mir.decls.filter((v) => v.local_index === local).at(0);
+      const locals = selectLocal(cursor, mir);
+      const userDecls = mir.decls.filter((v) => v.type === "user");
+      const selectedDecls = userDecls
+        .filter((v) => locals.includes(v.local_index))
+        .map((v) => ({
+          ...v,
+          lives: eliminatedRanges(v.lives),
+          must_live_at: eliminatedRanges(v.must_live_at),
+        }));
 
-        const locals = selectLocal(cursor, mir);
-        const userDecls = mir.decls.filter((v) => v.type === "user");
-        const selectedDecls = userDecls
-          .filter((v) => locals.includes(v.local_index))
-          .map((v) => ({
-            ...v,
-            lives: eliminatedRanges(v.lives),
-            must_live_at: eliminatedRanges(v.must_live_at),
-          }));
+      console.log(selectedDecls);
 
-        console.log(selectedDecls);
+      const selectedLiveDecos = selectedDecls
+        .map((v) =>
+          //v.must_live_at.map((w) => ({
+          v.lives
+            .map((w) => ({
+              range: w,
+              hoverMessage: `lifetime of variable \`${v.name}\``,
+            }))
+            .flat()
+        )
+        .flat();
+      lifetime = lifetime.concat(selectedLiveDecos);
 
-        const selectedLiveDecos = selectedDecls
-          .map((v) =>
-            //v.must_live_at.map((w) => ({
-            v.lives
-              .map((w) => ({
-                range: w,
-                hoverMessage: `lifetime of variable \`${v.name}\``,
-              }))
-              .flat()
-          )
-          .flat();
-        lifetime = lifetime.concat(selectedLiveDecos);
+      const outliveList = selectedDecls
+        .map((v) =>
+          v.must_live_at
+            .map((w) =>
+              // if there are drop range,
+              // it's type may be implemented `Drop`
+              v.drop
+                ? excludeRanges(w, v.drop_range)
+                : excludeRanges(w, v.lives)
+            )
+            .flat()
+            .map((w) => ({
+              ...v,
+              outLives: w,
+            }))
+            .map((v) => ({
+              range: v.outLives,
+              hoverMessage: `variable \`${v.name}\` outlives it's lifetime`,
+            }))
+        )
+        .flat();
+      outLives = outLives.concat(outliveList.map((v) => ({ range: v.range })));
+      messages = messages.concat(outliveList);
 
-        const outliveList = selectedDecls
-          .map((v) =>
-            v.must_live_at
-              .map((w) =>
-                // if there are drop range,
-                // it's type may be implemented `Drop`
-                v.drop
-                  ? excludeRanges(w, v.drop_range)
-                  : excludeRanges(w, v.lives)
-              )
-              .flat()
-              .map((w) => ({
-                ...v,
-                outLives: w,
-              }))
-              .map((v) => ({
-                range: v.outLives,
-                hoverMessage: `variable \`${v.name}\` outlives it's lifetime`,
-              }))
-          )
-          .flat();
-        outLives = outLives.concat(
-          outliveList.map((v) => ({ range: v.range }))
-        );
-        messages = messages.concat(outliveList);
-
-        // start generating decorations for basic blocks
-        for (const bb of mir.basic_blocks) {
-          // start generating decorations for statements
-          for (const stmt of bb.statements) {
-            if (stmt.type === "assign") {
-              if (
-                stmt.rval &&
-                (locals.includes(stmt.target_local_index) ||
-                  locals.includes(stmt.rval.target_local_index))
-              ) {
-                if (stmt.rval.type === "move") {
-                  const movedFrom = getDeclFromLocal(
-                    stmt.rval.target_local_index
-                  );
-                  const movedTo = getDeclFromLocal(stmt.target_local_index);
-                  moves.push({
+      // start generating decorations for basic blocks
+      for (const bb of mir.basic_blocks) {
+        // start generating decorations for statements
+        for (const stmt of bb.statements) {
+          if (stmt.type === "assign") {
+            if (
+              stmt.rval &&
+              (locals.includes(stmt.target_local_index) ||
+                locals.includes(stmt.rval.target_local_index))
+            ) {
+              if (stmt.rval.type === "move") {
+                const movedFrom = getDeclFromLocal(
+                  stmt.rval.target_local_index
+                );
+                const movedTo = getDeclFromLocal(stmt.target_local_index);
+                moves.push({
+                  range: stmt.rval.range,
+                  hoverMessage:
+                    "ownership moved" +
+                    (movedFrom?.type === "user"
+                      ? ` from \`${movedFrom.name}\``
+                      : "") +
+                    (movedTo?.type === "user" ? ` to \`${movedTo.name}\`` : ""),
+                });
+              } else if (stmt.rval.type === "borrow") {
+                const borrowFrom = getDeclFromLocal(
+                  stmt.rval.target_local_index
+                );
+                if (stmt.rval.mutable) {
+                  mBorrows.push({
                     range: stmt.rval.range,
                     hoverMessage:
-                      "ownership moved" +
-                      (movedFrom?.type === "user"
-                        ? ` from \`${movedFrom.name}\``
-                        : "") +
-                      (movedTo?.type === "user"
-                        ? ` to \`${movedTo.name}\``
+                      "mutable borrow" +
+                      (borrowFrom?.type === "user"
+                        ? ` of \`${borrowFrom.name}\``
                         : ""),
                   });
-                } else if (stmt.rval.type === "borrow") {
-                  const borrowFrom = getDeclFromLocal(
-                    stmt.rval.target_local_index
-                  );
-                  if (stmt.rval.mutable) {
-                    mBorrows.push({
-                      range: stmt.rval.range,
-                      hoverMessage:
-                        "mutable borrow" +
-                        (borrowFrom?.type === "user"
-                          ? ` of \`${borrowFrom.name}\``
-                          : ""),
-                    });
-                  } else {
-                    imBorrows.push({
-                      range: stmt.rval.range,
-                      hoverMessage:
-                        "immutable borrow" +
-                        (borrowFrom?.type === "user"
-                          ? ` of \`${borrowFrom.name}\``
-                          : ""),
-                    });
-                  }
+                } else {
+                  imBorrows.push({
+                    range: stmt.rval.range,
+                    hoverMessage:
+                      "immutable borrow" +
+                      (borrowFrom?.type === "user"
+                        ? ` of \`${borrowFrom.name}\``
+                        : ""),
+                  });
                 }
               }
             }
-            // start terminator
-            if (bb.terminator) {
-              if (
-                bb.terminator.type === "call" &&
-                locals.includes(bb.terminator.destination_local_index)
-              ) {
-                const dest = getDeclFromLocal(
-                  bb.terminator.destination_local_index
-                );
-                moves.push({
-                  range: bb.terminator.fn_span,
-                  hoverMessage:
-                    "value from function call" +
-                    (dest?.type === "user" ? ` to \`${dest.name}\`` : ""),
-                });
-              }
-            }
-            // end terminator
           }
-          // end statements
+          // start terminator
+          if (bb.terminator) {
+            if (
+              bb.terminator.type === "call" &&
+              locals.includes(bb.terminator.destination_local_index)
+            ) {
+              const dest = getDeclFromLocal(
+                bb.terminator.destination_local_index
+              );
+              moves.push({
+                range: bb.terminator.fn_span,
+                hoverMessage:
+                  "value from function call" +
+                  (dest?.type === "user" ? ` to \`${dest.name}\`` : ""),
+              });
+            }
+          }
+          // end terminator
         }
-        // end basic blocks
+        // end statements
       }
+      // end basic blocks
     }
     messages = messages.concat(lifetime);
     lifetime = lifetime
@@ -366,26 +365,36 @@ export function activate(context: vscode.ExtensionContext) {
     editor.setDecorations(outLiveDecorationType, []);
   };
 
-  const startAnalyze = async (editor: vscode.TextEditor) => {
+  const startAnalyze = async () => {
     console.log("start analyzing...");
     try {
-      const collected = await analyze(editor.document.getText());
-      console.log(`analyzed: ${collected.success}`);
-      if (collected.success) {
-        analyzed = collected.collected;
-        // initialize and generate decorations
-        /*
-        editor.setDecorations(
-          emptyDecorationType,
-          messagesAndRanges(editor.document, analyzed)
-        );
-        */
-        // decoration initialize end
-      } else {
-        vscode.window.showErrorMessage(
-          `Analyzer works but return compile error`
-        );
-      }
+      const wsPath = vscode.workspace.workspaceFolders![0].uri.path;
+      const owlProcess = spawn("cargo", ["owl"], {
+        stdio: ["ignore", "pipe", "pipe"],
+        cwd: wsPath,
+      });
+      owlProcess.stderr.on("data", (c: Buffer) => {
+        for (const o of c.toString().trimEnd().split("\n")) {
+          console.log("rustowl stderr: ", o);
+        }
+      });
+      let stdout = "";
+      owlProcess.stdout.on("data", (c: Buffer) => {
+        stdout += c.toString();
+      });
+      owlProcess.on("close", (code) => {
+        console.log(`cargo owl exited with status code ${code}`);
+        if (code === 0) {
+          const data = zWorkspace.safeParse(JSON.parse(stdout));
+          if (data.success) {
+            analyzed = data.data;
+            return;
+          } else {
+            console.log(data.error);
+          }
+        }
+        vscode.window.showErrorMessage("analyzer error");
+      });
     } catch (err) {
       vscode.window.showErrorMessage(`Analyzer returns internal error: ${err}`);
       return;
@@ -403,7 +412,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions
   );
   let timeout: NodeJS.Timeout | undefined = undefined;
-  vscode.workspace.onDidChangeTextDocument(
+  vscode.workspace.onDidSaveTextDocument(
     (ev) => {
       analyzed = undefined;
       if (timeout) {
@@ -418,10 +427,10 @@ export function activate(context: vscode.ExtensionContext) {
         }
         timeout = setTimeout(async () => {
           if (activeEditor) {
-            if (serverProcess !== "installing") {
-              await startAnalyze(activeEditor);
-              updateDecoration(activeEditor);
-            }
+            //if (serverProcess !== "installing") {
+            await startAnalyze();
+            updateDecoration(activeEditor);
+            //}
           }
         }, 1000);
       }
@@ -439,9 +448,11 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions
   );
 
+  /*
   if (dockerStatus === "not started") {
     startServer();
   }
+  */
   /*
   if (serverProcess === undefined) {
     runServer();
@@ -450,7 +461,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-  dockerStop();
+  //dockerStop();
   /*
   if (serverProcess instanceof ChildProcess) {
     serverProcess.kill();

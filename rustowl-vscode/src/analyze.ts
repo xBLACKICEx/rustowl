@@ -114,8 +114,7 @@ export const messagesAndRanges = (
   const push = (range: Range, hoverMessage: string) => {
     res.push({ range: rangeToRange(doc, range), hoverMessage });
   };
-  for (const item of items) {
-    const mir = item.mir;
+  for (const mir of items) {
     for (const decl of mir.decls) {
       if (decl.type === "user") {
         push(decl.span, `declaration of \`${decl.name}\``);
