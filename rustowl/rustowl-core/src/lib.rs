@@ -1,5 +1,6 @@
 #![feature(rustc_private)]
 
+pub extern crate indexmap;
 pub extern crate polonius_engine;
 pub extern crate rustc_borrowck;
 pub extern crate rustc_driver;
@@ -10,6 +11,7 @@ pub extern crate rustc_interface;
 pub extern crate rustc_middle;
 pub extern crate rustc_session;
 pub extern crate rustc_span;
+pub extern crate smallvec;
 
 mod analyze;
 pub mod models;
@@ -20,7 +22,10 @@ use rustc_borrowck::consumers;
 use rustc_driver::{Callbacks, Compilation, RunCompiler};
 use rustc_hir::def_id::LocalDefId;
 use rustc_interface::interface;
-use rustc_middle::{query::queries::mir_borrowck::ProvidedValue, ty::TyCtxt, util::Providers};
+use rustc_middle::{
+    mir::BorrowCheckResult, query::queries::mir_borrowck::ProvidedValue, ty::TyCtxt,
+    util::Providers,
+};
 use rustc_session::{config, EarlyDiagCtxt};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -70,7 +75,6 @@ fn mir_borrowck<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> ProvidedValue<'t
         .to_string();
     let source = fs::read_to_string(&filename).unwrap();
 
-    //let filename = tcx.hir().def_path(def_id).to_filename_friendly_no_crate();
     BODIES.with(|b| {
         b.borrow_mut().push((filename, source, offset, unsafe {
             std::mem::transmute(facts)
@@ -95,9 +99,13 @@ fn mir_borrowck<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> ProvidedValue<'t
     */
     //ANALYZE.lock().unwrap().push(task);
 
-    let mut providers = Providers::default();
-    rustc_borrowck::provide(&mut providers);
-    (providers.mir_borrowck)(tcx, def_id)
+    let result = BorrowCheckResult {
+        concrete_opaque_types: indexmap::IndexMap::default(),
+        closure_requirements: None,
+        used_mut_upvars: smallvec::SmallVec::new(),
+        tainted_by_errors: None,
+    };
+    tcx.arena.alloc(result)
 }
 
 pub struct AnalyzerCallback {
@@ -131,6 +139,7 @@ impl Callbacks for AnalyzerCallback {
         _compiler: &interface::Compiler,
         queries: &'tcx rustc_interface::Queries<'tcx>,
     ) -> Compilation {
+        log::info!("after analysis");
         let rt = Builder::new_multi_thread()
             .enable_all()
             .worker_threads(8)

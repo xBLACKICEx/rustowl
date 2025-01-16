@@ -3,6 +3,10 @@ import { zIndex, type zInfer, zMir, zRange } from "./api/schemas";
 
 type Range = zInfer<typeof zRange>;
 
+export const isSuperRange = (r1: Range, r2: Range): boolean => {
+  return r1.from <= r2.from && r2.until <= r1.until;
+};
+
 export const rangeToRange = (doc: vscode.TextDocument, range: Range) =>
   new vscode.Range(doc.positionAt(range.from), doc.positionAt(range.until));
 

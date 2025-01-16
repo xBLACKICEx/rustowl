@@ -5,9 +5,6 @@ import {
   ChildProcessWithoutNullStreams,
   ChildProcess,
 } from "node:child_process";
-import * as fs from "node:fs";
-import * as path from "node:path";
-import axios from "axios";
 
 import { analyze, isAlive } from "./api/request";
 import { zWorkspace, zCollectedData, zInfer, zRange } from "./api/schemas";
@@ -21,110 +18,8 @@ import {
 
 const DOCKER_CONTAINER_NAME = "rustowl-server";
 
-const dockerRun = (): ChildProcessWithoutNullStreams => {
-  return spawn("docker", [
-    "run",
-    "-d",
-    "--rm",
-    "--name",
-    DOCKER_CONTAINER_NAME,
-    "-p",
-    "127.0.0.1:7819:7819",
-    "ghcr.io/cordx56/rustowl:latest",
-  ]);
-};
-const dockerStop = (): ChildProcessWithoutNullStreams => {
-  return spawn("docker", ["stop", DOCKER_CONTAINER_NAME]);
-};
-
-let serverProcess:
-  | ChildProcessWithoutNullStreams
-  | "running"
-  | "installing"
-  | undefined = undefined;
-
-const stat = (path: string) => {
-  try {
-    return fs.statSync(path);
-  } catch (_e) {
-    return null;
-  }
-};
-
 export function activate(context: vscode.ExtensionContext) {
   console.log("rustowl activated");
-
-  const runServer = async () => {
-    if (await isAlive()) {
-      serverProcess = "running";
-      return;
-    }
-    const storage = context.globalStorageUri;
-    const storagePath = storage.fsPath;
-    if (!stat(storagePath)?.isDirectory()) {
-      fs.mkdirSync(storagePath);
-    }
-    serverProcess = "installing";
-    const installScriptPath = path.join(storagePath, "install.sh");
-    if (!stat(installScriptPath)?.isFile()) {
-      try {
-        const script = await axios.get<string>(
-          "https://github.com/cordx56/rustowl/releases/latest/download/install.sh"
-        );
-        fs.writeFileSync(installScriptPath, await script.data);
-      } catch (_e) {
-        vscode.window.showInformationMessage(
-          "installing rustowl-server failed"
-        );
-      }
-    }
-    vscode.window.showInformationMessage("Installing rustowl-server");
-    let installProcess = spawn("bash", ["install.sh"], {
-      cwd: storagePath,
-    });
-    installProcess.on("exit", (code) => {
-      if (code === 0) {
-        serverProcess = spawn("bash", ["install.sh", "run"], {
-          cwd: storagePath,
-        });
-        vscode.window.showInformationMessage("rustowl-server started");
-      } else {
-        vscode.window.showInformationMessage(
-          "installing rustowl-server failed"
-        );
-      }
-    });
-  };
-
-  // for quick start, automatically starts Docker container
-  // 1: not started, 2: starting, 3: started, 4: error
-  let dockerStatus: "not started" | "starting" | "started" | "error" =
-    "not started";
-  const startServer = async () => {
-    if (dockerStatus === "not started") {
-      if (await isAlive()) {
-        dockerStatus = "started";
-        return dockerStatus;
-      }
-      vscode.window.showInformationMessage(
-        "starting rustowl-server with Docker..."
-      );
-      dockerStatus = "starting";
-      const run = dockerRun();
-      run.on("exit", (code) => {
-        if (code !== 0) {
-          dockerStatus = "error";
-          vscode.window.showErrorMessage(
-            `rustowl-server on Docker exited with status code ${code}`
-          );
-        } else {
-          dockerStatus = "started";
-          vscode.window.showInformationMessage("rustowl-server started");
-        }
-      });
-    }
-    return dockerStatus;
-  };
 
   const lifetimeDecorationType = vscode.window.createTextEditorDecorationType({
     textDecoration: "underline solid 3px hsla(125, 80%, 60%, 0.8)",
@@ -175,8 +70,8 @@ export function activate(context: vscode.ExtensionContext) {
         mir.decls.filter((v) => v.local_index === local).at(0);
 
       const locals = selectLocal(cursor, mir);
-      const userDecls = mir.decls.filter((v) => v.type === "user");
-      const selectedDecls = userDecls
+      const decls = mir.decls;
+      const selectedDecls = decls
         .filter((v) => locals.includes(v.local_index))
         .map((v) => ({
           ...v,
@@ -192,7 +87,10 @@ export function activate(context: vscode.ExtensionContext) {
           v.lives
             .map((w) => ({
               range: w,
-              hoverMessage: `lifetime of variable \`${v.name}\``,
+              hoverMessage:
+                v.type === "user"
+                  ? `lifetime of variable \`${v.name}\``
+                  : undefined,
             }))
             .flat()
         )
@@ -216,7 +114,10 @@ export function activate(context: vscode.ExtensionContext) {
             }))
             .map((v) => ({
               range: v.outLives,
-              hoverMessage: `variable \`${v.name}\` outlives it's lifetime`,
+              hoverMessage:
+                v.type === "user"
+                  ? `variable \`${v.name}\` outlives it's lifetime`
+                  : "out of it's lifetime",
             }))
         )
         .flat();

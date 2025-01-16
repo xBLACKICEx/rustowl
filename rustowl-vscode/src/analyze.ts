@@ -7,7 +7,7 @@ import {
   zRange,
   zMirDecl,
 } from "./api/schemas";
-import { rangeToRange, eliminatedRanges } from "./range";
+import { rangeToRange, eliminatedRanges, isSuperRange } from "./range";
 
 type Mir = zInfer<typeof zMir>;
 type Local = zInfer<typeof zIndex>;
@@ -18,13 +18,12 @@ export type Analyzed = {};
 export const analyzeMir = (mir: Mir) => {};
 
 export const selectLocal = (pos: number, mir: Mir): Local[] => {
-  const selected: Local[] = [];
+  const selected: { local: Local; range: Range }[] = [];
   const select = (local: Local, range: Range) => {
     if (pos < range.from || range.until < pos) {
       return undefined;
     }
-    console.log("selected ", local, " @ ", range);
-    selected.push(local);
+    selected.push({ local, range });
   };
   console.log("select from position", pos);
 
@@ -45,8 +44,24 @@ export const selectLocal = (pos: number, mir: Mir): Local[] => {
         }
       }
     }
+    if (bb.terminator && bb.terminator.type === "call") {
+      select(bb.terminator.destination_local_index, bb.terminator.fn_span);
+    }
   }
-  return selected;
+  let idx = 0;
+  while (idx < selected.length) {
+    for (const sel of selected) {
+      if (isSuperRange(selected[idx].range, sel.range)) {
+        selected.splice(idx, 1);
+      } else {
+        idx += 1;
+      }
+    }
+  }
+  for (const sel of selected) {
+    console.log("selected ", sel.local, " @ ", sel.range);
+  }
+  return selected.map((v) => v.local);
 };
 
 type DeclLifetimes = Record<zInfer<typeof zIndex>, Range[]>;
