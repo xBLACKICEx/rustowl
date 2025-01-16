@@ -24,6 +24,7 @@ use rustc_middle::{query::queries::mir_borrowck::ProvidedValue, ty::TyCtxt, util
 use rustc_session::{config, EarlyDiagCtxt};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fs;
 use std::sync::{atomic::AtomicBool, Arc};
 use tokio::{runtime::Builder, task::JoinSet};
 
@@ -44,7 +45,7 @@ static ANALYZE: LazyLock<Mutex<JoinSet<MirAnalyzer<'static, 'static>>>> =
 */
 
 thread_local! {
-    static BODIES: RefCell<Vec<(String, u32, consumers::BodyWithBorrowckFacts<'static>)>> = RefCell::new(Vec::new());
+    static BODIES: RefCell<Vec<(String, String, u32, consumers::BodyWithBorrowckFacts<'static>)>> = RefCell::new(Vec::new());
 }
 
 fn override_queries(_session: &rustc_session::Session, local: &mut Providers) {
@@ -67,11 +68,13 @@ fn mir_borrowck<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> ProvidedValue<'t
         .display(rustc_span::FileNameDisplayPreference::Local)
         .to_string_lossy()
         .to_string();
+    let source = fs::read_to_string(&filename).unwrap();
 
     //let filename = tcx.hir().def_path(def_id).to_filename_friendly_no_crate();
     BODIES.with(|b| {
-        b.borrow_mut()
-            .push((filename, offset, unsafe { std::mem::transmute(facts) }))
+        b.borrow_mut().push((filename, source, offset, unsafe {
+            std::mem::transmute(facts)
+        }))
     });
     //log::info!("borrowck finished");
 
@@ -138,11 +141,13 @@ impl Callbacks for AnalyzerCallback {
         let collected = queries.global_ctxt().unwrap().enter(|tcx| {
             let bodies = BODIES.take();
             for i in 0..bodies.len() {
+                let (filename, source, offset, body) = &bodies[i];
                 let task = MirAnalyzer::new(
-                    bodies[i].0.clone(),
-                    bodies[i].1,
+                    filename.clone(),
+                    source.clone(),
+                    *offset,
                     unsafe { std::mem::transmute(&tcx) },
-                    unsafe { std::mem::transmute(&bodies[i].2) },
+                    unsafe { std::mem::transmute(body) },
                 );
                 set.spawn_on(task, rt.handle());
                 //set.spawn_on(async move { task.await.analyze() }, rt.handle());

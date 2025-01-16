@@ -14,19 +14,19 @@ pub enum Error {
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[serde(transparent)]
 pub struct Loc(u32);
-impl From<u32> for Loc {
-    fn from(value: u32) -> Self {
-        Self(value)
-    }
-}
-impl std::ops::Sub for Loc {
-    type Output = Loc;
-    fn sub(self, rhs: Self) -> Self::Output {
-        if self.0 < rhs.0 {
-            0.into()
+impl Loc {
+    pub fn new(source: &str, byte_pos: u32, offset: u32) -> Self {
+        let byte_pos = if byte_pos < offset {
+            0
         } else {
-            Loc::from(self.0 - rhs.0)
+            byte_pos - offset
+        };
+        for (i, (byte, _)) in source.char_indices().enumerate() {
+            if byte_pos <= byte as u32 {
+                return Self(i as u32);
+            }
         }
+        Self(0)
     }
 }
 
@@ -40,6 +40,11 @@ impl Range {
     pub fn new(from: Loc, until: Loc) -> Self {
         Self { from, until }
     }
+    pub fn from_span(source: &str, span: Span, offset: u32) -> Self {
+        let from = Loc::new(source, span.lo().0, offset);
+        let until = Loc::new(source, span.hi().0, offset);
+        Self::new(from, until)
+    }
     /*
     pub fn from_source_info(body: &Body<'_>, source_info: SourceInfo) -> Self {
         let scope = Range::from(body.source_scopes.get(source_info.scope).unwrap().span);
@@ -50,17 +55,6 @@ impl Range {
         )
     }
     */
-    pub fn offset(self, offset: u32) -> Self {
-        Self {
-            from: self.from - Loc::from(offset),
-            until: self.until - Loc::from(offset),
-        }
-    }
-}
-impl From<Span> for Range {
-    fn from(span: Span) -> Self {
-        Self::new(span.lo().0.into(), span.hi().0.into())
-    }
 }
 
 /// variable in MIR
