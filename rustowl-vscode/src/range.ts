@@ -4,7 +4,10 @@ import { zIndex, type zInfer, zMir, zRange } from "./api/schemas";
 type Range = zInfer<typeof zRange>;
 
 export const isSuperRange = (r1: Range, r2: Range): boolean => {
-  return r1.from <= r2.from && r2.until <= r1.until;
+  return (
+    (r1.from < r2.from && r2.until <= r1.until) ||
+    (r1.from <= r2.from && r2.until < r1.until)
+  );
 };
 
 export const rangeToRange = (doc: vscode.TextDocument, range: Range) =>
@@ -70,7 +73,7 @@ export const excludeRange = (from: Range, ex: Range): Range[] => {
     const r1 = { from: from.from, until: common.from - 1 };
     const r2 = { from: common.until + 1, until: from.until };
     return eliminatedRanges(
-      (r1.from < r1.until ? [r1] : []).concat(r2.from < r2.until ? [r2] : [])
+      (r1.from < r1.until ? [r1] : []).concat(r2.from < r2.until ? [r2] : []),
     );
   } else {
     return [from];

@@ -14,7 +14,6 @@ pub extern crate rustc_span;
 pub extern crate smallvec;
 
 mod analyze;
-pub mod models;
 
 use analyze::MirAnalyzer;
 use models::*;
@@ -27,11 +26,15 @@ use rustc_middle::{
     util::Providers,
 };
 use rustc_session::{config, EarlyDiagCtxt};
-use std::cell::RefCell;
+use std::cell::{LazyCell, RefCell};
 use std::collections::HashMap;
 use std::fs;
-use std::sync::{atomic::AtomicBool, Arc};
-use tokio::{runtime::Builder, task::JoinSet};
+use std::sync::{atomic::AtomicBool, Arc, LazyLock, Mutex};
+use tokio::{
+    runtime::Builder,
+    task::JoinSet,
+    time::{sleep, timeout, Duration},
+};
 
 pub struct RustcCallback;
 impl Callbacks for RustcCallback {}
@@ -45,19 +48,33 @@ static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
         .build()
         .unwrap()
 });
-static ANALYZE: LazyLock<Mutex<JoinSet<MirAnalyzer<'static, 'static>>>> =
-    LazyLock::new(|| Mutex::new(JoinSet::new()));
 */
 
+static TASKS: LazyLock<Mutex<JoinSet<MirAnalyzer<'static, 'static>>>> =
+    LazyLock::new(|| Mutex::new(JoinSet::new()));
+static TASK_LEN: LazyLock<Mutex<usize>> = LazyLock::new(|| Mutex::new(0));
 thread_local! {
-    static BODIES: RefCell<Vec<(String, String, u32, consumers::BodyWithBorrowckFacts<'static>)>> = RefCell::new(Vec::new());
+    //static TASK: RefCell<JoinSet<MirAnalyzer<'static, 'static>>> = RefCell::new(JoinSet::new());
+    static ANALYZERS: RefCell<Vec<MirAnalyzer<'static, 'static>>> = RefCell::new(Vec::new());
+    //static BODIES: RefCell<Vec<(String, String, u32, consumers::BodyWithBorrowckFacts<'static>)>> = RefCell::new(Vec::new());
+    //static IDS: RefCell<Vec<LocalDefId>> = RefCell::new(Vec::new());
 }
 
 fn override_queries(_session: &rustc_session::Session, local: &mut Providers) {
     local.mir_borrowck = mir_borrowck;
+    //local.analysis = |_, _| Ok(());
 }
 fn mir_borrowck<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> ProvidedValue<'tcx> {
     log::info!("start borrowck of {def_id:?}");
+    //IDS.with(|v| v.borrow_mut().push(def_id));
+
+    let rt = Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(8)
+        .thread_stack_size(1024 * 1024 * 1024)
+        .build()
+        .unwrap();
+
     let facts = consumers::get_body_with_borrowck_facts(
         tcx,
         def_id,
@@ -75,20 +92,50 @@ fn mir_borrowck<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> ProvidedValue<'t
         .to_string();
     let source = fs::read_to_string(&filename).unwrap();
 
+    /*
     BODIES.with(|b| {
         b.borrow_mut().push((filename, source, offset, unsafe {
             std::mem::transmute(facts)
         }))
     });
+    */
     //log::info!("borrowck finished");
 
-    /*
     log::info!("start analyze of {def_id:?}");
-    let analyzer = MirAnalyzer::new(unsafe { std::mem::transmute(&tcx) }, unsafe {
-        std::mem::transmute(&facts)
-    });
-    ANALYZE.lock().unwrap().spawn_on(analyzer, RUNTIME.handle());
-    */
+    let analyzer = MirAnalyzer::new(
+        filename,
+        source,
+        offset,
+        unsafe { std::mem::transmute(&tcx) },
+        unsafe { std::mem::transmute(&facts) },
+    );
+    {
+        TASKS.lock().unwrap().spawn_on(analyzer, rt.handle());
+        let mut len = TASK_LEN.lock().unwrap();
+        *len += 1;
+        if *len == 1 {
+            drop(len);
+            rt.block_on(async move {
+                loop {
+                    sleep(Duration::from_millis(100)).await;
+                    if { TASKS.lock().unwrap().len() } == { *TASK_LEN.lock().unwrap() } {
+                        break;
+                    }
+                }
+                while let Some(task) = TASKS.lock().unwrap().join_next().await {
+                    let (filename, analyzed) = task.unwrap().analyze();
+                    let ws = Workspace(HashMap::from([(
+                        filename,
+                        File {
+                            items: vec![analyzed],
+                        },
+                    )]));
+                    println!("{}", serde_json::to_string(&ws).unwrap());
+                }
+            });
+        }
+    }
+    //ANALYZE.lock().unwrap().spawn_on(analyzer, RUNTIME.handle());
     /*
     let task = spawn(move || {
         let analyzed = analyzer.join().unwrap().analyze();
@@ -134,6 +181,7 @@ impl Callbacks for AnalyzerCallback {
         );
     }
 
+    /*
     fn after_analysis<'tcx>(
         &mut self,
         _compiler: &interface::Compiler,
@@ -148,18 +196,36 @@ impl Callbacks for AnalyzerCallback {
             .unwrap();
         let mut set = JoinSet::new();
         let collected = queries.global_ctxt().unwrap().enter(|tcx| {
-            let bodies = BODIES.take();
-            for i in 0..bodies.len() {
-                let (filename, source, offset, body) = &bodies[i];
+            let ids = IDS.take();
+            for id in &ids {
+                log::info!("start borrowck of {id:?}");
+                let facts = consumers::get_body_with_borrowck_facts(
+                    tcx,
+                    *id,
+                    consumers::ConsumerOptions::PoloniusOutputFacts,
+                );
+
+                let source_map = tcx.sess.source_map();
+                let filename = source_map.span_to_filename(facts.body.span);
+
+                let source_file = source_map.get_source_file(&filename).unwrap();
+                let offset = source_file.start_pos.0;
+
+                let filename = filename
+                    .display(rustc_span::FileNameDisplayPreference::Local)
+                    .to_string_lossy()
+                    .to_string();
+                let source = fs::read_to_string(&filename).unwrap();
+
+                log::info!("{:?}", facts.body);
                 let task = MirAnalyzer::new(
                     filename.clone(),
                     source.clone(),
-                    *offset,
+                    offset,
                     unsafe { std::mem::transmute(&tcx) },
-                    unsafe { std::mem::transmute(body) },
+                    unsafe { std::mem::transmute(&facts) },
                 );
                 set.spawn_on(task, rt.handle());
-                //set.spawn_on(async move { task.await.analyze() }, rt.handle());
             }
             let mut files = HashMap::new();
             rt.block_on(async move {
@@ -183,6 +249,7 @@ impl Callbacks for AnalyzerCallback {
         println!("{}", serde_json::to_string(&workspace).unwrap());
         Compilation::Continue
     }
+    */
 }
 
 pub fn run_compiler() -> i32 {

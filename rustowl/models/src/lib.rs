@@ -1,4 +1,3 @@
-use rustc_span::Span;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -39,11 +38,6 @@ pub struct Range {
 impl Range {
     pub fn new(from: Loc, until: Loc) -> Self {
         Self { from, until }
-    }
-    pub fn from_span(source: &str, span: Span, offset: u32) -> Self {
-        let from = Loc::new(source, span.lo().0, offset);
-        let until = Loc::new(source, span.hi().0, offset);
-        Self::new(from, until)
     }
     /*
     pub fn from_source_info(body: &Body<'_>, source_info: SourceInfo) -> Self {
@@ -102,17 +96,30 @@ impl MirVariables {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum Item {
-    Function { span: Range, mir: AnalyzedMir },
+    Function { span: Range, mir: Function },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct File {
-    pub items: Vec<AnalyzedMir>,
+    pub items: Vec<Function>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(transparent)]
 pub struct Workspace(pub HashMap<String, File>);
+impl Workspace {
+    pub fn merge(mut self, other: Self) -> Self {
+        let Workspace(files) = other;
+        for (file, mir) in files {
+            if let Some(insert) = self.0.get_mut(&file) {
+                insert.items.extend_from_slice(&mir.items);
+            } else {
+                self.0.insert(file, mir);
+            }
+        }
+        self
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
@@ -192,7 +199,7 @@ pub enum MirDecl {
     },
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct AnalyzedMir {
+pub struct Function {
     pub basic_blocks: Vec<MirBasicBlock>,
     pub decls: Vec<MirDecl>,
 }

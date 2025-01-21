@@ -5,15 +5,16 @@ edition = "2021"
 default-run = "cargo-owl"
 
 [workspace]
-members = ["rustowl-core"]
+members = ["models", "rustowl-core"]
 [workspace.dependencies]
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.135"
 log = "0.4.22"
-tokio = { version = "1.43.0", features = ["rt", "rt-multi-thread", "macros", "sync"] }
+tokio = { version = "1.43.0", features = ["rt", "rt-multi-thread", "macros", "sync", "time"] }
 
 [dependencies]
 rustowl-core = { path = "./rustowl-core" }
+models = { path = "./models" }
 serde.workspace = true
 serde_json.workspace = true
 log.workspace = true

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use models::Workspace;
 use std::env;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -12,6 +12,7 @@ fn main() {
             "RUSTC_WORKSPACE_WRAPPER",
             self_path.with_file_name("rustowlc"),
         )
+        .env_remove("RUSTC_WRAPPER")
         .arg("run")
         .arg("nightly-2024-10-31")
         .arg("cargo")
@@ -24,10 +25,7 @@ fn main() {
     let objs = String::from_utf8_lossy(&output.stdout)
         .split("\n")
         .filter(|v| 0 < v.len())
-        .map(|v| serde_json::from_str::<HashMap<String, serde_json::Value>>(v).unwrap())
-        .fold(HashMap::new(), |mut acc, x| {
-            acc.extend(x);
-            acc
-        });
+        .map(|v| serde_json::from_str::<Workspace>(v).unwrap())
+        .reduce(|acc, x| acc.merge(x));
     println!("{}", serde_json::to_string(&objs).unwrap());
 }

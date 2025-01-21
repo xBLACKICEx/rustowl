@@ -21,7 +21,7 @@ export const selectLocal = (pos: number, mir: Mir): Local[] => {
   const selected: { local: Local; range: Range }[] = [];
   const select = (local: Local, range: Range) => {
     if (pos < range.from || range.until < pos) {
-      return undefined;
+      return;
     }
     selected.push({ local, range });
   };
@@ -66,7 +66,7 @@ export const selectLocal = (pos: number, mir: Mir): Local[] => {
 
 type DeclLifetimes = Record<zInfer<typeof zIndex>, Range[]>;
 export const calculateDeclsLifetimes = (
-  decls: zInfer<typeof zMirDecl>[]
+  decls: zInfer<typeof zMirDecl>[],
 ): DeclLifetimes => {
   const res: DeclLifetimes = {};
   for (const decl of decls) {
@@ -80,7 +80,7 @@ export const localAssigner = (local: Local, mir: Mir) => {
     .map((bb) =>
       bb.statements.filter((stmt) => {
         stmt.type === "assign" && stmt.target_local_index === local;
-      })
+      }),
     )
     .flat();
   const terminators = mir.basic_blocks
@@ -96,7 +96,7 @@ const traceAssigner = (local: Local, mir: Mir): Local[] => {
     .map((v) =>
       v.rval?.type === "borrow"
         ? traceAssigner(v.target_local_index, mir)
-        : [v.rval?.target_local_index]
+        : [v.rval?.target_local_index],
     )
     .flat()
     .filter((v) => typeof v === "number");
@@ -111,7 +111,7 @@ export const traceAssignersRanges = (local: Local, mir: Mir): Range[] => {
         ? [v.rval.range, ...traceAssignersRanges(v.target_local_index, mir)]
         : v.rval?.type === "move"
           ? [v.rval.range]
-          : []
+          : [],
     )
     .flat();
   const terminators = tmp.terminators
@@ -123,7 +123,7 @@ export const traceAssignersRanges = (local: Local, mir: Mir): Range[] => {
 // obtain the list of message and range
 export const messagesAndRanges = (
   doc: vscode.TextDocument,
-  { items }: zInfer<typeof zCollectedData>
+  { items }: zInfer<typeof zCollectedData>,
 ) => {
   const res: vscode.DecorationOptions[] = [];
   const push = (range: Range, hoverMessage: string) => {
@@ -154,7 +154,7 @@ export const messagesAndRanges = (
                     "mutable borrow" +
                       (borrowFrom?.type === "user"
                         ? ` of \`${borrowFrom.name}\``
-                        : "")
+                        : ""),
                   );
                 } else {
                   push(
@@ -162,7 +162,7 @@ export const messagesAndRanges = (
                     "immutable borrow" +
                       (borrowFrom?.type === "user"
                         ? ` of \`${borrowFrom.name}\``
-                        : "")
+                        : ""),
                   );
                 }
               }
@@ -175,7 +175,7 @@ export const messagesAndRanges = (
                   (movedFrom?.type === "user"
                     ? ` from \`${movedFrom.name}\``
                     : "") +
-                  (movedTo?.type === "user" ? ` to \`${movedTo.name}\`` : "")
+                  (movedTo?.type === "user" ? ` to \`${movedTo.name}\`` : ""),
               );
             }
           }

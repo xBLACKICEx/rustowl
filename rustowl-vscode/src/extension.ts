@@ -92,7 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
                   ? `lifetime of variable \`${v.name}\``
                   : undefined,
             }))
-            .flat()
+            .flat(),
         )
         .flat();
       lifetime = lifetime.concat(selectedLiveDecos);
@@ -105,7 +105,7 @@ export function activate(context: vscode.ExtensionContext) {
               // it's type may be implemented `Drop`
               v.drop
                 ? excludeRanges(w, v.drop_range)
-                : excludeRanges(w, v.lives)
+                : excludeRanges(w, v.lives),
             )
             .flat()
             .map((w) => ({
@@ -118,7 +118,7 @@ export function activate(context: vscode.ExtensionContext) {
                 v.type === "user"
                   ? `variable \`${v.name}\` outlives it's lifetime`
                   : "out of it's lifetime",
-            }))
+            })),
         )
         .flat();
       outLives = outLives.concat(outliveList.map((v) => ({ range: v.range })));
@@ -136,7 +136,7 @@ export function activate(context: vscode.ExtensionContext) {
             ) {
               if (stmt.rval.type === "move") {
                 const movedFrom = getDeclFromLocal(
-                  stmt.rval.target_local_index
+                  stmt.rval.target_local_index,
                 );
                 const movedTo = getDeclFromLocal(stmt.target_local_index);
                 moves.push({
@@ -150,7 +150,7 @@ export function activate(context: vscode.ExtensionContext) {
                 });
               } else if (stmt.rval.type === "borrow") {
                 const borrowFrom = getDeclFromLocal(
-                  stmt.rval.target_local_index
+                  stmt.rval.target_local_index,
                 );
                 if (stmt.rval.mutable) {
                   mBorrows.push({
@@ -181,7 +181,7 @@ export function activate(context: vscode.ExtensionContext) {
               locals.includes(bb.terminator.destination_local_index)
             ) {
               const dest = getDeclFromLocal(
-                bb.terminator.destination_local_index
+                bb.terminator.destination_local_index,
               );
               moves.push({
                 range: bb.terminator.fn_span,
@@ -207,9 +207,9 @@ export function activate(context: vscode.ExtensionContext) {
             .concat(
               mBorrows.map((w) => w.range),
               imBorrows.map((w) => w.range),
-              moves.map((w) => w.range)
-            )
-        ).map((w) => ({ range: w }))
+              moves.map((w) => w.range),
+            ),
+        ).map((w) => ({ range: w })),
       )
       .flat();
     messages = messages.concat(moves);
@@ -221,9 +221,9 @@ export function activate(context: vscode.ExtensionContext) {
             .map((w) => w.range)
             .concat(
               mBorrows.map((w) => w.range),
-              imBorrows.map((w) => w.range)
-            )
-        ).map((w) => ({ range: w }))
+              imBorrows.map((w) => w.range),
+            ),
+        ).map((w) => ({ range: w })),
       )
       .flat();
     messages = messages.concat(imBorrows);
@@ -231,8 +231,8 @@ export function activate(context: vscode.ExtensionContext) {
       .map((v) =>
         excludeRanges(
           v.range,
-          outLives.map((w) => w.range).concat(mBorrows.map((w) => w.range))
-        ).map((w) => ({ range: w }))
+          outLives.map((w) => w.range).concat(mBorrows.map((w) => w.range)),
+        ).map((w) => ({ range: w })),
       )
       .flat();
     messages = messages.concat(mBorrows);
@@ -240,8 +240,8 @@ export function activate(context: vscode.ExtensionContext) {
       .map((v) =>
         excludeRanges(
           v.range,
-          outLives.map((w) => w.range)
-        ).map((w) => ({ range: w }))
+          outLives.map((w) => w.range),
+        ).map((w) => ({ range: w })),
       )
       .flat();
 
@@ -289,6 +289,7 @@ export function activate(context: vscode.ExtensionContext) {
           const data = zWorkspace.safeParse(JSON.parse(stdout));
           if (data.success) {
             analyzed = data.data;
+            console.log(analyzed);
             return;
           } else {
             console.log(data.error);
@@ -310,7 +311,7 @@ export function activate(context: vscode.ExtensionContext) {
       activeEditor = editor;
     },
     null,
-    context.subscriptions
+    context.subscriptions,
   );
   let timeout: NodeJS.Timeout | undefined = undefined;
   vscode.workspace.onDidSaveTextDocument(
@@ -337,7 +338,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
     },
     null,
-    context.subscriptions
+    context.subscriptions,
   );
   vscode.window.onDidChangeTextEditorSelection(
     (ev) => {
@@ -346,7 +347,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
     },
     null,
-    context.subscriptions
+    context.subscriptions,
   );
 
   /*

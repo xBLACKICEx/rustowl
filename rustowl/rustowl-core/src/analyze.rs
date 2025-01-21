@@ -1,5 +1,4 @@
-use crate::models::*;
-use crate::AnalyzedMir;
+use models::*;
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::{
     BodyWithBorrowckFacts, BorrowIndex, LocationTable, PoloniusInput, PoloniusOutput, RichLocation,
@@ -12,7 +11,7 @@ use rustc_middle::{
     },
     ty::TyCtxt,
 };
-use rustc_span::source_map::SourceMap;
+use rustc_span::{source_map::SourceMap, Span};
 use std::collections::{BTreeSet, HashMap};
 use std::future::Future;
 use std::hash::Hash;
@@ -56,6 +55,12 @@ where
             self.insert(key.clone(), set);
         }
     }
+}
+
+fn range_from_span(source: &str, span: Span, offset: u32) -> Range {
+    let from = Loc::new(source, span.lo().0, offset);
+    let until = Loc::new(source, span.hi().0, offset);
+    Range::new(from, until)
 }
 
 pub struct MirAnalyzer<'c, 'tcx> {
@@ -159,7 +164,7 @@ where
             .get(&bb)
             .map(|bb| bb.statements.get(stmt_index))
             .flatten()
-            .map(|stmt| Range::from_span(&self.source, stmt.source_info.span, self.offset))
+            .map(|stmt| range_from_span(&self.source, stmt.source_info.span, self.offset))
     }
     fn rich_locations_to_ranges(&self, locations: &[RichLocation]) -> Vec<Range> {
         let mut starts = Vec::new();
@@ -222,7 +227,7 @@ where
                 VarDebugInfoContents::Place(place) => Some((
                     place.local,
                     (
-                        Range::from_span(&self.source, debug.source_info.span, self.offset),
+                        range_from_span(&self.source, debug.source_info.span, self.offset),
                         debug.name.as_str().to_owned(),
                     ),
                 )),
@@ -293,11 +298,11 @@ where
                         match &statement.kind {
                             StatementKind::StorageLive(local) => Some(MirStatement::StorageLive {
                                 target_local_index: local.index(),
-                                range: Range::from_span(source, statement.source_info.span, offset),
+                                range: range_from_span(source, statement.source_info.span, offset),
                             }),
                             StatementKind::StorageDead(local) => Some(MirStatement::StorageDead {
                                 target_local_index: local.index(),
-                                range: Range::from_span(source, statement.source_info.span, offset),
+                                range: range_from_span(source, statement.source_info.span, offset),
                             }),
                             StatementKind::Assign(ref v) => {
                                 let (place, rval) = &**v;
@@ -309,7 +314,7 @@ where
                                             let local = p.local;
                                             Some(MirRval::Move {
                                                 target_local_index: local.index(),
-                                                range: Range::from_span(
+                                                range: range_from_span(
                                                     source,
                                                     statement.source_info.span,
                                                     offset,
@@ -327,7 +332,7 @@ where
                                         let outlive = None;
                                         Some(MirRval::Borrow {
                                             target_local_index: local.index(),
-                                            range: Range::from_span(
+                                            range: range_from_span(
                                                 source,
                                                 statement.source_info.span,
                                                 offset,
@@ -340,7 +345,7 @@ where
                                 };
                                 Some(MirStatement::Assign {
                                     target_local_index,
-                                    range: Range::from_span(
+                                    range: range_from_span(
                                         source,
                                         statement.source_info.span,
                                         offset,
@@ -359,11 +364,7 @@ where
                         .map(|terminator| match &terminator.kind {
                             TerminatorKind::Drop { place, .. } => MirTerminator::Drop {
                                 local_index: place.local.index(),
-                                range: Range::from_span(
-                                    source,
-                                    terminator.source_info.span,
-                                    offset,
-                                ),
+                                range: range_from_span(source, terminator.source_info.span, offset),
                             },
                             TerminatorKind::Call {
                                 destination,
@@ -371,7 +372,7 @@ where
                                 ..
                             } => MirTerminator::Call {
                                 destination_local_index: destination.local.as_usize(),
-                                fn_span: Range::from_span(source, *fn_span, offset),
+                                fn_span: range_from_span(source, *fn_span, offset),
                             },
                             _ => MirTerminator::Other,
                         });
@@ -506,13 +507,13 @@ where
     }
 
     /// analyze MIR to get JSON-serializable, TypeScript friendly representation
-    pub fn analyze(self) -> (String, AnalyzedMir) {
+    pub fn analyze(self) -> (String, Function) {
         let decls = self.collect_decls();
         let basic_blocks = self.basic_blocks;
 
         (
             self.filename,
-            AnalyzedMir {
+            Function {
                 basic_blocks,
                 decls,
             },

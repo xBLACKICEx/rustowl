@@ -103,6 +103,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "models"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "num-conv"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -167,6 +174,7 @@ name = "rustowl"
 version = "0.1.0"
 dependencies = [
  "log",
+ "models",
  "rustowl-core",
  "serde",
  "serde_json",
@@ -179,6 +187,7 @@ name = "rustowl-core"
 version = "0.1.0"
 dependencies = [
  "log",
+ "models",
  "serde",
  "serde_json",
  "tokio",
