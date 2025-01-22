@@ -247,10 +247,12 @@ where
             .map(|(local, decl)| {
                 let local_index = local.index();
                 let ty = decl.ty.to_string();
-                let must_live_at = must_live_at.get(&local).cloned().unwrap_or(Vec::new());
-                let lives = lives.get(&local).cloned().unwrap_or(Vec::new());
+                let must_live_at =
+                    Self::merge_common(must_live_at.get(&local).cloned().unwrap_or(Vec::new()));
+                let lives = Self::merge_common(lives.get(&local).cloned().unwrap_or(Vec::new()));
                 let drop = self.is_drop(local);
-                let drop_range = drop_range.get(&local).cloned().unwrap_or(Vec::new());
+                let drop_range =
+                    Self::merge_common(drop_range.get(&local).cloned().unwrap_or(Vec::new()));
                 if decl.is_user_variable() {
                     let (span, name) = user_vars.get(&local).cloned().unwrap();
                     MirDecl::User {
@@ -399,6 +401,29 @@ where
                     && ((ranges[i].from <= ranges[j].from && ranges[j].until < ranges[i].until)
                         || (ranges[i].from < ranges[j].from && ranges[j].until <= ranges[i].until))
                 {
+                    ranges.remove(j);
+                } else {
+                    j += 1;
+                }
+                len = ranges.len();
+            }
+            i += 1;
+        }
+        ranges
+    }
+    fn merge_common(mut ranges: Vec<Range>) -> Vec<Range> {
+        let mut len = ranges.len();
+        let mut i = 0;
+        while i < len {
+            let mut j = i + 1;
+            while j < len {
+                if (ranges[j].from <= ranges[i].from && ranges[i].from <= ranges[j].until)
+                    || (ranges[j].from <= ranges[i].until && ranges[i].until <= ranges[j].until)
+                {
+                    ranges[i] = Range {
+                        from: ranges[i].from.min(ranges[j].from),
+                        until: ranges[i].until.max(ranges[j].until),
+                    };
                     ranges.remove(j);
                 } else {
                     j += 1;

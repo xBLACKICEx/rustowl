@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { zIndex, type zInfer, zMir, zRange } from "./api/schemas";
+import { zIndex, type zInfer, zMir, zRange } from "./schemas";
 
 type Range = zInfer<typeof zRange>;
 

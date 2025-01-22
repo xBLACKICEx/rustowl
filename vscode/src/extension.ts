@@ -7,7 +7,7 @@ import {
 } from "node:child_process";
 
 import { analyze, isAlive } from "./api/request";
-import { zWorkspace, zCollectedData, zInfer, zRange } from "./api/schemas";
+import { zWorkspace, zCollectedData, zInfer, zRange } from "./schemas";
 import { selectLocal } from "./analyze";
 import {
   commonRanges,

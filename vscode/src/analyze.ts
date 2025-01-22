@@ -6,7 +6,7 @@ import {
   zMir,
   zRange,
   zMirDecl,
-} from "./api/schemas";
+} from "./schemas";
 import { rangeToRange, eliminatedRanges, isSuperRange } from "./range";
 
 type Mir = zInfer<typeof zMir>;
@@ -48,15 +48,17 @@ export const selectLocal = (pos: number, mir: Mir): Local[] => {
       select(bb.terminator.destination_local_index, bb.terminator.fn_span);
     }
   }
-  let idx = 0;
-  while (idx < selected.length) {
-    for (const sel of selected) {
-      if (isSuperRange(selected[idx].range, sel.range)) {
-        selected.splice(idx, 1);
+  let i = 0;
+  while (i < selected.length) {
+    let j = i + 1;
+    while (j < selected.length) {
+      if (isSuperRange(selected[i].range, selected[j].range)) {
+        selected.splice(j, 1);
       } else {
-        idx += 1;
+        j += 1;
       }
     }
+    i += 1;
   }
   for (const sel of selected) {
     console.log("selected ", sel.local, " @ ", sel.range);
