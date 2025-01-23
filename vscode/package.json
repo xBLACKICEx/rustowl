@@ -2,7 +2,7 @@
   "name": "rustowl-vscode",
   "displayName": "rustowl-vscode",
   "description": "Visualize ownership and lifetimes in Rust",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -48,7 +48,6 @@
     "typescript": "^5.6.3"
   },
   "dependencies": {
-    "axios": "^1.7.7",
     "zod": "^3.23.8"
   }
 }

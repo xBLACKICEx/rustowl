@@ -1,22 +1,9 @@
 import * as vscode from "vscode";
 
-import {
-  spawn,
-  ChildProcessWithoutNullStreams,
-  ChildProcess,
-} from "node:child_process";
-
-import { analyze, isAlive } from "./api/request";
-import { zWorkspace, zCollectedData, zInfer, zRange } from "./schemas";
+import { spawn } from "node:child_process";
+import { zWorkspace, zInfer, zRange } from "./schemas";
 import { selectLocal } from "./analyze";
-import {
-  commonRanges,
-  eliminatedRanges,
-  rangeToRange,
-  excludeRanges,
-} from "./range";
-
-const DOCKER_CONTAINER_NAME = "rustowl-server";
+import { eliminatedRanges, rangeToRange, excludeRanges } from "./range";
 
 export function activate(context: vscode.ExtensionContext) {
   console.log("rustowl activated");
@@ -315,7 +302,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
   let timeout: NodeJS.Timeout | undefined = undefined;
   vscode.workspace.onDidSaveTextDocument(
-    (ev) => {
+    (_ev) => {
       analyzed = undefined;
       if (timeout) {
         clearTimeout(timeout);
@@ -349,24 +336,6 @@ export function activate(context: vscode.ExtensionContext) {
     null,
     context.subscriptions,
   );
-
-  /*
-  if (dockerStatus === "not started") {
-    startServer();
-  }
-  */
-  /*
-  if (serverProcess === undefined) {
-    runServer();
-  }
-  */
 }
 
-export function deactivate() {
-  //dockerStop();
-  /*
-  if (serverProcess instanceof ChildProcess) {
-    serverProcess.kill();
-  }
-    */
-}
+export function deactivate() { }
