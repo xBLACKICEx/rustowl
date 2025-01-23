@@ -1,21 +1,32 @@
-# RustOwl
-
-Visualize Ownership and Lifetimes on Rust
+<div style="text-align: center;">
+    <h1>RustOwl</h1>
+    <p>
+        Visualize ownership and lifetimes in Rust for debugging and optimization
+    </p>
+</div>
 
 ## Quick Start
 
-Quick start guide using Docker.
+Here we describe how to start using RustOwl.
 
 ### Prerequisite
 
-- Docker installed, `docker` command available, and Docker Engine started
+- `rustup` and `cargo` installed
 - Visual Studio Code (VSCode) installed
 
-We tested this guide on macOS Sonoma 14.6.1 on arm64 architecture with docker 26.0.0 and VSCode 1.95.1.
+We tested this guide on macOS Sequoia 15.2 on arm64 architecture with VSCode 1.95.1.
+
+### Install RustOwl
+
+To install RustOwl, run the command below.
+
+```bash
+curl -L "https://github.com/cordx56/rustowl/releases/latest/download/install.sh" | sh
+```
 
 ### Download VSCode extension
 
-Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/latest/download/rustowl-vscode-0.0.1.vsix).
+Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/latest/download/rustowl-vscode-0.0.2.vsix).
 
 ### Install VSCode extension
 
@@ -24,24 +35,23 @@ Type `install vsix` in the command palette, and `Extensions: Install from VSIX..
 Click it and select the downloaded `.vsix` file.
 The extension will then be installed.
 
-After installation, the extension will automatically start the RustOwl server with Docker when you open and edit any Rust program.
-The first time, it may take a while to download the Docker image.
+After installation, the extension will automatically run RustOwl when you save any Rust program in cargo workspace.
+The initial analysis may take some time, but from the second run onward, compile caching is used to reduce the analysis time.
 
-We provide several simple Rust programs for observing the visualization in the `example` directory.
 
 ## Build manually
 
 Here, we describe manual install instructions from source code.
 
-### HTTP server
+### RustOwl
 
 #### Prerequisite
 
-- `rustup` installed
+- `rustup` and `cargo` installed
     - You can install `rustup` from [this link](https://rustup.rs/).
     - You need to set up the `PATH` environment variable. To do this, follow the instructions provided by the `rustup` installer. For example, in bash, run `export PATH=$HOME/.cargo/bin:$PATH`.
 
-HTTP server has been tested on macOS Sonoma 14.6.1 on arm64 architecture with `rustup` 1.27.1.
+RustOwl has been tested on macOS Sequoia 15.2 on arm64 architecture with `rustup` 1.27.1.
 We have not tested the installation of dependencies from other package repositories, such as Homebrew. You may need to uninstall any Rust-related packages installed through those repositories first.
 Other dependencies are locked in the configuration files and will be installed automatically.
 
@@ -53,8 +63,9 @@ We have confirmed that running `apt install -y build-essential` is necessary on 
 #### Build & Run
 
 ```bash
-cd rustowl-server
-cargo run
+cd rustowl
+cargo install --path . --locked
+cargo owl
 ```
 
 
@@ -68,7 +79,7 @@ cargo run
 - `yarn` installed
     - After installing Node.js, You can install `yarn` by running `npm install -g yarn`.
 
-VSCode extension has been tested on macOS Sonoma 14.6.1 on arm64 architecture with Visual Studio Code 1.95.1, nodejs v20.16.0, and `yarn` 1.22.22.
+VSCode extension has been tested on macOS Sequoia 15.2 on arm64 architecture with Visual Studio Code 1.96.4, nodejs v20.16.0, and `yarn` 1.22.22.
 Other dependencies are locked in the configuration files and will be installed automatically.
 
 #### Build & Run
@@ -85,12 +96,12 @@ Then open `rustowl-vscode` directory in VSCode.
 A notification to install the recommended VSCode extension will appear in the bottom right corner of VSCode.
 Click the install button, wait for the installation to finish, and then restart VSCode.
 
-Open `rustowl-vscode` directory again, and press the `F5` key in the VSCode window.
+Open `vscode` directory again, and press the `F5` key in the VSCode window.
 A new VSCode window with the extension enabled will appear.
 
-Open `rustowl-vscode/sample.rs` in the new VSCode window.
+Open cargo workspace directory in the new VSCode window.
 
-When you make changes to Rust files, decoration indicating the movement of ownership and lifetimes will appear in the editor.
+When you save Rust files, decoration indicating the movement of ownership and lifetimes will appear in the editor.
 
 
 ## Note
