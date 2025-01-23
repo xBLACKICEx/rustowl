@@ -3,7 +3,21 @@
     <p>
         Visualize ownership and lifetimes in Rust for debugging and optimization
     </p>
+    <img src="docs/readme-screenshot.png" />
 </div>
+
+RustOwl visualizes ownership movement and lifetimes for variables.
+When you save Rust source code, it is analyzed, and the ownership and lifetimes of variables are visualized when you hover over a variable or function call.
+
+RustOwl uses underlines:
+
+- green: variable's actual lifetime
+- blue: immutable borrowing
+- purple: mutable borrowing
+- orange: value moved
+- red: lifetime error - diff of lifetime between actual and expected
+
+Currently, we only offer a VS Code extension.
 
 ## Quick Start
 
@@ -21,12 +35,12 @@ We tested this guide on macOS Sequoia 15.2 on arm64 architecture with VSCode 1.9
 To install RustOwl, run the command below.
 
 ```bash
-curl -L "https://github.com/cordx56/rustowl/releases/latest/download/install.sh" | sh
+curl -L "https://github.com/cordx56/rustowl/releases/download/v0.0.2/install.sh" | sh
 ```
 
 ### Download VSCode extension
 
-Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/latest/download/rustowl-vscode-0.0.2.vsix).
+Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.0.2/rustowl-vscode-0.0.2.vsix).
 
 ### Install VSCode extension
 

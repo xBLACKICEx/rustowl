@@ -1,5 +1,7 @@
 #!/bin/bash
 
+VERSION="v0.0.2"
+
 function install_rust() {
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -q -y --profile minimal
 }
@@ -14,7 +16,7 @@ function install_rustowl() {
         return
     fi
     cd "$(mktemp -d)"
-    curl -L "https://github.com/cordx56/rustowl/releases/latest/download/rustowl.zip" > rustowl.zip
+    curl -L "https://github.com/cordx56/rustowl/releases/download/$VERSION/rustowl.zip" > rustowl.zip
     unzip rustowl.zip
     cd ./rustowl
     cargo install --path . --locked
