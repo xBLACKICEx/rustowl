@@ -3,13 +3,15 @@
     <p>
         Visualize ownership and lifetimes in Rust for debugging and optimization
     </p>
-    <img src="docs/readme-screenshot.png" />
+    <p>
+        <img src="docs/readme-screenshot.png" />
+    </p>
 </div>
 
-RustOwl visualizes ownership movement and lifetimes for variables.
+RustOwl visualizes ownership movement and lifetimes of variables.
 When you save Rust source code, it is analyzed, and the ownership and lifetimes of variables are visualized when you hover over a variable or function call.
 
-RustOwl uses underlines:
+RustOwl visualizes those by using underlines:
 
 - green: variable's actual lifetime
 - blue: immutable borrowing
@@ -28,7 +30,7 @@ Here we describe how to start using RustOwl.
 - `rustup` and `cargo` installed
 - Visual Studio Code (VSCode) installed
 
-We tested this guide on macOS Sequoia 15.2 on arm64 architecture with VSCode 1.95.1.
+We tested this guide on macOS Sequoia 15.2 on arm64 architecture with VSCode 1.96.4 and `rustup` 1.27.1.
 
 ### Install RustOwl
 
