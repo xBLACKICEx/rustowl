@@ -19,7 +19,7 @@ RustOwl visualizes those by using underlines:
 - orange: value moved
 - red: lifetime error - diff of lifetime between actual and expected
 
-Currently, we only offer a VS Code extension.
+Currently, we only offer a VSCode extension.
 
 ## Quick Start
 
