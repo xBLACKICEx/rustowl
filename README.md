@@ -1,4 +1,4 @@
-<div style="text-align: center;">
+<div align="center">
     <h1>RustOwl</h1>
     <p>
         Visualize ownership and lifetimes in Rust for debugging and optimization
