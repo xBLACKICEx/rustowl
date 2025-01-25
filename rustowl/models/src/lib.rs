@@ -12,7 +12,7 @@ pub enum Error {
 /// location in source code
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[serde(transparent)]
-pub struct Loc(u32);
+pub struct Loc(pub u32);
 impl Loc {
     pub fn new(source: &str, byte_pos: u32, offset: u32) -> Self {
         let byte_pos = if byte_pos < offset {
@@ -26,6 +26,26 @@ impl Loc {
             }
         }
         Self(0)
+    }
+}
+impl std::ops::Add<i32> for Loc {
+    type Output = Loc;
+    fn add(self, rhs: i32) -> Self::Output {
+        if rhs < 0 && (self.0 as i32) < -rhs {
+            Loc(0)
+        } else {
+            Loc(self.0 + rhs as u32)
+        }
+    }
+}
+impl std::ops::Sub<i32> for Loc {
+    type Output = Loc;
+    fn sub(self, rhs: i32) -> Self::Output {
+        if 0 < rhs && (self.0 as i32) < rhs {
+            Loc(0)
+        } else {
+            Loc(self.0 - rhs as u32)
+        }
     }
 }
 
