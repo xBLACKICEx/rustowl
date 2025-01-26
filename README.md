@@ -22,7 +22,9 @@ RustOwl visualizes those by using underlines:
 - orange: value moved
 - red: lifetime error - diff of lifetime between actual and expected
 
-Currently, we only offer a VSCode extension.
+Currently, we offer VSCode extension and Neovim plugin.
+We implemented LSP server `cargo owlsp` which extends the protocol.
+So, RustOwl can be used easily from other editor.
 
 ## Quick Start
 
