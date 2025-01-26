@@ -124,12 +124,14 @@ impl Deco<Range> {
 }
 #[derive(serde::Serialize, Clone, Debug)]
 struct Decorations {
+    is_analyzed: bool,
+    path: Option<PathBuf>,
     decorations: Vec<Deco<lsp_types::Range>>,
 }
 #[derive(serde::Deserialize, Clone, Debug)]
 struct CursorRequest {
     position: lsp_types::Position,
-    document: lsp_types::TextDocumentItem,
+    document: lsp_types::TextDocumentIdentifier,
 }
 
 struct SelectLocal {
@@ -339,19 +341,23 @@ impl Backend {
     }
     async fn analzye(&self) {
         if let Some(ws) = { self.workspace.read().await.clone() } {
+            // wait for rust-analyzer
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
             let output = process::Command::new("cargo")
                 .arg("owl")
                 .current_dir(ws)
                 .stdout(process::Stdio::piped())
+                .stderr(process::Stdio::piped())
                 .spawn()
                 .unwrap()
                 .wait_with_output()
                 .unwrap();
-            *self.analyzed.write().await =
-                serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).unwrap();
+            let ws =
+                serde_json::from_str::<Workspace>(&String::from_utf8_lossy(&output.stdout)).ok();
+            *self.analyzed.write().await = ws;
         }
     }
-    async fn decos(&self, filepath: PathBuf, position: Loc) -> Vec<Deco> {
+    async fn decos(&self, filepath: &PathBuf, position: Loc) -> Vec<Deco> {
         let mut selected = SelectLocal::new(position);
         if let Some(analyzed) = &*self.analyzed.read().await {
             for (mir_filename, file) in analyzed.0.iter() {
@@ -376,26 +382,26 @@ impl Backend {
     }
 
     async fn cursor(&self, params: CursorRequest) -> jsonrpc::Result<Decorations> {
-        if params.document.language_id == "rust" {
-            if let Ok(path) = params.document.uri.to_file_path() {
-                let decos = self
-                    .decos(
-                        path,
-                        Loc(utils::line_char_to_index(
-                            &params.document.text,
-                            params.position.line,
-                            params.position.character,
-                        )),
-                    )
-                    .await;
-                let decorations = decos
-                    .into_iter()
-                    .map(|v| v.to_lsp_range(&params.document.text))
-                    .collect();
-                return Ok(Decorations { decorations });
+        let is_analyzed = self.analyzed.read().await.is_some();
+        if let Ok(path) = params.document.uri.to_file_path() {
+            if let Ok(text) = std::fs::read_to_string(&path) {
+                let pos = Loc(utils::line_char_to_index(
+                    &text,
+                    params.position.line,
+                    params.position.character,
+                ));
+                let decos = self.decos(&path, pos).await;
+                let decorations = decos.into_iter().map(|v| v.to_lsp_range(&text)).collect();
+                return Ok(Decorations {
+                    is_analyzed,
+                    path: Some(path),
+                    decorations,
+                });
             }
         }
         return Ok(Decorations {
+            is_analyzed,
+            path: None,
             decorations: Vec::new(),
         });
     }
@@ -408,7 +414,11 @@ impl LanguageServer for Backend {
         params: lsp_types::InitializeParams,
     ) -> jsonrpc::Result<lsp_types::InitializeResult> {
         if let Some(root) = params.root_uri {
-            *self.workspace.write().await = root.to_file_path().ok();
+            if let Ok(root) = root.to_file_path() {
+                *self.workspace.write().await = Some(root);
+            } else if root.scheme() == "file" {
+                *self.workspace.write().await = Some(PathBuf::from("."));
+            }
         }
         Ok(lsp_types::InitializeResult::default())
     }
