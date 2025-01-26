@@ -40,7 +40,7 @@ We tested this guide on macOS Sequoia 15.2 on arm64 architecture with VSCode 1.9
 To install RustOwl, run the command below.
 
 ```bash
-curl -L "https://github.com/cordx56/rustowl/releases/download/v0.0.2/install.sh" | sh
+curl -L "https://github.com/cordx56/rustowl/releases/download/v0.0.2/install.sh" | bash
 ```
 
 ### Download VSCode extension
