@@ -106,11 +106,11 @@ Other dependencies are locked in the configuration files and will be installed a
 First, install the dependencies.
 
 ```bash
-cd rustowl-vscode
+cd vscode
 yarn install --frozen-locked
 ```
 
-Then open `rustowl-vscode` directory in VSCode.
+Then open `vscode` directory in VSCode.
 
 A notification to install the recommended VSCode extension will appear in the bottom right corner of VSCode.
 Click the install button, wait for the installation to finish, and then restart VSCode.
