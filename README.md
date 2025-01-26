@@ -45,7 +45,15 @@ To install RustOwl, run the command below.
 curl -L "https://github.com/cordx56/rustowl/releases/download/v0.0.2/install.sh" | bash
 ```
 
-### Download VSCode extension
+### Neovim
+
+Add to plugin manager:
+
+```
+{ "cordx56/rustowl", dependencies = { "neovim/nvim-lspconfig" } }
+```
+
+### VSCode
 
 Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.0.2/rustowl-vscode-0.0.2.vsix).
 
