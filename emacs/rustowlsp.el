@@ -66,9 +66,12 @@
                                      )
                         ))))
 
+;;;###autoload
 (defvar rustowlsp-cursor-timer nil)
+;;;###autoload
 (defvar rustowlsp-cursor-timeout 2)
 
+;;;###autoload
 (defun rustowlsp-reset-cursor-timer ()
   (when rustowlsp-cursor-timer
     (cancel-timer rustowlsp-cursor-timer))
@@ -76,15 +79,18 @@
   (setq rustowlsp-cursor-timer
     (run-with-idle-timer rustowlsp-cursor-timeout nil #'rustowlsp-cursor-call)))
 
+;;;###autoload
 (defun enable-rustowlsp-cursor ()
   (add-hook 'post-command-hook #'rustowlsp-reset-cursor-timer))
 
+;;;###autoload
 (defun disable-rustowlsp-cursor ()
   (remove-hook 'post-command-hook #'rustowlsp-reset-cursor-timer)
   (when rustowlsp-cursor-timer
     (cancel-timer rustowlsp-cursor-timer)
     (setq rustowlsp-cursor-timer nil)))
 
+;;;###autoload
 (enable-rustowlsp-cursor)
 
 ;; RustOwl visualization
