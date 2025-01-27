@@ -323,11 +323,27 @@ impl utils::MirVisitor for CalcDecos {
     }
 }
 
+fn read_dir_rec(path: &PathBuf) -> Vec<PathBuf> {
+    let mut res = Vec::new();
+    if let Ok(mut dirs) = std::fs::read_dir(path) {
+        while let Some(Ok(dir)) = dirs.next() {
+            if let Ok(meta) = dir.metadata() {
+                if meta.is_dir() {
+                    res.extend_from_slice(&read_dir_rec(&dir.path()));
+                } else {
+                    res.push(dir.path());
+                }
+            }
+        }
+    }
+    res
+}
+
 #[derive(Debug)]
 struct Backend {
     #[allow(unused)]
     client: Client,
-    workspace: Arc<RwLock<Option<PathBuf>>>,
+    roots: Arc<RwLock<Vec<PathBuf>>>,
     analyzed: Arc<RwLock<Option<Workspace>>>,
 }
 
@@ -335,26 +351,55 @@ impl Backend {
     fn new(client: Client) -> Self {
         Self {
             client,
-            workspace: Arc::new(RwLock::new(None)),
+            roots: Arc::new(RwLock::new(Vec::new())),
             analyzed: Arc::new(RwLock::new(None)),
         }
     }
+    async fn set_roots(&self, uri: &lsp_types::Url) {
+        let path = uri.path();
+        let mut write = self.roots.write().await;
+        'outer: for path in read_dir_rec(&PathBuf::from(path)) {
+            if let Some(filename) = path.file_name() {
+                if filename == "Cargo.toml" {
+                    let dir = path.parent().unwrap();
+                    for added in write.iter() {
+                        if dir.starts_with(added) {
+                            continue 'outer;
+                        }
+                    }
+                    write.push(path.parent().unwrap().to_path_buf());
+                }
+            }
+        }
+    }
+
     async fn analzye(&self) {
-        if let Some(ws) = { self.workspace.read().await.clone() } {
-            // wait for rust-analyzer
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // wait for rust-analyzer
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        {
+            *self.analyzed.write().await = None;
+        }
+        let roots = { self.roots.read().await.clone() };
+        for root in roots {
             let output = process::Command::new("cargo")
                 .arg("owl")
-                .current_dir(ws)
+                .current_dir(&root)
                 .stdout(process::Stdio::piped())
                 .stderr(process::Stdio::piped())
                 .spawn()
                 .unwrap()
                 .wait_with_output()
                 .unwrap();
-            let ws =
-                serde_json::from_str::<Workspace>(&String::from_utf8_lossy(&output.stdout)).ok();
-            *self.analyzed.write().await = ws;
+            if let Ok(ws) =
+                serde_json::from_str::<Workspace>(&String::from_utf8_lossy(&output.stdout))
+            {
+                let write = &mut *self.analyzed.write().await;
+                if let Some(write) = write {
+                    *write = write.clone().merge(ws);
+                } else {
+                    *write = Some(ws);
+                }
+            }
         }
     }
     async fn decos(&self, filepath: &PathBuf, position: Loc) -> Vec<Deco> {
@@ -413,17 +458,24 @@ impl LanguageServer for Backend {
         &self,
         params: lsp_types::InitializeParams,
     ) -> jsonrpc::Result<lsp_types::InitializeResult> {
-        if let Some(root) = params.root_uri {
-            if let Ok(root) = root.to_file_path() {
-                *self.workspace.write().await = Some(root);
-            } else if root.scheme() == "file" {
-                *self.workspace.write().await = Some(PathBuf::from("."));
-            }
+        if let Some(uri) = params.root_uri {
+            self.set_roots(&uri).await;
         }
-        Ok(lsp_types::InitializeResult::default())
+        let mut init_res = lsp_types::InitializeResult::default();
+        let mut sync_option = lsp_types::TextDocumentSyncOptions::default();
+        sync_option.save = Some(lsp_types::TextDocumentSyncSaveOptions::Supported(true));
+        init_res.capabilities.text_document_sync =
+            Some(lsp_types::TextDocumentSyncCapability::Options(sync_option));
+        let mut workspace_cap = lsp_types::WorkspaceServerCapabilities::default();
+        workspace_cap.workspace_folders = Some(lsp_types::WorkspaceFoldersServerCapabilities {
+            supported: Some(true),
+            change_notifications: Some(lsp_types::OneOf::Left(true)),
+        });
+        init_res.capabilities.workspace = Some(workspace_cap);
+        Ok(init_res)
     }
     async fn initialized(&self, _p: lsp_types::InitializedParams) {
-        self.analzye().await;
+        //self.analzye().await;
     }
     async fn did_save(&self, _params: lsp_types::DidSaveTextDocumentParams) {
         self.analzye().await;
@@ -433,12 +485,10 @@ impl LanguageServer for Backend {
         &self,
         params: lsp_types::DidChangeWorkspaceFoldersParams,
     ) -> () {
-        if let Some(ws) = params.event.added.get(0) {
-            {
-                *self.workspace.write().await = ws.uri.to_file_path().ok();
-            }
-            self.analzye().await;
+        for added in params.event.added {
+            self.set_roots(&added.uri).await;
         }
+        self.analzye().await;
     }
 
     async fn shutdown(&self) -> jsonrpc::Result<()> {
