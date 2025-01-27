@@ -1,4 +1,4 @@
-;; rustowlsp
+;;;###autoload
 (lsp-register-client
   (make-lsp-client
     :new-connection (lsp-stdio-connection '("cargo" "owlsp"))
