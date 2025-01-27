@@ -53,6 +53,18 @@ Add to plugin manager:
 { "cordx56/rustowl", dependencies = { "neovim/nvim-lspconfig" } }
 ```
 
+### Emacs
+
+Elpaca example:
+
+```elisp
+(elpaca
+  (rustowlsp
+    :host github
+    :repo "cordx56/rustowl"
+    :files (:defaults "emacs/*")))
+```
+
 ### VSCode
 
 Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.0.2/rustowl-vscode-0.0.2.vsix).
