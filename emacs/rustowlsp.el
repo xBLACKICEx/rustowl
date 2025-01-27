@@ -1,11 +1,12 @@
 ;;;###autoload
-(lsp-register-client
-  (make-lsp-client
-    :new-connection (lsp-stdio-connection '("cargo" "owlsp"))
-    :major-modes '(rust-mode)
-    :server-id 'rustowlsp
-    :priority -1
-    :add-on? t))
+(with-eval-after-load 'lsp-mode
+  (lsp-register-client
+    (make-lsp-client
+      :new-connection (lsp-stdio-connection '("cargo" "owlsp"))
+      :major-modes '(rust-mode)
+      :server-id 'rustowlsp
+      :priority -1
+      :add-on? t)))
 
 (defun rustowlsp-cursor (params)
   (lsp-request-async
