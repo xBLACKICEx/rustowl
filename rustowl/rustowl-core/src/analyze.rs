@@ -1,13 +1,13 @@
 use models::*;
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::{
-    BodyWithBorrowckFacts, BorrowIndex, LocationTable, PoloniusInput, PoloniusOutput, RichLocation,
-    RustcFacts,
+    BodyWithBorrowckFacts, BorrowIndex, PoloniusInput, PoloniusOutput, RichLocation, RustcFacts,
 };
+use rustc_index::IndexVec;
 use rustc_middle::{
     mir::{
-        BasicBlock, BasicBlockData, BasicBlocks, Body, BorrowKind, Local, Operand, Rvalue,
-        StatementKind, TerminatorKind, VarDebugInfoContents,
+        BasicBlock, BasicBlockData, BasicBlocks, Body, BorrowKind, Local, Location, Operand,
+        Rvalue, StatementKind, TerminatorKind, VarDebugInfoContents,
     },
     ty::TyCtxt,
 };
@@ -17,11 +17,68 @@ use std::future::Future;
 use std::hash::Hash;
 use std::pin::Pin;
 
-pub type MirAnalyzeFuture<'c, 'tcx> =
-    Pin<Box<dyn Future<Output = MirAnalyzer<'c, 'tcx>> + Send + Sync>>;
+pub type MirAnalyzeFuture<'tcx> = Pin<Box<dyn Future<Output = MirAnalyzer<'tcx>> + Send + Sync>>;
 
 type Borrow = <RustcFacts as FactTypes>::Loan;
 type Region = <RustcFacts as FactTypes>::Origin;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct LocationIndex(usize);
+impl LocationIndex {
+    fn is_start(self) -> bool {
+        (self.0 % 2) == 0
+    }
+}
+impl From<usize> for LocationIndex {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+/// https://github.com/rust-lang/rust/blob/759e07f063fb8e6306ff1bdaeb70af56a878b415/compiler/rustc_borrowck/src/location.rs
+struct LocationTableSim {
+    _num_points: usize,
+    statements_before_block: IndexVec<BasicBlock, usize>,
+}
+impl LocationTableSim {
+    fn new(body: &Body<'_>) -> Self {
+        let mut num_points = 0;
+        let statements_before_block = body
+            .basic_blocks
+            .iter()
+            .map(|block_data| {
+                let v = num_points;
+                num_points += (block_data.statements.len() + 1) * 2;
+                v
+            })
+            .collect();
+
+        Self {
+            _num_points: num_points,
+            statements_before_block,
+        }
+    }
+    pub fn to_location(&self, index: LocationIndex) -> RichLocation {
+        let point_index = index.0;
+        let (block, &first_index) = self
+            .statements_before_block
+            .iter_enumerated()
+            .rfind(|&(_, &first_index)| first_index <= point_index)
+            .unwrap();
+
+        let statement_index = (point_index - first_index) / 2;
+        if index.is_start() {
+            RichLocation::Start(Location {
+                block,
+                statement_index,
+            })
+        } else {
+            RichLocation::Mid(Location {
+                block,
+                statement_index,
+            })
+        }
+    }
+}
 
 trait Append<K, V>
 where
@@ -63,11 +120,11 @@ fn range_from_span(source: &str, span: Span, offset: u32) -> Range {
     Range::new(from, until)
 }
 
-pub struct MirAnalyzer<'c, 'tcx> {
+pub struct MirAnalyzer<'tcx> {
     filename: String,
     source: String,
     offset: u32,
-    location_table: &'c LocationTable,
+    location_table: LocationTableSim,
     body: Body<'tcx>,
     input: PoloniusInput,
     output_insensitive: PoloniusOutput,
@@ -77,9 +134,8 @@ pub struct MirAnalyzer<'c, 'tcx> {
     borrow_locals: HashMap<Borrow, Local>,
     basic_blocks: Vec<MirBasicBlock>,
 }
-impl<'c, 'tcx> MirAnalyzer<'c, 'tcx>
+impl<'tcx> MirAnalyzer<'tcx>
 where
-    'c: 'static,
     'tcx: 'static,
 {
     /// initialize analyzer
@@ -87,12 +143,12 @@ where
         filename: String,
         source: String,
         offset: u32,
-        tcx: &'c TyCtxt<'tcx>,
-        facts: &'c BodyWithBorrowckFacts<'tcx>,
-    ) -> MirAnalyzeFuture<'c, 'tcx> {
+        tcx: &TyCtxt<'tcx>,
+        facts: &BodyWithBorrowckFacts<'tcx>,
+    ) -> MirAnalyzeFuture<'tcx> {
         let input = *facts.input_facts.as_ref().unwrap().clone();
-        let location_table = facts.location_table.as_ref().unwrap();
         let body = facts.body.clone();
+        let location_table = LocationTableSim::new(&body);
 
         // local -> all borrows on that local
         let local_borrows: HashMap<Local, Vec<BorrowIndex>> = HashMap::from_iter(
@@ -199,7 +255,7 @@ where
     fn drop_range(&self) -> HashMap<Local, Vec<Range>> {
         let mut local_live_locs = HashMap::new();
         for (loc_idx, locals) in self.output_datafrog.var_drop_live_on_entry.iter() {
-            let location = self.location_table.to_location(*loc_idx);
+            let location = self.location_table.to_location(loc_idx.as_usize().into());
             for local in locals {
                 let insert = match local_live_locs.get_mut(local) {
                     Some(v) => v,
@@ -283,8 +339,8 @@ where
     fn basic_blocks(
         source: &str,
         offset: u32,
-        basic_blocks: &'c BasicBlocks<'static>,
-        source_map: &'c SourceMap,
+        basic_blocks: &BasicBlocks<'static>,
+        source_map: &SourceMap,
     ) -> Vec<MirBasicBlock> {
         basic_blocks
             .iter_enumerated()
@@ -439,7 +495,9 @@ where
         let output = &self.output_datafrog;
         let mut local_loan_live_at = HashMap::new();
         for (location_idx, borrow_idc) in output.loan_live_at.iter() {
-            let location = self.location_table.to_location(*location_idx);
+            let location = self
+                .location_table
+                .to_location(location_idx.as_usize().into());
             for borrow_idx in borrow_idc {
                 if let Some(local) = self.borrow_locals.get(borrow_idx) {
                     let locations = match local_loan_live_at.get_mut(local) {
@@ -476,7 +534,11 @@ where
                         region_locations.get_mut(region_idx).unwrap()
                     }
                 };
-                insert.push(self.location_table.to_location(*location_idx).clone());
+                insert.push(
+                    self.location_table
+                        .to_location(location_idx.as_usize().into())
+                        .clone(),
+                );
                 region_locations_idc.append(region_idx, *location_idx);
             }
         }
@@ -500,7 +562,11 @@ where
                         region_locations.get_mut(region_idx).unwrap()
                     }
                 };
-                insert.push(self.location_table.to_location(*location_idx).clone());
+                insert.push(
+                    self.location_table
+                        .to_location(location_idx.as_usize().into())
+                        .clone(),
+                );
                 //region_locations_idc.append(region_idx, *location_idx);
             }
         }

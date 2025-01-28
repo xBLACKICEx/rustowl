@@ -16,7 +16,7 @@ fn main() {
         .arg("run")
         .arg("nightly-2024-10-31")
         .arg("cargo")
-        .arg("rustc")
+        .arg("check")
         .stdout(Stdio::piped())
         .spawn()
         .unwrap()

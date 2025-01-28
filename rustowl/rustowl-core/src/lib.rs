@@ -7,6 +7,7 @@ pub extern crate rustc_driver;
 pub extern crate rustc_errors;
 pub extern crate rustc_hash;
 pub extern crate rustc_hir;
+pub extern crate rustc_index;
 pub extern crate rustc_interface;
 pub extern crate rustc_middle;
 pub extern crate rustc_session;
@@ -32,13 +33,12 @@ use std::sync::{atomic::AtomicBool, Arc, LazyLock, Mutex};
 use tokio::{
     runtime::{Builder, Handle, Runtime},
     task::JoinSet,
-    time::{sleep, Duration},
 };
 
 pub struct RustcCallback;
 impl Callbacks for RustcCallback {}
 
-static TASKS: LazyLock<Mutex<JoinSet<MirAnalyzer<'static, 'static>>>> =
+static TASKS: LazyLock<Mutex<JoinSet<MirAnalyzer<'static>>>> =
     LazyLock::new(|| Mutex::new(JoinSet::new()));
 static RUNTIME: LazyLock<Mutex<Runtime>> = LazyLock::new(|| {
     Mutex::new(
@@ -51,6 +51,7 @@ static RUNTIME: LazyLock<Mutex<Runtime>> = LazyLock::new(|| {
     )
 });
 static HANDLE: LazyLock<Handle> = LazyLock::new(|| RUNTIME.lock().unwrap().handle().clone());
+static ANALYZED: LazyLock<Mutex<Vec<LocalDefId>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
 fn override_queries(_session: &rustc_session::Session, local: &mut Providers) {
     local.mir_borrowck = mir_borrowck;
@@ -84,13 +85,26 @@ fn mir_borrowck<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> ProvidedValue<'t
         unsafe { std::mem::transmute(&facts) },
     );
     {
-        TASKS.lock().unwrap().spawn_on(analyzer, &HANDLE);
+        let mut locked = TASKS.lock().unwrap();
+        locked.spawn_on(analyzer, &HANDLE);
     }
-    if { TASKS.lock().unwrap().len() } == 1 {
+    let (current, mir_len) = {
+        let mut locked = ANALYZED.lock().unwrap();
+        locked.push(def_id);
+        let current = locked.len();
+        let mir_len = tcx
+            .mir_keys(())
+            .into_iter()
+            .filter(|v| tcx.hir_node_by_def_id(**v).body_id().is_some())
+            .count();
+        log::info!("borrow checked: {} / {}", current, mir_len);
+        (current, mir_len)
+    };
+    if current == mir_len {
         RUNTIME.lock().unwrap().block_on(async move {
-            sleep(Duration::from_millis(100)).await;
             while let Some(task) = { TASKS.lock().unwrap().join_next() }.await {
                 let (filename, analyzed) = task.unwrap().analyze();
+                log::info!("analyzed one item of {}", filename);
                 let ws = Workspace(HashMap::from([(
                     filename,
                     File {
@@ -99,7 +113,7 @@ fn mir_borrowck<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> ProvidedValue<'t
                 )]));
                 println!("{}", serde_json::to_string(&ws).unwrap());
             }
-        });
+        })
     }
 
     let result = BorrowCheckResult {
@@ -108,6 +122,7 @@ fn mir_borrowck<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> ProvidedValue<'t
         used_mut_upvars: smallvec::SmallVec::new(),
         tainted_by_errors: None,
     };
+
     tcx.arena.alloc(result)
 }
 

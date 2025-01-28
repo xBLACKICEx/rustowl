@@ -1,10 +1,15 @@
 mod utils;
 
+use mktemp::Temp;
 use models::*;
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::process;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    process,
+    sync::RwLock,
+};
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
@@ -323,15 +328,24 @@ impl utils::MirVisitor for CalcDecos {
     }
 }
 
-fn read_dir_rec(path: &PathBuf) -> Vec<PathBuf> {
+fn search_cargo(p: &PathBuf) -> Vec<PathBuf> {
     let mut res = Vec::new();
-    if let Ok(mut dirs) = std::fs::read_dir(path) {
-        while let Some(Ok(dir)) = dirs.next() {
-            if let Ok(meta) = dir.metadata() {
+    if let Ok(mut paths) = std::fs::read_dir(p) {
+        'entry: while let Some(Ok(path)) = paths.next() {
+            if let Ok(meta) = path.metadata() {
                 if meta.is_dir() {
-                    res.extend_from_slice(&read_dir_rec(&dir.path()));
-                } else {
-                    res.push(dir.path());
+                    res.extend_from_slice(&search_cargo(&path.path()));
+                } else if path.file_name() == "Cargo.toml" {
+                    let dir = path.path().parent().unwrap().to_path_buf();
+                    for i in 0..res.len() {
+                        if res[i].starts_with(&dir) {
+                            res[i] = dir;
+                            continue 'entry;
+                        } else if dir.starts_with(&res[i]) {
+                            continue 'entry;
+                        }
+                    }
+                    res.push(dir);
                 }
             }
         }
@@ -343,7 +357,7 @@ fn read_dir_rec(path: &PathBuf) -> Vec<PathBuf> {
 struct Backend {
     #[allow(unused)]
     client: Client,
-    roots: Arc<RwLock<Vec<PathBuf>>>,
+    roots: Arc<RwLock<HashMap<PathBuf, PathBuf>>>,
     analyzed: Arc<RwLock<Option<Workspace>>>,
 }
 
@@ -351,25 +365,15 @@ impl Backend {
     fn new(client: Client) -> Self {
         Self {
             client,
-            roots: Arc::new(RwLock::new(Vec::new())),
+            roots: Arc::new(RwLock::new(HashMap::new())),
             analyzed: Arc::new(RwLock::new(None)),
         }
     }
     async fn set_roots(&self, uri: &lsp_types::Url) {
         let path = uri.path();
         let mut write = self.roots.write().await;
-        'outer: for path in read_dir_rec(&PathBuf::from(path)) {
-            if let Some(filename) = path.file_name() {
-                if filename == "Cargo.toml" {
-                    let dir = path.parent().unwrap();
-                    for added in write.iter() {
-                        if dir.starts_with(added) {
-                            continue 'outer;
-                        }
-                    }
-                    write.push(path.parent().unwrap().to_path_buf());
-                }
-            }
+        for path in search_cargo(&PathBuf::from(path)) {
+            write.insert(path, Temp::new_dir().unwrap().to_path_buf());
         }
     }
 
@@ -380,28 +384,47 @@ impl Backend {
             *self.analyzed.write().await = None;
         }
         let roots = { self.roots.read().await.clone() };
-        for root in roots {
-            let output = process::Command::new("cargo")
-                .arg("owl")
+        let self_path = PathBuf::from(std::env::args().nth(0).unwrap());
+        for (root, target) in roots {
+            let mut child = process::Command::new("rustup")
+                .env(
+                    "RUSTC_WORKSPACE_WRAPPER",
+                    self_path.with_file_name("rustowlc"),
+                )
+                .env("CARGO_TARGET_DIR", &target)
+                .env_remove("RUSTC_WRAPPER")
+                .arg("run")
+                .arg("nightly-2024-10-31")
+                .arg("cargo")
+                .arg("check")
                 .current_dir(&root)
-                .stdout(process::Stdio::piped())
-                .stderr(process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null())
                 .spawn()
-                .unwrap()
-                .wait_with_output()
                 .unwrap();
-            if let Ok(ws) =
-                serde_json::from_str::<Workspace>(&String::from_utf8_lossy(&output.stdout))
-            {
-                let write = &mut *self.analyzed.write().await;
-                if let Some(write) = write {
-                    *write = write.clone().merge(ws);
-                } else {
-                    *write = Some(ws);
+            let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines();
+            let analyzed = self.analyzed.clone();
+            tokio::spawn(async move {
+                while let Ok(Some(line)) = stdout.next_line().await {
+                    if let Ok(ws) = serde_json::from_str::<Workspace>(&line) {
+                        let write = &mut *analyzed.write().await;
+                        if let Some(write) = write {
+                            *write = write.clone().merge(ws);
+                        } else {
+                            *write = Some(ws);
+                        }
+                    }
                 }
-            }
+            });
+            child.wait().await.ok();
         }
     }
+    async fn cleanup_targets(&self) {
+        for (_, target) in self.roots.read().await.iter() {
+            std::fs::remove_dir_all(target).ok();
+        }
+    }
+
     async fn decos(&self, filepath: &PathBuf, position: Loc) -> Vec<Deco> {
         let mut selected = SelectLocal::new(position);
         if let Some(analyzed) = &*self.analyzed.read().await {
@@ -458,8 +481,10 @@ impl LanguageServer for Backend {
         &self,
         params: lsp_types::InitializeParams,
     ) -> jsonrpc::Result<lsp_types::InitializeResult> {
-        if let Some(uri) = params.root_uri {
-            self.set_roots(&uri).await;
+        if let Some(wss) = params.workspace_folders {
+            for ws in wss {
+                self.set_roots(&ws.uri).await;
+            }
         }
         let mut init_res = lsp_types::InitializeResult::default();
         let mut sync_option = lsp_types::TextDocumentSyncOptions::default();
@@ -492,6 +517,7 @@ impl LanguageServer for Backend {
     }
 
     async fn shutdown(&self) -> jsonrpc::Result<()> {
+        self.cleanup_targets().await;
         Ok(())
     }
 }
