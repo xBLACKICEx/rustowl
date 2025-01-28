@@ -45,30 +45,54 @@ local function show_rustowl(bufnr)
     end
 end
 
-local function rustowl_on_attach(client, bufnr)
+local function rustowl_on_attach(client, bufnr, idle_time_ms)
+    local timer = nil
     local augroup = vim.api.nvim_create_augroup('RustOwlCmd', { clear = true })
 
-    vim.api.nvim_create_autocmd(
-        { 'CursorHold', 'CursorHoldI' },
-        {
-            group = augroup,
-            buffer = bufnr,
-            callback = function()
-                show_rustowl(bufnr)
-            end
-        }
-    )
+    local function clear_timer()
+        if timer then
+            timer:stop()
+            timer:close()
+            timer = nil
+        end
+    end
+
+    local function start_timer()
+        clear_timer()
+        timer = vim.uv.new_timer()
+        timer:start(
+            idle_time_ms,
+            0,
+            vim.schedule_wrap(
+                function()
+                    show_rustowl(bufnr)
+                end
+            )
+        )
+    end
 
     vim.api.nvim_create_autocmd(
-        'CursorMoved',
+        { 'CursorMoved', 'CursorMovedI' },
         {
             group = augroup,
             buffer = bufnr,
             callback = function()
                 vim.api.nvim_buf_clear_namespace(bufnr, hlns, 0, -1)
+                start_timer()
             end
         }
     )
+
+    vim.api.nvim_create_autocmd(
+        'BufUnload',
+        {
+            group = augroup,
+            buffer = bufnr,
+            callback = clear_timer
+        }
+    )
+
+    start_timer()
 end
 
 if not configs.rustowlsp then
@@ -80,6 +104,7 @@ if not configs.rustowlsp then
             on_attach = function(client, bufnr)
             end,
         },
+        idle_time = 2000,
     }
 end
 
@@ -87,8 +112,10 @@ local orig_setup = lspconfig.rustowlsp.setup
 lspconfig.rustowlsp.setup = function(user_opts)
     user_opts = user_opts or {}
     local user = user_opts.on_attach
+    local idle_time = tonumber(user_opts.idle_time) or 2000
+
     user_opts.on_attach = function(client, bufnr)
-        rustowl_on_attach(client, bufnr)
+        rustowl_on_attach(client, bufnr, idle_time)
 
         if type(user) == 'function' then
             user(client, bufnr)
