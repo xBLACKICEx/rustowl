@@ -9,7 +9,18 @@ pub enum Error {
     LocalIsNotUserVariable,
 }
 
-/// location in source code
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Local {
+    pub id: u32,
+    pub fn_id: u32,
+}
+
+impl Local {
+    pub fn new(id: u32, fn_id: u32) -> Self {
+        Self { id, fn_id }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[serde(transparent)]
 pub struct Loc(pub u32);
@@ -49,7 +60,6 @@ impl std::ops::Sub<i32> for Loc {
     }
 }
 
-/// represents range in source code
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct Range {
     pub from: Loc,
@@ -59,29 +69,18 @@ impl Range {
     pub fn new(from: Loc, until: Loc) -> Self {
         Self { from, until }
     }
-    /*
-    pub fn from_source_info(body: &Body<'_>, source_info: SourceInfo) -> Self {
-        let scope = Range::from(body.source_scopes.get(source_info.scope).unwrap().span);
-        let wide = Range::from(source_info.span);
-        Range::new(
-            Loc::from(wide.from - scope.from),
-            Loc::from(wide.until - scope.from),
-        )
-    }
-    */
 }
 
-/// variable in MIR
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirVariable {
     User {
-        index: usize,
+        index: u32,
         live: Range,
         dead: Range,
     },
     Other {
-        index: usize,
+        index: u32,
         live: Range,
         dead: Range,
     },
@@ -89,7 +88,7 @@ pub enum MirVariable {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(transparent)]
-pub struct MirVariables(HashMap<usize, MirVariable>);
+pub struct MirVariables(HashMap<u32, MirVariable>);
 impl MirVariables {
     pub fn new() -> Self {
         Self(HashMap::new())
@@ -145,62 +144,61 @@ impl Workspace {
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirRval {
     Move {
-        target_local_index: usize,
+        target_local_index: u32,
         range: Range,
     },
     Borrow {
-        target_local_index: usize,
+        target_local_index: u32,
         range: Range,
         mutable: bool,
         outlive: Option<Range>,
     },
 }
 
-/// statement in MIR
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirStatement {
     StorageLive {
-        target_local_index: usize,
+        target_local_index: u32,
         range: Range,
     },
     StorageDead {
-        target_local_index: usize,
+        target_local_index: u32,
         range: Range,
     },
     Assign {
-        target_local_index: usize,
+        target_local_index: u32,
         range: Range,
         rval: Option<MirRval>,
     },
 }
-/// terminator in MIR
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirTerminator {
     Drop {
-        local_index: usize,
+        local_index: u32,
         range: Range,
     },
     Call {
-        destination_local_index: usize,
+        destination_local_index: u32,
         fn_span: Range,
     },
     Other,
 }
-/// basic block in MIR
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MirBasicBlock {
     pub statements: Vec<MirStatement>,
     pub terminator: Option<MirTerminator>,
 }
 
-/// declared variable in MIR
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirDecl {
     User {
-        local_index: usize,
+        local_index: u32,
+        fn_id: u32,
         name: String,
         span: Range,
         ty: String,
@@ -210,7 +208,8 @@ pub enum MirDecl {
         must_live_at: Vec<Range>,
     },
     Other {
-        local_index: usize,
+        local_index: u32,
+        fn_id: u32,
         ty: String,
         lives: Vec<Range>,
         drop: bool,
@@ -218,8 +217,10 @@ pub enum MirDecl {
         must_live_at: Vec<Range>,
     },
 }
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Function {
+    pub fn_id: u32,
     pub basic_blocks: Vec<MirBasicBlock>,
     pub decls: Vec<MirDecl>,
 }

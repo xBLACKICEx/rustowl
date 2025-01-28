@@ -1,8 +1,10 @@
 use models::*;
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::{
-    BodyWithBorrowckFacts, BorrowIndex, PoloniusInput, PoloniusOutput, RichLocation, RustcFacts,
+    get_body_with_borrowck_facts, BorrowIndex, ConsumerOptions, PoloniusInput, PoloniusOutput,
+    RichLocation, RustcFacts,
 };
+use rustc_hir::def_id::LocalDefId;
 use rustc_index::IndexVec;
 use rustc_middle::{
     mir::{
@@ -130,25 +132,32 @@ pub struct MirAnalyzer<'tcx> {
     output_insensitive: PoloniusOutput,
     output_datafrog: PoloniusOutput,
     bb_map: HashMap<BasicBlock, BasicBlockData<'tcx>>,
-    //local_borrows: HashMap<Local, Vec<BorrowIndex>>,
     borrow_locals: HashMap<Borrow, Local>,
     basic_blocks: Vec<MirBasicBlock>,
+    fn_id: LocalDefId,
 }
 impl<'tcx> MirAnalyzer<'tcx>
 where
     'tcx: 'static,
 {
     /// initialize analyzer
-    pub fn new(
-        filename: String,
-        source: String,
-        offset: u32,
-        tcx: &TyCtxt<'tcx>,
-        facts: &BodyWithBorrowckFacts<'tcx>,
-    ) -> MirAnalyzeFuture<'tcx> {
+    pub fn new(tcx: TyCtxt<'tcx>, fn_id: LocalDefId) -> MirAnalyzeFuture<'tcx> {
+        let facts = get_body_with_borrowck_facts(tcx, fn_id, ConsumerOptions::PoloniusOutputFacts);
         let input = *facts.input_facts.as_ref().unwrap().clone();
         let body = facts.body.clone();
         let location_table = LocationTableSim::new(&body);
+
+        let source_map = tcx.sess.source_map();
+
+        let filename = source_map.span_to_filename(facts.body.span);
+        let source_file = source_map.get_source_file(&filename).unwrap();
+        let offset = source_file.start_pos.0;
+        let filename = filename
+            .display(rustc_span::FileNameDisplayPreference::Local)
+            .to_string_lossy()
+            .to_string();
+        let source = std::fs::read_to_string(&filename).unwrap();
+        log::info!("facts of {fn_id:?} prepared; start analyze of {fn_id:?}");
 
         // local -> all borrows on that local
         let local_borrows: HashMap<Local, Vec<BorrowIndex>> = HashMap::from_iter(
@@ -205,9 +214,9 @@ where
                 output_insensitive,
                 output_datafrog,
                 bb_map,
-                //local_borrows,
                 borrow_locals,
                 basic_blocks,
+                fn_id,
             }
         })
     }
@@ -301,7 +310,7 @@ where
             .local_decls
             .iter_enumerated()
             .map(|(local, decl)| {
-                let local_index = local.index();
+                let local_index = local.as_u32();
                 let ty = decl.ty.to_string();
                 let must_live_at =
                     Self::merge_common(must_live_at.get(&local).cloned().unwrap_or(Vec::new()));
@@ -313,6 +322,7 @@ where
                     let (span, name) = user_vars.get(&local).cloned().unwrap();
                     MirDecl::User {
                         local_index,
+                        fn_id: self.fn_id.local_def_index.as_u32(),
                         name,
                         span: Range::from(span),
                         ty,
@@ -324,6 +334,7 @@ where
                 } else {
                     MirDecl::Other {
                         local_index,
+                        fn_id: self.fn_id.local_def_index.as_u32(),
                         ty,
                         lives,
                         must_live_at,
@@ -355,23 +366,22 @@ where
                         }
                         match &statement.kind {
                             StatementKind::StorageLive(local) => Some(MirStatement::StorageLive {
-                                target_local_index: local.index(),
+                                target_local_index: local.as_u32(),
                                 range: range_from_span(source, statement.source_info.span, offset),
                             }),
                             StatementKind::StorageDead(local) => Some(MirStatement::StorageDead {
-                                target_local_index: local.index(),
+                                target_local_index: local.as_u32(),
                                 range: range_from_span(source, statement.source_info.span, offset),
                             }),
                             StatementKind::Assign(ref v) => {
                                 let (place, rval) = &**v;
-                                let target_local_index = place.local.index();
-                                //place.local
+                                let target_local_index = place.local.as_u32();
                                 let rv = match rval {
                                     Rvalue::Use(usage) => match usage {
                                         Operand::Move(p) => {
                                             let local = p.local;
                                             Some(MirRval::Move {
-                                                target_local_index: local.index(),
+                                                target_local_index: local.as_u32(),
                                                 range: range_from_span(
                                                     source,
                                                     statement.source_info.span,
@@ -389,7 +399,7 @@ where
                                         let local = place.local;
                                         let outlive = None;
                                         Some(MirRval::Borrow {
-                                            target_local_index: local.index(),
+                                            target_local_index: local.as_u32(),
                                             range: range_from_span(
                                                 source,
                                                 statement.source_info.span,
@@ -421,7 +431,7 @@ where
                         .as_ref()
                         .map(|terminator| match &terminator.kind {
                             TerminatorKind::Drop { place, .. } => MirTerminator::Drop {
-                                local_index: place.local.index(),
+                                local_index: place.local.as_u32(),
                                 range: range_from_span(source, terminator.source_info.span, offset),
                             },
                             TerminatorKind::Call {
@@ -429,7 +439,7 @@ where
                                 fn_span,
                                 ..
                             } => MirTerminator::Call {
-                                destination_local_index: destination.local.as_usize(),
+                                destination_local_index: destination.local.as_u32(),
                                 fn_span: range_from_span(source, *fn_span, offset),
                             },
                             _ => MirTerminator::Other,
@@ -567,7 +577,6 @@ where
                         .to_location(location_idx.as_usize().into())
                         .clone(),
                 );
-                //region_locations_idc.append(region_idx, *location_idx);
             }
         }
 
@@ -605,6 +614,7 @@ where
         (
             self.filename,
             Function {
+                fn_id: self.fn_id.local_def_index.as_u32(),
                 basic_blocks,
                 decls,
             },

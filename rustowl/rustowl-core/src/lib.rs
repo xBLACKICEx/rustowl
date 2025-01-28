@@ -18,7 +18,6 @@ mod analyze;
 
 use analyze::MirAnalyzer;
 use models::*;
-use rustc_borrowck::consumers;
 use rustc_driver::{Callbacks, RunCompiler};
 use rustc_hir::def_id::LocalDefId;
 use rustc_interface::interface;
@@ -28,7 +27,6 @@ use rustc_middle::{
 };
 use rustc_session::{config, EarlyDiagCtxt};
 use std::collections::HashMap;
-use std::fs;
 use std::sync::{atomic::AtomicBool, Arc, LazyLock, Mutex};
 use tokio::{
     runtime::{Builder, Handle, Runtime},
@@ -59,31 +57,7 @@ fn override_queries(_session: &rustc_session::Session, local: &mut Providers) {
 fn mir_borrowck<'tcx>(tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> ProvidedValue<'tcx> {
     log::info!("start borrowck of {def_id:?}");
 
-    let facts = consumers::get_body_with_borrowck_facts(
-        tcx,
-        def_id,
-        consumers::ConsumerOptions::PoloniusOutputFacts,
-    );
-    let source_map = tcx.sess.source_map();
-    let filename = source_map.span_to_filename(facts.body.span);
-
-    let source_file = source_map.get_source_file(&filename).unwrap();
-    let offset = source_file.start_pos.0;
-
-    let filename = filename
-        .display(rustc_span::FileNameDisplayPreference::Local)
-        .to_string_lossy()
-        .to_string();
-    let source = fs::read_to_string(&filename).unwrap();
-    log::info!("facts of {def_id:?} prepared; start analyze of {def_id:?}");
-
-    let analyzer = MirAnalyzer::new(
-        filename,
-        source,
-        offset,
-        unsafe { std::mem::transmute(&tcx) },
-        unsafe { std::mem::transmute(&facts) },
-    );
+    let analyzer = MirAnalyzer::new(unsafe { std::mem::transmute(tcx) }, def_id);
     {
         let mut locked = TASKS.lock().unwrap();
         locked.spawn_on(analyzer, &HANDLE);

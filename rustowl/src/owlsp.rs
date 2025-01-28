@@ -9,6 +9,7 @@ use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process,
     sync::RwLock,
+    task::JoinSet,
 };
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types;
@@ -18,12 +19,12 @@ use tower_lsp::{Client, LanguageServer, LspService, Server};
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum Deco<R = Range> {
-    Lifetime { local: usize, range: R },
-    ImmBorrow { local: usize, range: R },
-    MutBorrow { local: usize, range: R },
-    Move { local: usize, range: R },
-    Call { local: usize, range: R },
-    OutLive { local: usize, range: R },
+    Lifetime { local: Local, range: R },
+    ImmBorrow { local: Local, range: R },
+    MutBorrow { local: Local, range: R },
+    Move { local: Local, range: R },
+    Call { local: Local, range: R },
+    OutLive { local: Local, range: R },
 }
 impl Deco<Range> {
     fn to_lsp_range(&self, s: &str) -> Deco<lsp_types::Range> {
@@ -141,18 +142,20 @@ struct CursorRequest {
 
 struct SelectLocal {
     pos: Loc,
-    selected: Vec<usize>,
+    selected: Vec<Local>,
+    current_fn_id: u32,
 }
 impl SelectLocal {
     fn new(pos: Loc) -> Self {
         Self {
             pos,
             selected: Vec::new(),
+            current_fn_id: 0,
         }
     }
-    fn select(&mut self, local: usize, range: Range) {
+    fn select(&mut self, local_id: u32, range: Range) {
         if range.from <= self.pos && self.pos <= range.until {
-            self.selected.push(local);
+            self.selected.push(Local::new(local_id, self.current_fn_id));
         }
     }
 }
@@ -160,8 +163,12 @@ impl utils::MirVisitor for SelectLocal {
     fn visit_decl(&mut self, decl: &MirDecl) {
         match decl {
             MirDecl::User {
-                local_index, span, ..
+                local_index,
+                fn_id,
+                span,
+                ..
             } => {
+                self.current_fn_id = *fn_id;
                 self.select(*local_index, *span);
             }
             _ => {}
@@ -201,14 +208,16 @@ impl utils::MirVisitor for SelectLocal {
     }
 }
 struct CalcDecos {
-    locals: Vec<usize>,
+    locals: Vec<Local>,
     decorations: Vec<Deco>,
+    current_fn_id: u32,
 }
 impl CalcDecos {
-    pub fn new(locals: Vec<usize>) -> Self {
+    pub fn new(locals: Vec<Local>) -> Self {
         Self {
             locals,
             decorations: Vec::new(),
+            current_fn_id: 0,
         }
     }
 }
@@ -217,16 +226,19 @@ impl utils::MirVisitor for CalcDecos {
         match decl {
             MirDecl::User {
                 local_index,
+                fn_id,
                 lives,
                 drop,
                 drop_range,
                 must_live_at,
                 ..
             } => {
-                if self.locals.contains(local_index) {
+                self.current_fn_id = *fn_id;
+                let local = Local::new(*local_index, *fn_id);
+                if self.locals.contains(&local) {
                     for range in lives {
                         self.decorations.push(Deco::Lifetime {
-                            local: *local_index,
+                            local,
                             range: *range,
                         });
                     }
@@ -241,10 +253,7 @@ impl utils::MirVisitor for CalcDecos {
                         })
                         .flatten()
                     {
-                        self.decorations.push(Deco::OutLive {
-                            local: *local_index,
-                            range,
-                        });
+                        self.decorations.push(Deco::OutLive { local, range });
                     }
                 }
             }
@@ -258,9 +267,10 @@ impl utils::MirVisitor for CalcDecos {
                     target_local_index,
                     range,
                 }) => {
-                    if self.locals.contains(target_local_index) {
+                    let local = Local::new(*target_local_index, self.current_fn_id);
+                    if self.locals.contains(&local) {
                         self.decorations.push(Deco::Move {
-                            local: *target_local_index,
+                            local,
                             range: *range,
                         });
                     }
@@ -271,15 +281,16 @@ impl utils::MirVisitor for CalcDecos {
                     mutable,
                     ..
                 }) => {
-                    if self.locals.contains(target_local_index) {
+                    let local = Local::new(*target_local_index, self.current_fn_id);
+                    if self.locals.contains(&local) {
                         if *mutable {
                             self.decorations.push(Deco::MutBorrow {
-                                local: *target_local_index,
+                                local,
                                 range: *range,
                             });
                         } else {
                             self.decorations.push(Deco::ImmBorrow {
-                                local: *target_local_index,
+                                local,
                                 range: *range,
                             });
                         }
@@ -296,7 +307,8 @@ impl utils::MirVisitor for CalcDecos {
                 destination_local_index,
                 fn_span,
             } => {
-                if self.locals.contains(destination_local_index) {
+                let local = Local::new(*destination_local_index, self.current_fn_id);
+                if self.locals.contains(&local) {
                     let mut i = 0;
                     for deco in &self.decorations {
                         match deco {
@@ -331,20 +343,12 @@ impl utils::MirVisitor for CalcDecos {
 fn search_cargo(p: &PathBuf) -> Vec<PathBuf> {
     let mut res = Vec::new();
     if let Ok(mut paths) = std::fs::read_dir(p) {
-        'entry: while let Some(Ok(path)) = paths.next() {
+        while let Some(Ok(path)) = paths.next() {
             if let Ok(meta) = path.metadata() {
                 if meta.is_dir() {
                     res.extend_from_slice(&search_cargo(&path.path()));
                 } else if path.file_name() == "Cargo.toml" {
                     let dir = path.path().parent().unwrap().to_path_buf();
-                    for i in 0..res.len() {
-                        if res[i].starts_with(&dir) {
-                            res[i] = dir;
-                            continue 'entry;
-                        } else if dir.starts_with(&res[i]) {
-                            continue 'entry;
-                        }
-                    }
                     res.push(dir);
                 }
             }
@@ -372,7 +376,16 @@ impl Backend {
     async fn set_roots(&self, uri: &lsp_types::Url) {
         let path = uri.path();
         let mut write = self.roots.write().await;
-        for path in search_cargo(&PathBuf::from(path)) {
+        'entries: for path in search_cargo(&PathBuf::from(path)) {
+            for (root, target) in write.clone().into_iter() {
+                if root.starts_with(&path) {
+                    write.remove(&root);
+                    write.insert(path, target);
+                    continue 'entries;
+                } else if path.starts_with(&root) {
+                    continue 'entries;
+                }
+            }
             write.insert(path, Temp::new_dir().unwrap().to_path_buf());
         }
     }
@@ -385,6 +398,7 @@ impl Backend {
         }
         let roots = { self.roots.read().await.clone() };
         let self_path = PathBuf::from(std::env::args().nth(0).unwrap());
+        let mut join = JoinSet::new();
         for (root, target) in roots {
             let mut child = process::Command::new("rustup")
                 .env(
@@ -416,8 +430,9 @@ impl Backend {
                     }
                 }
             });
-            child.wait().await.ok();
+            join.spawn(async move { child.wait().await });
         }
+        join.join_all().await;
     }
     async fn cleanup_targets(&self) {
         for (_, target) in self.roots.read().await.iter() {
@@ -500,7 +515,7 @@ impl LanguageServer for Backend {
         Ok(init_res)
     }
     async fn initialized(&self, _p: lsp_types::InitializedParams) {
-        //self.analzye().await;
+        self.analzye().await;
     }
     async fn did_save(&self, _params: lsp_types::DidSaveTextDocumentParams) {
         self.analzye().await;
