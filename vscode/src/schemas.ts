@@ -96,3 +96,26 @@ export const zAnalyzeResponse = z.union([
 ]);
 
 export type zInfer<T extends ZodSchema> = z.infer<T>;
+
+export const zLspLocation = z.object({
+  line: z.number().int(),
+  character: z.number().int(),
+});
+export const zLspRange = z.object({ start: zLspLocation, end: zLspLocation });
+export const zLspType = z.union([
+  z.literal("lifetime"),
+  z.literal("imm_borrow"),
+  z.literal("mut_borrow"),
+  z.literal("move"),
+  z.literal("call"),
+  z.literal("outlive"),
+]);
+export const zLspCursorResponse = z.object({
+  decorations: z
+    .object({
+      type: zLspType,
+      range: zLspRange,
+      hover_text: z.string().nullish(),
+    })
+    .array(),
+});

@@ -22,8 +22,8 @@ RustOwl visualizes those by using underlines:
 - orange: value moved
 - red: lifetime error - diff of lifetime between actual and expected
 
-Currently, we offer VSCode extension and Neovim plugin.
-We implemented LSP server `cargo owlsp` which extends the protocol.
+Currently, we offer VSCode extension, Neovim plugin and Emacs package.
+We implemented LSP server `cargo owlsp` with an extended protocol.
 So, RustOwl can be used easily from other editor.
 
 ## Quick Start
@@ -36,6 +36,18 @@ Here we describe how to start using RustOwl.
 - Visual Studio Code (VSCode) installed
 
 We tested this guide on macOS Sequoia 15.2 on arm64 architecture with VSCode 1.96.4 and `rustup` 1.27.1.
+
+After installation, the extension will automatically run RustOwl when you save any Rust program in cargo workspace.
+The initial analysis may take some time, but from the second run onward, compile caching is used to reduce the analysis time.
+
+### VSCode
+
+Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.0.2/rustowl-vscode-0.0.2.vsix).
+
+Press `Cmd+Shift+P` on macOS or `Ctrl+Shift+P` on other systems to open the command palette in VSCode.
+Type `install vsix` in the command palette, and `Extensions: Install from VSIX...` will appear.
+Click it and select the downloaded `.vsix` file.
+The extension will then be installed.
 
 ### Install RustOwl
 
@@ -65,20 +77,6 @@ Elpaca example:
     :files (:defaults "emacs/*")))
 ```
 
-### VSCode
-
-Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.0.2/rustowl-vscode-0.0.2.vsix).
-
-### Install VSCode extension
-
-Press `Cmd+Shift+P` on macOS or `Ctrl+Shift+P` on other systems to open the command palette in VSCode.
-Type `install vsix` in the command palette, and `Extensions: Install from VSIX...` will appear.
-Click it and select the downloaded `.vsix` file.
-The extension will then be installed.
-
-After installation, the extension will automatically run RustOwl when you save any Rust program in cargo workspace.
-The initial analysis may take some time, but from the second run onward, compile caching is used to reduce the analysis time.
-
 
 ## Build manually
 
@@ -106,7 +104,7 @@ We have confirmed that running `apt install -y build-essential` is necessary on 
 ```bash
 cd rustowl
 cargo install --path . --locked
-cargo owl
+cargo owlsp
 ```
 
 
@@ -120,7 +118,7 @@ cargo owl
 - `yarn` installed
     - After installing Node.js, You can install `yarn` by running `npm install -g yarn`.
 
-VSCode extension has been tested on macOS Sequoia 15.2 on arm64 architecture with Visual Studio Code 1.96.4, nodejs v20.16.0, and `yarn` 1.22.22.
+VSCode extension has been tested on macOS Sequoia 15.2 on arm64 architecture with Visual Studio Code 1.96.4, Node.js v20.16.0, and `yarn` 1.22.22.
 Other dependencies are locked in the configuration files and will be installed automatically.
 
 #### Build & Run
@@ -129,7 +127,7 @@ First, install the dependencies.
 
 ```bash
 cd vscode
-yarn install --frozen-locked
+yarn install --frozen-lockfile
 ```
 
 Then open `vscode` directory in VSCode.
