@@ -228,7 +228,6 @@ impl utils::MirVisitor for CalcDecos {
                 local_index,
                 fn_id,
                 lives,
-                drop,
                 drop_range,
                 must_live_at,
                 ..
@@ -236,7 +235,11 @@ impl utils::MirVisitor for CalcDecos {
                 self.current_fn_id = *fn_id;
                 let local = Local::new(*local_index, *fn_id);
                 if self.locals.contains(&local) {
-                    for range in lives {
+                    // merge Drop object lives
+                    let mut drop_copy_live = lives.clone();
+                    drop_copy_live.extend_from_slice(&drop_range);
+                    drop_copy_live = utils::eliminated_ranges(drop_copy_live.clone());
+                    for range in &drop_copy_live {
                         self.decorations.push(Deco::Lifetime {
                             local,
                             range: *range,
@@ -244,13 +247,7 @@ impl utils::MirVisitor for CalcDecos {
                     }
                     for range in must_live_at
                         .into_iter()
-                        .map(|v| {
-                            if *drop {
-                                utils::exclude_ranges(*v, drop_range.clone())
-                            } else {
-                                utils::exclude_ranges(*v, lives.clone())
-                            }
-                        })
+                        .map(|v| utils::exclude_ranges(*v, drop_copy_live.clone()))
                         .flatten()
                     {
                         self.decorations.push(Deco::OutLive { local, range });
