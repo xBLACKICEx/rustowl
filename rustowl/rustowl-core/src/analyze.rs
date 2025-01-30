@@ -1,3 +1,4 @@
+use crate::from_rustc::LocationTableSim;
 use models::*;
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::{
@@ -5,11 +6,10 @@ use rustc_borrowck::consumers::{
     RichLocation, RustcFacts,
 };
 use rustc_hir::def_id::LocalDefId;
-use rustc_index::IndexVec;
 use rustc_middle::{
     mir::{
-        BasicBlock, BasicBlockData, BasicBlocks, Body, BorrowKind, Local, Location, Operand,
-        Rvalue, StatementKind, TerminatorKind, VarDebugInfoContents,
+        BasicBlock, BasicBlockData, BasicBlocks, Body, BorrowKind, Local, Operand, Rvalue,
+        StatementKind, TerminatorKind, VarDebugInfoContents,
     },
     ty::TyCtxt,
 };
@@ -23,64 +23,6 @@ pub type MirAnalyzeFuture<'tcx> = Pin<Box<dyn Future<Output = MirAnalyzer<'tcx>>
 
 type Borrow = <RustcFacts as FactTypes>::Loan;
 type Region = <RustcFacts as FactTypes>::Origin;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct LocationIndex(usize);
-impl LocationIndex {
-    fn is_start(self) -> bool {
-        (self.0 % 2) == 0
-    }
-}
-impl From<usize> for LocationIndex {
-    fn from(value: usize) -> Self {
-        Self(value)
-    }
-}
-/// https://github.com/rust-lang/rust/blob/759e07f063fb8e6306ff1bdaeb70af56a878b415/compiler/rustc_borrowck/src/location.rs
-struct LocationTableSim {
-    _num_points: usize,
-    statements_before_block: IndexVec<BasicBlock, usize>,
-}
-impl LocationTableSim {
-    fn new(body: &Body<'_>) -> Self {
-        let mut num_points = 0;
-        let statements_before_block = body
-            .basic_blocks
-            .iter()
-            .map(|block_data| {
-                let v = num_points;
-                num_points += (block_data.statements.len() + 1) * 2;
-                v
-            })
-            .collect();
-
-        Self {
-            _num_points: num_points,
-            statements_before_block,
-        }
-    }
-    pub fn to_location(&self, index: LocationIndex) -> RichLocation {
-        let point_index = index.0;
-        let (block, &first_index) = self
-            .statements_before_block
-            .iter_enumerated()
-            .rfind(|&(_, &first_index)| first_index <= point_index)
-            .unwrap();
-
-        let statement_index = (point_index - first_index) / 2;
-        if index.is_start() {
-            RichLocation::Start(Location {
-                block,
-                statement_index,
-            })
-        } else {
-            RichLocation::Mid(Location {
-                block,
-                statement_index,
-            })
-        }
-    }
-}
 
 trait Append<K, V>
 where

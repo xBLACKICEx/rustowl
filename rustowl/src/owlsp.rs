@@ -19,17 +19,45 @@ use tower_lsp::{Client, LanguageServer, LspService, Server};
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum Deco<R = Range> {
-    Lifetime { local: Local, range: R },
-    ImmBorrow { local: Local, range: R },
-    MutBorrow { local: Local, range: R },
-    Move { local: Local, range: R },
-    Call { local: Local, range: R },
-    OutLive { local: Local, range: R },
+    Lifetime {
+        local: Local,
+        range: R,
+        hover_text: String,
+    },
+    ImmBorrow {
+        local: Local,
+        range: R,
+        hover_text: String,
+    },
+    MutBorrow {
+        local: Local,
+        range: R,
+        hover_text: String,
+    },
+    Move {
+        local: Local,
+        range: R,
+        hover_text: String,
+    },
+    Call {
+        local: Local,
+        range: R,
+        hover_text: String,
+    },
+    OutLive {
+        local: Local,
+        range: R,
+        hover_text: String,
+    },
 }
 impl Deco<Range> {
     fn to_lsp_range(&self, s: &str) -> Deco<lsp_types::Range> {
         match self.clone() {
-            Deco::Lifetime { local, range } => {
+            Deco::Lifetime {
+                local,
+                range,
+                hover_text,
+            } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
                 let start = lsp_types::Position {
@@ -43,9 +71,14 @@ impl Deco<Range> {
                 Deco::Lifetime {
                     local,
                     range: lsp_types::Range { start, end },
+                    hover_text,
                 }
             }
-            Deco::ImmBorrow { local, range } => {
+            Deco::ImmBorrow {
+                local,
+                range,
+                hover_text,
+            } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
                 let start = lsp_types::Position {
@@ -59,9 +92,14 @@ impl Deco<Range> {
                 Deco::ImmBorrow {
                     local,
                     range: lsp_types::Range { start, end },
+                    hover_text,
                 }
             }
-            Deco::MutBorrow { local, range } => {
+            Deco::MutBorrow {
+                local,
+                range,
+                hover_text,
+            } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
                 let start = lsp_types::Position {
@@ -75,9 +113,14 @@ impl Deco<Range> {
                 Deco::ImmBorrow {
                     local,
                     range: lsp_types::Range { start, end },
+                    hover_text,
                 }
             }
-            Deco::Move { local, range } => {
+            Deco::Move {
+                local,
+                range,
+                hover_text,
+            } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
                 let start = lsp_types::Position {
@@ -91,9 +134,14 @@ impl Deco<Range> {
                 Deco::Move {
                     local,
                     range: lsp_types::Range { start, end },
+                    hover_text,
                 }
             }
-            Deco::Call { local, range } => {
+            Deco::Call {
+                local,
+                range,
+                hover_text,
+            } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
                 let start = lsp_types::Position {
@@ -107,9 +155,14 @@ impl Deco<Range> {
                 Deco::Call {
                     local,
                     range: lsp_types::Range { start, end },
+                    hover_text,
                 }
             }
-            Deco::OutLive { local, range } => {
+            Deco::OutLive {
+                local,
+                range,
+                hover_text,
+            } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
                 let start = lsp_types::Position {
@@ -123,6 +176,7 @@ impl Deco<Range> {
                 Deco::OutLive {
                     local,
                     range: lsp_types::Range { start, end },
+                    hover_text,
                 }
             }
         }
@@ -135,6 +189,7 @@ struct Decorations {
     decorations: Vec<Deco<lsp_types::Range>>,
 }
 #[derive(serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
 struct CursorRequest {
     position: lsp_types::Position,
     document: lsp_types::TextDocumentIdentifier,
@@ -230,6 +285,7 @@ impl utils::MirVisitor for CalcDecos {
                 lives,
                 drop_range,
                 must_live_at,
+                name,
                 ..
             } => {
                 self.current_fn_id = *fn_id;
@@ -243,6 +299,7 @@ impl utils::MirVisitor for CalcDecos {
                         self.decorations.push(Deco::Lifetime {
                             local,
                             range: *range,
+                            hover_text: format!("lifetime of variable `{}`", name),
                         });
                     }
                     for range in must_live_at
@@ -250,7 +307,11 @@ impl utils::MirVisitor for CalcDecos {
                         .map(|v| utils::exclude_ranges(*v, drop_copy_live.clone()))
                         .flatten()
                     {
-                        self.decorations.push(Deco::OutLive { local, range });
+                        self.decorations.push(Deco::OutLive {
+                            local,
+                            range,
+                            hover_text: format!("variable `{}` is required to live here", name),
+                        });
                     }
                 }
             }
@@ -269,6 +330,7 @@ impl utils::MirVisitor for CalcDecos {
                         self.decorations.push(Deco::Move {
                             local,
                             range: *range,
+                            hover_text: format!("variable moved"),
                         });
                     }
                 }
@@ -284,11 +346,13 @@ impl utils::MirVisitor for CalcDecos {
                             self.decorations.push(Deco::MutBorrow {
                                 local,
                                 range: *range,
+                                hover_text: format!("mutable borrow"),
                             });
                         } else {
                             self.decorations.push(Deco::ImmBorrow {
                                 local,
                                 range: *range,
+                                hover_text: format!("immutable borrow"),
                             });
                         }
                     }
@@ -330,6 +394,11 @@ impl utils::MirVisitor for CalcDecos {
                         }
                         i += 1;
                     }
+                    self.decorations.push(Deco::Call {
+                        local,
+                        range: *fn_span,
+                        hover_text: format!("function call"),
+                    });
                 }
             }
             _ => {}

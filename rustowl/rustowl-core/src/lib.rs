@@ -15,6 +15,7 @@ pub extern crate rustc_span;
 pub extern crate smallvec;
 
 mod analyze;
+mod from_rustc;
 
 use analyze::MirAnalyzer;
 use models::*;
