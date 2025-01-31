@@ -29,6 +29,10 @@ pub fn merge_ranges(r1: Range, r2: Range) -> Option<Range> {
 pub fn eliminated_ranges(mut ranges: Vec<Range>) -> Vec<Range> {
     let mut i = 0;
     'outer: while i < ranges.len() {
+        if ranges[i].until <= ranges[i].from {
+            ranges.remove(i);
+            continue;
+        }
         let mut j = i + 1;
         while j < ranges.len() {
             if let Some(eliminated) = merge_ranges(ranges[i], ranges[j]) {
@@ -44,44 +48,39 @@ pub fn eliminated_ranges(mut ranges: Vec<Range>) -> Vec<Range> {
     ranges
 }
 
-pub fn exclude_range(from: Range, exclude: Range) -> Vec<Range> {
-    if let Some(common) = common_range(from, exclude) {
-        let r1 = Range {
-            from: from.from,
-            until: common.from - 1,
-        };
-        let r2 = Range {
-            from: common.until + 1,
-            until: from.until,
-        };
-        let mut res = if r1.from < r1.until {
-            vec![r1]
-        } else {
-            Vec::new()
-        };
-        if r2.from < r2.until {
-            res.push(r2);
-        }
-        res
-    } else {
-        vec![from]
-    }
-}
-
-pub fn exclude_ranges(from: Range, excludes: Vec<Range>) -> Vec<Range> {
-    let mut res = vec![from];
+pub fn exclude_ranges(mut from: Vec<Range>, excludes: Vec<Range>) -> Vec<Range> {
     let mut i = 0;
-    while i < excludes.len() {
+    'outer: while i < from.len() {
         let mut j = 0;
-        while j < res.len() {
-            let tmp = exclude_range(res[j], excludes[i]);
-            res.remove(j);
-            j += tmp.len();
-            res.extend(tmp);
+        while j < excludes.len() {
+            if let Some(common) = common_range(from[i], excludes[j]) {
+                if common.from == common.until {
+                    j += 1;
+                    continue;
+                }
+                let r1 = Range {
+                    from: from[i].from,
+                    until: common.from - 1,
+                };
+                let r2 = Range {
+                    from: common.from + 1,
+                    until: from[i].until,
+                };
+                from.remove(i);
+                if r1.from < r1.until {
+                    from.push(r1);
+                }
+                if r2.from < r2.until {
+                    from.push(r2);
+                }
+                i = 0;
+                continue 'outer;
+            }
+            j += 1;
         }
         i += 1;
     }
-    eliminated_ranges(res)
+    eliminated_ranges(from)
 }
 
 #[allow(unused)]

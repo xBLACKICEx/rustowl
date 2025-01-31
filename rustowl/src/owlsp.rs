@@ -44,7 +44,7 @@ enum Deco<R = Range> {
         range: R,
         hover_text: String,
     },
-    OutLive {
+    Outlive {
         local: Local,
         range: R,
         hover_text: String,
@@ -158,7 +158,7 @@ impl Deco<Range> {
                     hover_text,
                 }
             }
-            Deco::OutLive {
+            Deco::Outlive {
                 local,
                 range,
                 hover_text,
@@ -173,7 +173,7 @@ impl Deco<Range> {
                     line: end.0,
                     character: end.1,
                 };
-                Deco::OutLive {
+                Deco::Outlive {
                     local,
                     range: lsp_types::Range { start, end },
                     hover_text,
@@ -195,6 +195,7 @@ struct CursorRequest {
     document: lsp_types::TextDocumentIdentifier,
 }
 
+#[derive(Clone, Debug)]
 struct SelectLocal {
     pos: Loc,
     selected: Vec<Local>,
@@ -262,6 +263,7 @@ impl utils::MirVisitor for SelectLocal {
         }
     }
 }
+#[derive(Clone, Debug)]
 struct CalcDecos {
     locals: Vec<Local>,
     decorations: Vec<Deco>,
@@ -302,12 +304,9 @@ impl utils::MirVisitor for CalcDecos {
                             hover_text: format!("lifetime of variable `{}`", name),
                         });
                     }
-                    for range in must_live_at
-                        .into_iter()
-                        .map(|v| utils::exclude_ranges(*v, drop_copy_live.clone()))
-                        .flatten()
-                    {
-                        self.decorations.push(Deco::OutLive {
+                    let outlive = utils::exclude_ranges(must_live_at.clone(), drop_copy_live);
+                    for range in outlive {
+                        self.decorations.push(Deco::Outlive {
                             local,
                             range,
                             hover_text: format!("variable `{}` is required to live here", name),
@@ -516,6 +515,7 @@ impl Backend {
                     }
                 }
             }
+
             let mut calc = CalcDecos::new(selected.selected);
             for (mir_filename, file) in analyzed.0.iter() {
                 if filepath.ends_with(mir_filename) {
