@@ -56,7 +56,7 @@ export function activate(context: vscode.ExtensionContext) {
   ) => {
     const rangeToRange = (range: zInfer<typeof zLspRange>) => {
       return new vscode.Range(
-        new vscode.Position(range.start.line, range.start.line),
+        new vscode.Position(range.start.line, range.start.character),
         new vscode.Position(range.end.line, range.end.character)
       );
     };
