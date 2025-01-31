@@ -45,12 +45,12 @@ The initial analysis may take some time, but from the second run onward, compile
 To install RustOwl command, run the command below.
 
 ```bash
-curl -L "https://github.com/cordx56/rustowl/releases/download/v0.0.3/install.sh" | bash
+curl -L "https://github.com/cordx56/rustowl/releases/download/v0.0.4/install.sh" | bash
 ```
 
 ### VSCode
 
-Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.0.3/rustowl-vscode-0.0.3.vsix).
+Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.0.4/rustowl-vscode-0.0.4.vsix).
 
 Press `Cmd+Shift+P` on macOS or `Ctrl+Shift+P` on other systems to open the command palette in VSCode.
 Type `install vsix` in the command palette, and `Extensions: Install from VSIX...` will appear.
