@@ -28,7 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
     "rustowlsp",
     "RustOwLSP",
     serverOptions,
-    clientOptions
+    clientOptions,
   );
   client.start();
 
@@ -52,12 +52,12 @@ export function activate(context: vscode.ExtensionContext) {
   // update decoration
   const updateDecoration = (
     editor: vscode.TextEditor,
-    data: zInfer<typeof zLspCursorResponse>
+    data: zInfer<typeof zLspCursorResponse>,
   ) => {
     const rangeToRange = (range: zInfer<typeof zLspRange>) => {
       return new vscode.Range(
         new vscode.Position(range.start.line, range.start.character),
-        new vscode.Position(range.end.line, range.end.character)
+        new vscode.Position(range.end.line, range.end.character),
       );
     };
     const lifetime: vscode.DecorationOptions[] = [];
@@ -68,20 +68,22 @@ export function activate(context: vscode.ExtensionContext) {
     const messages: vscode.DecorationOptions[] = [];
     for (const deco of data.decorations) {
       const range = rangeToRange(deco.range);
-      const hoverMessage = deco.hover_text;
-      if (deco.type === "lifetime") {
-        lifetime.push({
-          range,
-        });
-      } else if (deco.type === "imm_borrow") {
-        immut.push({ range });
-      } else if (deco.type === "mut_borrow") {
-        mut.push({ range });
-      } else if (deco.type === "call" || deco.type === "move") {
-        moveCall.push({ range });
-      } else if (deco.type === "outlive") {
-        outlive.push({ range });
+      if (deco.is_display) {
+        if (deco.type === "lifetime") {
+          lifetime.push({
+            range,
+          });
+        } else if (deco.type === "imm_borrow") {
+          immut.push({ range });
+        } else if (deco.type === "mut_borrow") {
+          mut.push({ range });
+        } else if (deco.type === "call" || deco.type === "move") {
+          moveCall.push({ range });
+        } else if (deco.type === "outlive") {
+          outlive.push({ range });
+        }
       }
+      const hoverMessage = deco.hover_text;
       if (hoverMessage) {
         messages.push({ range, hoverMessage });
       }
@@ -109,13 +111,13 @@ export function activate(context: vscode.ExtensionContext) {
       activeEditor = editor;
     },
     null,
-    context.subscriptions
+    context.subscriptions,
   );
   //let timeout: NodeJS.Timeout | undefined = undefined;
   vscode.workspace.onDidSaveTextDocument(
     (_ev) => {},
     null,
-    context.subscriptions
+    context.subscriptions,
   );
   vscode.window.onDidChangeTextEditorSelection(
     (ev) => {
@@ -140,7 +142,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
     },
     null,
-    context.subscriptions
+    context.subscriptions,
   );
 }
 

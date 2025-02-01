@@ -23,31 +23,37 @@ enum Deco<R = Range> {
         local: Local,
         range: R,
         hover_text: String,
+        is_display: bool,
     },
     ImmBorrow {
         local: Local,
         range: R,
         hover_text: String,
+        is_display: bool,
     },
     MutBorrow {
         local: Local,
         range: R,
         hover_text: String,
+        is_display: bool,
     },
     Move {
         local: Local,
         range: R,
         hover_text: String,
+        is_display: bool,
     },
     Call {
         local: Local,
         range: R,
         hover_text: String,
+        is_display: bool,
     },
     Outlive {
         local: Local,
         range: R,
         hover_text: String,
+        is_display: bool,
     },
 }
 impl Deco<Range> {
@@ -57,6 +63,7 @@ impl Deco<Range> {
                 local,
                 range,
                 hover_text,
+                is_display,
             } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
@@ -72,12 +79,14 @@ impl Deco<Range> {
                     local,
                     range: lsp_types::Range { start, end },
                     hover_text,
+                    is_display,
                 }
             }
             Deco::ImmBorrow {
                 local,
                 range,
                 hover_text,
+                is_display,
             } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
@@ -93,12 +102,14 @@ impl Deco<Range> {
                     local,
                     range: lsp_types::Range { start, end },
                     hover_text,
+                    is_display,
                 }
             }
             Deco::MutBorrow {
                 local,
                 range,
                 hover_text,
+                is_display,
             } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
@@ -110,16 +121,18 @@ impl Deco<Range> {
                     line: end.0,
                     character: end.1,
                 };
-                Deco::ImmBorrow {
+                Deco::MutBorrow {
                     local,
                     range: lsp_types::Range { start, end },
                     hover_text,
+                    is_display,
                 }
             }
             Deco::Move {
                 local,
                 range,
                 hover_text,
+                is_display,
             } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
@@ -135,12 +148,14 @@ impl Deco<Range> {
                     local,
                     range: lsp_types::Range { start, end },
                     hover_text,
+                    is_display,
                 }
             }
             Deco::Call {
                 local,
                 range,
                 hover_text,
+                is_display,
             } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
@@ -156,12 +171,14 @@ impl Deco<Range> {
                     local,
                     range: lsp_types::Range { start, end },
                     hover_text,
+                    is_display,
                 }
             }
             Deco::Outlive {
                 local,
                 range,
                 hover_text,
+                is_display,
             } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
@@ -177,6 +194,7 @@ impl Deco<Range> {
                     local,
                     range: lsp_types::Range { start, end },
                     hover_text,
+                    is_display,
                 }
             }
         }
@@ -277,6 +295,158 @@ impl CalcDecos {
             current_fn_id: 0,
         }
     }
+
+    fn get_deco_order(deco: &Deco) -> u8 {
+        match deco {
+            Deco::Lifetime { .. } => 0,
+            Deco::ImmBorrow { .. } => 1,
+            Deco::MutBorrow { .. } => 2,
+            Deco::Move { .. } => 3,
+            Deco::Call { .. } => 4,
+            Deco::Outlive { .. } => 5,
+        }
+    }
+
+    fn sort_by_definition(&mut self) {
+        self.decorations.sort_by_key(Self::get_deco_order);
+    }
+
+    fn handle_overlapping(&mut self) {
+        self.sort_by_definition();
+        let mut i = 1;
+        while i < self.decorations.len() {
+            let current_range = match &self.decorations[i] {
+                Deco::Lifetime { range, .. }
+                | Deco::ImmBorrow { range, .. }
+                | Deco::MutBorrow { range, .. }
+                | Deco::Move { range, .. }
+                | Deco::Call { range, .. }
+                | Deco::Outlive { range, .. } => *range,
+            };
+
+            let mut j = 0;
+            while j < i {
+                let prev = &self.decorations[j];
+                let (prev_range, prev_is_display) = match prev {
+                    Deco::Lifetime {
+                        range, is_display, ..
+                    }
+                    | Deco::ImmBorrow {
+                        range, is_display, ..
+                    }
+                    | Deco::MutBorrow {
+                        range, is_display, ..
+                    }
+                    | Deco::Move {
+                        range, is_display, ..
+                    }
+                    | Deco::Call {
+                        range, is_display, ..
+                    }
+                    | Deco::Outlive {
+                        range, is_display, ..
+                    } => (*range, *is_display),
+                };
+
+                if !prev_is_display {
+                    j += 1;
+                    continue;
+                }
+
+                if let Some(common) = utils::common_range(current_range, prev_range) {
+                    if common.from < common.until {
+                        let mut new_decos = Vec::new();
+                        let non_overlapping = utils::exclude_ranges(vec![prev_range], vec![common]);
+
+                        for range in non_overlapping {
+                            let new_deco = match prev {
+                                Deco::Lifetime {
+                                    local, hover_text, ..
+                                } => Deco::Lifetime {
+                                    local: *local,
+                                    range,
+                                    hover_text: hover_text.clone(),
+                                    is_display: true,
+                                },
+                                Deco::ImmBorrow {
+                                    local, hover_text, ..
+                                } => Deco::ImmBorrow {
+                                    local: *local,
+                                    range,
+                                    hover_text: hover_text.clone(),
+                                    is_display: true,
+                                },
+                                Deco::MutBorrow {
+                                    local, hover_text, ..
+                                } => Deco::MutBorrow {
+                                    local: *local,
+                                    range,
+                                    hover_text: hover_text.clone(),
+                                    is_display: true,
+                                },
+                                Deco::Move {
+                                    local, hover_text, ..
+                                } => Deco::Move {
+                                    local: *local,
+                                    range,
+                                    hover_text: hover_text.clone(),
+                                    is_display: true,
+                                },
+                                Deco::Call {
+                                    local, hover_text, ..
+                                } => Deco::Call {
+                                    local: *local,
+                                    range,
+                                    hover_text: hover_text.clone(),
+                                    is_display: true,
+                                },
+                                Deco::Outlive {
+                                    local, hover_text, ..
+                                } => Deco::Outlive {
+                                    local: *local,
+                                    range,
+                                    hover_text: hover_text.clone(),
+                                    is_display: true,
+                                },
+                            };
+                            new_decos.push(new_deco);
+                        }
+
+                        match &mut self.decorations[j] {
+                            Deco::Lifetime {
+                                range, is_display, ..
+                            }
+                            | Deco::ImmBorrow {
+                                range, is_display, ..
+                            }
+                            | Deco::MutBorrow {
+                                range, is_display, ..
+                            }
+                            | Deco::Move {
+                                range, is_display, ..
+                            }
+                            | Deco::Call {
+                                range, is_display, ..
+                            }
+                            | Deco::Outlive {
+                                range, is_display, ..
+                            } => {
+                                *range = common;
+                                *is_display = false;
+                            }
+                        }
+
+                        for (jj, deco) in new_decos.into_iter().enumerate() {
+                            self.decorations.insert(j + jj + 1, deco);
+                        }
+                        self.sort_by_definition();
+                    }
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+    }
 }
 impl utils::MirVisitor for CalcDecos {
     fn visit_decl(&mut self, decl: &MirDecl) {
@@ -302,6 +472,7 @@ impl utils::MirVisitor for CalcDecos {
                             local,
                             range: *range,
                             hover_text: format!("lifetime of variable `{}`", name),
+                            is_display: true,
                         });
                     }
                     let outlive = utils::exclude_ranges(must_live_at.clone(), drop_copy_live);
@@ -310,6 +481,7 @@ impl utils::MirVisitor for CalcDecos {
                             local,
                             range,
                             hover_text: format!("variable `{}` is required to live here", name),
+                            is_display: true,
                         });
                     }
                 }
@@ -330,6 +502,7 @@ impl utils::MirVisitor for CalcDecos {
                             local,
                             range: *range,
                             hover_text: format!("variable moved"),
+                            is_display: true,
                         });
                     }
                 }
@@ -346,12 +519,14 @@ impl utils::MirVisitor for CalcDecos {
                                 local,
                                 range: *range,
                                 hover_text: format!("mutable borrow"),
+                                is_display: true,
                             });
                         } else {
                             self.decorations.push(Deco::ImmBorrow {
                                 local,
                                 range: *range,
                                 hover_text: format!("immutable borrow"),
+                                is_display: true,
                             });
                         }
                     }
@@ -397,6 +572,7 @@ impl utils::MirVisitor for CalcDecos {
                         local,
                         range: *fn_span,
                         hover_text: format!("function call"),
+                        is_display: true,
                     });
                 }
             }
@@ -524,6 +700,7 @@ impl Backend {
                     }
                 }
             }
+            calc.handle_overlapping();
             calc.decorations
         } else {
             Vec::new()
