@@ -9,18 +9,6 @@ fn main() {
     let root_dir = PathBuf::from(env::args().nth(2).unwrap_or(".".to_owned()));
     let target_dir = PathBuf::from(env::args().nth(3).unwrap_or("./target".to_owned()));
     let mut command = Command::new("rustup");
-    command
-        .env(
-            "RUSTC_WORKSPACE_WRAPPER",
-            self_path.with_file_name("rustowlc"),
-        )
-        .env("CARGO_TARGET_DIR", &target_dir)
-        .env_remove("RUSTC_WRAPPER")
-        .arg("run")
-        .arg("nightly-2024-10-31")
-        .arg("cargo")
-        .arg("check")
-        .current_dir(&root_dir);
 
     #[cfg(target_os = "windows")]
     command.env(
@@ -33,6 +21,19 @@ fn main() {
             env::var("Path").unwrap_or("".to_owned())
         ),
     );
+
+    command
+        .env(
+            "RUSTC_WORKSPACE_WRAPPER",
+            self_path.with_file_name("rustowlc"),
+        )
+        .env("CARGO_TARGET_DIR", &target_dir)
+        .env_remove("RUSTC_WRAPPER")
+        .arg("run")
+        .arg("nightly-2024-10-31")
+        .arg("cargo")
+        .arg("check")
+        .current_dir(&root_dir);
 
     let code = command.spawn().unwrap().wait().unwrap().code().unwrap();
     exit(code);
