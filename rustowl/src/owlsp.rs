@@ -638,21 +638,12 @@ impl Backend {
             *self.analyzed.write().await = None;
         }
         let roots = { self.roots.read().await.clone() };
-        let self_path = PathBuf::from(std::env::args().nth(0).unwrap());
         let mut join = JoinSet::new();
         for (root, target) in roots {
-            let mut child = process::Command::new("rustup")
-                .env(
-                    "RUSTC_WORKSPACE_WRAPPER",
-                    self_path.with_file_name("rustowlc"),
-                )
-                .env("CARGO_TARGET_DIR", &target)
-                .env_remove("RUSTC_WRAPPER")
-                .arg("run")
-                .arg("nightly-2024-10-31")
-                .arg("cargo")
-                .arg("check")
-                .current_dir(&root)
+            let mut child = process::Command::new("cargo")
+                .arg("owl")
+                .arg(&root)
+                .arg(&target)
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::null())
                 .spawn()
