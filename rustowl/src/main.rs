@@ -12,14 +12,7 @@ fn main() {
     #[cfg(windows)]
     unsafe {
         use std::ffi::OsString;
-        use std::os::windows::ffi::OsStrExt;
-        use windows::core::PCWSTR;
-        use windows::Win32::System::Environment::SetEnvironmentVariableW;
-        let path: Vec<u16> = OsString::from("Path")
-            .encode_wide()
-            .chain(Some(0))
-            .collect();
-        let value: Vec<u16> = OsString::from(format!(
+        let value = OsString::from(format!(
             "{}{}",
             env::var("LD_LIBRARY_PATH")
                 .map(|paths| paths
@@ -29,11 +22,8 @@ fn main() {
                     .join(""))
                 .unwrap_or("".to_owned()),
             env::var("Path").unwrap_or("".to_owned()),
-        ))
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-        SetEnvironmentVariableW(PCWSTR(path.as_ptr()), PCWSTR(value.as_ptr())).unwrap();
+        ));
+        env::set_var("Path", &value);
     }
 
     let mut command = Command::new("cargo");
