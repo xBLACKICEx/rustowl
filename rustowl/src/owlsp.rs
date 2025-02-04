@@ -615,9 +615,9 @@ impl Backend {
         }
     }
     async fn set_roots(&self, uri: &lsp_types::Url) {
-        let path = uri.path();
+        let path = uri.to_file_path().unwrap();
         let mut write = self.roots.write().await;
-        'entries: for path in search_cargo(&PathBuf::from(path)) {
+        'entries: for path in search_cargo(&path) {
             for (root, target) in write.clone().into_iter() {
                 if root.starts_with(&path) {
                     write.remove(&root);
@@ -640,7 +640,10 @@ impl Backend {
         let roots = { self.roots.read().await.clone() };
         let mut join = JoinSet::new();
         for (root, target) in roots {
-            let mut child = process::Command::new("cargo")
+            let mut child = process::Command::new("rustup")
+                .arg("run")
+                .arg("nightly-2024-10-31")
+                .arg("cargo")
                 .arg("owl")
                 .arg(&root)
                 .arg(&target)
