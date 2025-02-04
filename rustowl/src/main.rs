@@ -1,6 +1,10 @@
+mod toolchain_version;
+
 use std::env;
 use std::path::PathBuf;
 use std::process::{exit, Command};
+
+use toolchain_version::TOOLCHAIN_VERSION;
 
 fn main() {
     simple_logger::init().unwrap();
@@ -12,14 +16,22 @@ fn main() {
     #[cfg(windows)]
     unsafe {
         use std::ffi::OsString;
+        let triple_suffix = env::var("RUSTUP_TOOLCHAIN")
+            .unwrap()
+            .split("-")
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .take(4)
+            .rev()
+            .collect::<Vec<_>>()
+            .join("-");
         let value = OsString::from(format!(
             "{}{}",
-            env::var("LD_LIBRARY_PATH")
-                .map(|paths| paths
-                    .split(";")
-                    .map(|path| format!("{path}\\..\\bin;"))
-                    .collect::<Vec<_>>()
-                    .join(""))
+            env::var("RUSTUP_HOME")
+                .map(|path| format!(
+                    "{path}\\toolchains\\{TOOLCHAIN_VERSION}-{triple_suffix}\\bin;"
+                ))
                 .unwrap_or("".to_owned()),
             env::var("Path").unwrap_or("".to_owned()),
         ));
