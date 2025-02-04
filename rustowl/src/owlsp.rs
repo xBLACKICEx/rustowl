@@ -1,3 +1,4 @@
+mod toolchain_version;
 mod utils;
 
 use mktemp::Temp;
@@ -14,6 +15,8 @@ use tokio::{
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
+
+use toolchain_version::TOOLCHAIN_VERSION;
 
 #[allow(unused)]
 #[derive(serde::Serialize, Clone, Debug)]
@@ -642,7 +645,7 @@ impl Backend {
         for (root, target) in roots {
             let mut child = process::Command::new("rustup")
                 .arg("run")
-                .arg("nightly-2024-10-31")
+                .arg(TOOLCHAIN_VERSION)
                 .arg("cargo")
                 .arg("owl")
                 .arg(&root)
