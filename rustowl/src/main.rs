@@ -14,7 +14,7 @@ fn main() {
     let target_dir = PathBuf::from(env::args().nth(3).unwrap_or("./target".to_owned()));
 
     #[cfg(windows)]
-    unsafe {
+    {
         let triple_suffix = env::var("RUSTUP_TOOLCHAIN")
             .unwrap()
             .split("-")
@@ -33,7 +33,9 @@ fn main() {
                 .unwrap()
                 .into(),
         );
-        env::set_var("Path", &env::join_paths(paths).unwrap());
+        unsafe {
+            env::set_var("Path", &env::join_paths(paths).unwrap());
+        }
     }
 
     let mut command = Command::new("cargo");
