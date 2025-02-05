@@ -1,6 +1,10 @@
+mod toolchain_version;
+
 use std::env;
 use std::path::PathBuf;
 use std::process::{exit, Command};
+
+use toolchain_version::TOOLCHAIN_VERSION;
 
 fn main() {
     simple_logger::init().unwrap();
@@ -10,30 +14,28 @@ fn main() {
     let target_dir = PathBuf::from(env::args().nth(3).unwrap_or("./target".to_owned()));
 
     #[cfg(windows)]
-    unsafe {
-        use std::ffi::OsString;
-        use std::os::windows::ffi::OsStrExt;
-        use windows::core::PCWSTR;
-        use windows::Win32::System::Environment::SetEnvironmentVariableW;
-        let path: Vec<u16> = OsString::from("Path")
-            .encode_wide()
-            .chain(Some(0))
-            .collect();
-        let value: Vec<u16> = OsString::from(format!(
-            "{}{}",
-            env::var("LD_LIBRARY_PATH")
-                .map(|paths| paths
-                    .split(";")
-                    .map(|path| format!("{path}\\..\\bin;"))
-                    .collect::<Vec<_>>()
-                    .join(""))
-                .unwrap_or("".to_owned()),
-            env::var("Path").unwrap_or("".to_owned()),
-        ))
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-        SetEnvironmentVariableW(PCWSTR(path.as_ptr()), PCWSTR(value.as_ptr())).unwrap();
+    {
+        let triple_suffix = env::var("RUSTUP_TOOLCHAIN")
+            .unwrap()
+            .split("-")
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .take(4)
+            .rev()
+            .collect::<Vec<_>>()
+            .join("-");
+        let mut paths = env::split_paths(&env::var_os("Path").unwrap())
+            .collect::<std::collections::VecDeque<_>>();
+        paths.push_front(
+            env::var("RUSTUP_HOME")
+                .map(|path| format!("{path}\\toolchains\\{TOOLCHAIN_VERSION}-{triple_suffix}\\bin"))
+                .unwrap()
+                .into(),
+        );
+        unsafe {
+            env::set_var("Path", &env::join_paths(paths).unwrap());
+        }
     }
 
     let mut command = Command::new("cargo");
