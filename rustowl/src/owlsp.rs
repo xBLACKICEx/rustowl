@@ -607,6 +607,7 @@ struct Backend {
     client: Client,
     roots: Arc<RwLock<HashMap<PathBuf, PathBuf>>>,
     analyzed: Arc<RwLock<Option<Workspace>>>,
+    processes: Arc<RwLock<JoinSet<()>>>,
 }
 
 impl Backend {
@@ -615,6 +616,7 @@ impl Backend {
             client,
             roots: Arc::new(RwLock::new(HashMap::new())),
             analyzed: Arc::new(RwLock::new(None)),
+            processes: Arc::new(RwLock::new(JoinSet::new())),
         }
     }
     async fn set_roots(&self, uri: &lsp_types::Url) {
@@ -641,7 +643,8 @@ impl Backend {
             *self.analyzed.write().await = None;
         }
         let roots = { self.roots.read().await.clone() };
-        let mut join = JoinSet::new();
+        let mut join = self.processes.write().await;
+        join.shutdown().await;
         for (root, target) in roots {
             let mut child = process::Command::new("rustup")
                 .arg("run")
@@ -668,9 +671,10 @@ impl Backend {
                     }
                 }
             });
-            join.spawn(async move { child.wait().await });
+            join.spawn(async move {
+                let _ = child.wait().await;
+            });
         }
-        join.join_all().await;
     }
     async fn cleanup_targets(&self) {
         for (_, target) in self.roots.read().await.iter() {
@@ -744,6 +748,7 @@ impl LanguageServer for Backend {
         let mut init_res = lsp_types::InitializeResult::default();
         let mut sync_option = lsp_types::TextDocumentSyncOptions::default();
         sync_option.save = Some(lsp_types::TextDocumentSyncSaveOptions::Supported(true));
+        sync_option.change = Some(lsp_types::TextDocumentSyncKind::INCREMENTAL);
         init_res.capabilities.text_document_sync =
             Some(lsp_types::TextDocumentSyncCapability::Options(sync_option));
         let mut workspace_cap = lsp_types::WorkspaceServerCapabilities::default();
@@ -760,6 +765,10 @@ impl LanguageServer for Backend {
     async fn did_save(&self, _params: lsp_types::DidSaveTextDocumentParams) {
         self.analzye().await;
     }
+    async fn did_change(&self, _params: lsp_types::DidChangeTextDocumentParams) {
+        *self.analyzed.write().await = None;
+        self.processes.write().await.shutdown().await;
+    }
 
     async fn did_change_workspace_folders(
         &self,
@@ -773,6 +782,7 @@ impl LanguageServer for Backend {
 
     async fn shutdown(&self) -> jsonrpc::Result<()> {
         self.cleanup_targets().await;
+        self.processes.write().await.shutdown().await;
         Ok(())
     }
 }
