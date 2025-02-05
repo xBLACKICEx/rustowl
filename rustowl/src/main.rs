@@ -15,7 +15,6 @@ fn main() {
 
     #[cfg(windows)]
     unsafe {
-        use std::ffi::OsString;
         let triple_suffix = env::var("RUSTUP_TOOLCHAIN")
             .unwrap()
             .split("-")
@@ -26,16 +25,15 @@ fn main() {
             .rev()
             .collect::<Vec<_>>()
             .join("-");
-        let value = OsString::from(format!(
-            "{}{}",
+        let mut paths = env::split_paths(&env::var_os("Path").unwrap())
+            .collect::<std::collections::VecDeque<_>>();
+        paths.push_front(
             env::var("RUSTUP_HOME")
-                .map(|path| format!(
-                    "{path}\\toolchains\\{TOOLCHAIN_VERSION}-{triple_suffix}\\bin;"
-                ))
-                .unwrap_or("".to_owned()),
-            env::var("Path").unwrap_or("".to_owned()),
-        ));
-        env::set_var("Path", &value);
+                .map(|path| format!("{path}\\toolchains\\{TOOLCHAIN_VERSION}-{triple_suffix}\\bin"))
+                .unwrap()
+                .into(),
+        );
+        env::set_var("Path", &env::join_paths(paths).unwrap());
     }
 
     let mut command = Command::new("cargo");
