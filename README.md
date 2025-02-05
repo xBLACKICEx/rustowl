@@ -19,7 +19,7 @@ RustOwl visualizes those by using underlines:
 - green: variable's actual lifetime
 - blue: immutable borrowing
 - purple: mutable borrowing
-- orange: value moved
+- orange: value moved / function call
 - red: lifetime error - diff of lifetime between actual and expected
 
 Currently, we offer VSCode extension, Neovim plugin and Emacs package.
@@ -28,7 +28,7 @@ So, RustOwl can be used easily from other editor.
 
 ## Quick Start
 
-Here we describe how to start using RustOwl.
+Here we describe how to start using RustOwl with VSCode.
 
 ### Prerequisite
 
@@ -37,8 +37,14 @@ Here we describe how to start using RustOwl.
 
 We tested this guide on macOS Sequoia 15.2 on arm64 architecture with VSCode 1.96.4 and `rustup` 1.27.1.
 
+We also tested this guide on Ubuntu 25.04 on arm64 architecture with VSCode 1.96.4 and `rustup` 1.27.1.
+On Ubuntu, you need to run `apt install build-essential` before installing.
+
 After installation, the extension will automatically run RustOwl when you save any Rust program in cargo workspace.
 The initial analysis may take some time, but from the second run onward, compile caching is used to reduce the analysis time.
+
+We tested on Windows 11 Education 23H2 on amd64 architecture.
+For Windows, please build RustOwl manually by downloading `rustowl.zip` from [releases page](https://github.com/cordx56/rustowl/releases).
 
 ### Install RustOwl
 
@@ -48,9 +54,6 @@ To install RustOwl command, run the command below.
 curl -L "https://github.com/cordx56/rustowl/releases/download/v0.0.5/install.sh" | bash
 ```
 
-For Windows, please build RustOwl manually by downloading `rustowl.zip` from [releases page](https://github.com/cordx56/rustowl/releases).
-We tested on Windows 11 Education 23H2 on amd64 architecture.
-
 ### VSCode
 
 Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.0.5/rustowl-vscode-0.0.5.vsix).
@@ -59,6 +62,11 @@ Press `Cmd+Shift+P` on macOS or `Ctrl+Shift+P` on other systems to open the comm
 Type `install vsix` in the command palette, and `Extensions: Install from VSIX...` will appear.
 Click it and select the downloaded `.vsix` file.
 The extension will then be installed.
+
+## Other editor support
+
+We support Neovim and Emacs.
+You can also create your own LSP client.
 
 ### Neovim
 
@@ -94,13 +102,13 @@ Here, we describe manual install instructions from source code.
     - You need to set up the `PATH` environment variable. To do this, follow the instructions provided by the `rustup` installer. For example, in bash, run `export PATH=$HOME/.cargo/bin:$PATH`.
 
 RustOwl has been tested on macOS Sequoia 15.2 on arm64 architecture with `rustup` 1.27.1.
-We have not tested the installation of dependencies from other package repositories, such as Homebrew. You may need to uninstall any Rust-related packages installed through those repositories first.
+We have not tested the installation of dependencies from other package repositories, such as Homebrew.
+You may need to uninstall any Rust-related packages installed through those repositories first.
 Other dependencies are locked in the configuration files and will be installed automatically.
 
-We have also tested this on Ubuntu 24.04.1 on amd64 architecture with rustup 1.27.1.
-
+We have also tested this on Ubuntu 25.04 on arm64 architecture with `rustup` 1.27.1.
 Additional dependencies may be required.
-We have confirmed that running `apt install -y build-essential` is necessary on a freshly installed Ubuntu for linking.
+We have confirmed that running `apt install build-essential` is necessary on a freshly installed Ubuntu for linking.
 
 #### Build & Run
 
