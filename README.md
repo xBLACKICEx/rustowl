@@ -48,6 +48,9 @@ To install RustOwl command, run the command below.
 curl -L "https://github.com/cordx56/rustowl/releases/download/v0.0.5/install.sh" | bash
 ```
 
+For Windows, please build RustOwl manually by downloading `rustowl.zip` from [releases page](https://github.com/cordx56/rustowl/releases).
+We tested on Windows 11 Education 23H2 on amd64 architecture.
+
 ### VSCode
 
 Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.0.5/rustowl-vscode-0.0.5.vsix).
