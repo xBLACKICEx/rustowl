@@ -4,6 +4,7 @@ use std::env;
 use std::path::PathBuf;
 use std::process::{exit, Command};
 
+#[allow(unused)]
 use toolchain_version::TOOLCHAIN_VERSION;
 
 fn main() {
