@@ -1,13 +1,27 @@
 {
   "name": "rustowl-vscode",
-  "displayName": "rustowl-vscode",
+  "displayName": "RustOwl VSCode",
   "description": "Visualize ownership and lifetimes in Rust",
   "version": "0.1.0",
+  "author": "cordx56 <cordx56@cordx.cx>",
   "engines": {
     "vscode": "^1.95.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cordx56/rustowl.git"
+  },
+  "license": "MPL-2.0",
+  "keywords": [
+    "rust",
+    "ownership",
+    "lifetimes",
+    "visualization"
+  ],
   "categories": [
-    "Other"
+    "Other",
+    "Programming Languages",
+    "IDE Extensions"
   ],
   "activationEvents": [
     "onLanguage:rust"
