@@ -1,0 +1,40 @@
+name: Check RustOwl
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - review_requested
+
+jobs:
+  cargo:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - run: rustup component add rustfmt
+        working-directory: ./rustowl
+      - run: cargo fmt --check
+        working-directory: ./rustowl
+      - run: cargo check
+        working-directory: ./rustowl
+
+  vscode:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: yarn prettier -c src
+      - run: yarn lint && yarn check-types
