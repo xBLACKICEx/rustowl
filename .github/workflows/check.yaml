@@ -37,6 +37,7 @@ jobs:
         with:
           node-version: 20
       - run: yarn install --frozen-locked
+        working-directory: ./vscode
       - run: yarn prettier -c src
         working-directory: ./vscode
       - run: yarn lint && yarn check-types
