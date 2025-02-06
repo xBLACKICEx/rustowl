@@ -36,6 +36,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+      - run: yarn install --frozen-locked
       - run: yarn prettier -c src
         working-directory: ./vscode
       - run: yarn lint && yarn check-types
