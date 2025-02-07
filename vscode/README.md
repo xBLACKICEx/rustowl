@@ -7,7 +7,7 @@ This is RustOwl extension for VSCode.
 Before using RustOwl VSCode, you need to install RustOwl.
 
 ```bash
-cargo +nightly-2024-10-31 install --git https://github.com/cordx56/rustowl --tag v0.1.0
+curl -L "https://github.com/cordx56/rustowl/releases/download/v0.1.1/install.sh" | sh
 ```
 
 Then, you can use RustOwl VSCode when opening a Cargo workspace.

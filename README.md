@@ -32,7 +32,7 @@ Here we describe how to start using RustOwl with VSCode.
 
 ### Prerequisite
 
-- `rustup` and `cargo` installed
+- `curl`, `rustup` and `cargo` installed
 - Visual Studio Code (VSCode) installed
 
 We tested this guide on macOS Sequoia 15.2 on arm64 architecture with VSCode 1.96.4 and `rustup` 1.27.1.
@@ -51,12 +51,12 @@ For Windows, please build RustOwl manually by downloading `rustowl.zip` from [re
 To install RustOwl command, run the command below.
 
 ```bash
-cargo +nightly-2024-10-31 install --git https://github.com/cordx56/rustowl --tag v0.1.0
+curl -L "https://github.com/cordx56/rustowl/releases/download/v0.1.1/install.sh" | sh
 ```
 
 ### VSCode
 
-Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.1.0/rustowl-vscode-0.1.0.vsix).
+Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.1.0/rustowl-vscode-0.1.1.vsix).
 
 Press `Cmd+Shift+P` on macOS or `Ctrl+Shift+P` on other systems to open the command palette in VSCode.
 Type `install vsix` in the command palette, and `Extensions: Install from VSIX...` will appear.

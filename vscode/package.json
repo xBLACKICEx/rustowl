@@ -2,7 +2,7 @@
   "name": "rustowl-vscode",
   "displayName": "RustOwl VSCode",
   "description": "Visualize ownership and lifetimes in Rust",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "cordx56 <cordx56@cordx.cx>",
   "engines": {
     "vscode": "^1.95.0"
@@ -27,9 +27,6 @@
     "onLanguage:rust"
   ],
   "main": "./dist/extension.js",
-  "contributes": {
-    "commands": []
-  },
   "scripts": {
     "vscode:prepublish": "yarn run package",
     "compile": "yarn run check-types && yarn run lint && node esbuild.js",

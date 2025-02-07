@@ -11,6 +11,8 @@ import {
 
 let client: LanguageClient | undefined = undefined;
 
+let decoTimer: NodeJS.Timeout | null = null;
+
 export function activate(context: vscode.ExtensionContext) {
   console.log("rustowl activated");
 
@@ -123,7 +125,11 @@ export function activate(context: vscode.ExtensionContext) {
     (ev) => {
       if (ev.textEditor === activeEditor) {
         resetDecoration(ev.textEditor);
-        (async () => {
+        if (decoTimer) {
+          clearTimeout(decoTimer);
+          decoTimer = null;
+        }
+        decoTimer = setTimeout(async () => {
           const select = ev.textEditor.selection.active;
           const uri = ev.textEditor.document.uri.toString();
           const req = client?.sendRequest("rustowl/cursor", {
@@ -138,7 +144,7 @@ export function activate(context: vscode.ExtensionContext) {
           if (data.success) {
             updateDecoration(ev.textEditor, data.data);
           }
-        })();
+        }, 2000);
       }
     },
     null,
