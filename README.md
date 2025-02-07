@@ -44,7 +44,7 @@ After installation, the extension will automatically run RustOwl when you save a
 The initial analysis may take some time, but from the second run onward, compile caching is used to reduce the analysis time.
 
 We tested on Windows 11 Education 23H2 on amd64 architecture.
-For Windows, please build RustOwl manually by downloading `rustowl.zip` from [releases page](https://github.com/cordx56/rustowl/releases).
+For Windows, please clone this repository and build RustOwl manually.
 
 ### Install RustOwl
 
@@ -56,12 +56,9 @@ curl -L "https://github.com/cordx56/rustowl/releases/download/v0.1.1/install.sh"
 
 ### VSCode
 
-Download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.1.0/rustowl-vscode-0.1.1.vsix).
+You can install VSCode extension from [this link](https://marketplace.visualstudio.com/items?itemName=cordx56.rustowl-vscode).
 
-Press `Cmd+Shift+P` on macOS or `Ctrl+Shift+P` on other systems to open the command palette in VSCode.
-Type `install vsix` in the command palette, and `Extensions: Install from VSIX...` will appear.
-Click it and select the downloaded `.vsix` file.
-The extension will then be installed.
+Also, you can download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.1.0/rustowl-vscode-0.1.1.vsix).
 
 ## Other editor support
 

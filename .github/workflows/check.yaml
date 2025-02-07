@@ -1,6 +1,7 @@
 name: Check RustOwl
 
 on:
+  workflow_call:
   push:
     branches:
       - main

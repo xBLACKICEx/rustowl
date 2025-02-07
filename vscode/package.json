@@ -4,6 +4,7 @@
   "description": "Visualize ownership and lifetimes in Rust",
   "version": "0.1.1",
   "author": "cordx56 <cordx56@cordx.cx>",
+  "publisher": "cordx56",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -19,9 +20,7 @@
     "visualization"
   ],
   "categories": [
-    "Other",
-    "Programming Languages",
-    "IDE Extensions"
+    "Programming Languages"
   ],
   "activationEvents": [
     "onLanguage:rust"
