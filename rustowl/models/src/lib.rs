@@ -97,12 +97,12 @@ impl MirVariables {
     pub fn push(&mut self, var: MirVariable) {
         match &var {
             MirVariable::User { index, .. } => {
-                if self.0.get(index).is_none() {
+                if !self.0.contains_key(index) {
                     self.0.insert(*index, var);
                 }
             }
             MirVariable::Other { index, .. } => {
-                if self.0.get(index).is_none() {
+                if !self.0.contains_key(index) {
                     self.0.insert(*index, var);
                 }
             }
