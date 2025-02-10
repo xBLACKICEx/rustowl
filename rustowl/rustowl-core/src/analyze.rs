@@ -263,7 +263,7 @@ where
                         local_index,
                         fn_id: self.fn_id.local_def_index.as_u32(),
                         name,
-                        span: Range::from(span),
+                        span,
                         ty,
                         lives,
                         must_live_at,
