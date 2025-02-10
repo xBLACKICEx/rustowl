@@ -515,7 +515,7 @@ where
                 Self::erase_superset(
                     self.rich_locations_to_ranges(
                         &regions
-                            .into_iter()
+                            .iter()
                             .filter_map(|v| region_locations.get(v).cloned())
                             .flatten()
                             .collect::<Vec<_>>(),
