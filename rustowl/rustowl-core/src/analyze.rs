@@ -532,7 +532,7 @@ where
                 return true;
             }
         }
-        return false;
+        false
     }
 
     /// analyze MIR to get JSON-serializable, TypeScript friendly representation

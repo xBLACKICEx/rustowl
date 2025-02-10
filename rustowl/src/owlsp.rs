@@ -726,11 +726,11 @@ impl Backend {
                 });
             }
         }
-        return Ok(Decorations {
+        Ok(Decorations {
             is_analyzed,
             path: None,
             decorations: Vec::new(),
-        });
+        })
     }
 }
 
