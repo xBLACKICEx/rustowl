@@ -788,7 +788,7 @@ async fn main() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let (service, socket) = LspService::build(|client| Backend::new(client))
+    let (service, socket) = LspService::build(Backend::new)
         .custom_method("rustowl/cursor", Backend::cursor)
         .finish();
     Server::new(stdin, stdout, socket).serve(service).await;
