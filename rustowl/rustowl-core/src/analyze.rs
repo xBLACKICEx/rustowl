@@ -477,8 +477,7 @@ where
                 };
                 insert.push(
                     self.location_table
-                        .to_location(location_idx.as_usize().into())
-                        .clone(),
+                        .to_location(location_idx.as_usize().into()),
                 );
                 region_locations_idc.append(region_idx, *location_idx);
             }
@@ -505,8 +504,7 @@ where
                 };
                 insert.push(
                     self.location_table
-                        .to_location(location_idx.as_usize().into())
-                        .clone(),
+                        .to_location(location_idx.as_usize().into()),
                 );
             }
         }
