@@ -125,12 +125,12 @@ pub fn run_compiler() -> i32 {
     for arg in args {
         if arg == "-vV" || arg.starts_with("--print") {
             let mut callback = RustcCallback;
-            let runner = RunCompiler::new(&args, &mut callback);
+            let runner = RunCompiler::new(args, &mut callback);
             return rustc_driver::catch_with_exit_code(|| runner.run());
         }
     }
     let mut callback = AnalyzerCallback;
-    let mut runner = RunCompiler::new(&args, &mut callback);
+    let mut runner = RunCompiler::new(args, &mut callback);
     runner.set_make_codegen_backend(None);
     rustc_driver::catch_with_exit_code(|| {
         runner

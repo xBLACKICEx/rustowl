@@ -35,7 +35,7 @@ fn main() {
                 .into(),
         );
         unsafe {
-            env::set_var("Path", &env::join_paths(paths).unwrap());
+            env::set_var("Path", env::join_paths(paths).unwrap());
         }
     }
 

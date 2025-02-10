@@ -468,7 +468,7 @@ impl utils::MirVisitor for CalcDecos {
                 if self.locals.contains(&local) {
                     // merge Drop object lives
                     let mut drop_copy_live = lives.clone();
-                    drop_copy_live.extend_from_slice(&drop_range);
+                    drop_copy_live.extend_from_slice(drop_range);
                     drop_copy_live = utils::eliminated_ranges(drop_copy_live.clone());
                     for range in &drop_copy_live {
                         self.decorations.push(Deco::Lifetime {
