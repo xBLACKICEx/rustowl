@@ -55,6 +55,7 @@ static ANALYZED: LazyLock<Mutex<Vec<LocalDefId>>> = LazyLock::new(|| Mutex::new(
 fn override_queries(_session: &rustc_session::Session, local: &mut Providers) {
     local.mir_borrowck = mir_borrowck;
 }
+#[allow(clippy::await_holding_lock)]
 fn mir_borrowck(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ProvidedValue<'_> {
     log::info!("start borrowck of {def_id:?}");
 
