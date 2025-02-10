@@ -328,10 +328,7 @@ where
                                         })
                                     }
                                     Rvalue::Ref(_region, kind, place) => {
-                                        let mutable = match kind {
-                                            BorrowKind::Mut { .. } => true,
-                                            _ => false,
-                                        };
+                                        let mutable = matches!(kind, BorrowKind::Mut { .. });
                                         let local = place.local;
                                         let outlive = None;
                                         Some(MirRval::Borrow {
