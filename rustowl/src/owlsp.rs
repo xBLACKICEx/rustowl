@@ -732,18 +732,27 @@ impl LanguageServer for Backend {
                 self.set_roots(&ws.uri).await;
             }
         }
-        let mut init_res = lsp_types::InitializeResult::default();
-        let mut sync_option = lsp_types::TextDocumentSyncOptions::default();
-        sync_option.save = Some(lsp_types::TextDocumentSyncSaveOptions::Supported(true));
-        sync_option.change = Some(lsp_types::TextDocumentSyncKind::INCREMENTAL);
-        init_res.capabilities.text_document_sync =
-            Some(lsp_types::TextDocumentSyncCapability::Options(sync_option));
-        let mut workspace_cap = lsp_types::WorkspaceServerCapabilities::default();
-        workspace_cap.workspace_folders = Some(lsp_types::WorkspaceFoldersServerCapabilities {
-            supported: Some(true),
-            change_notifications: Some(lsp_types::OneOf::Left(true)),
-        });
-        init_res.capabilities.workspace = Some(workspace_cap);
+        let sync_options = lsp_types::TextDocumentSyncOptions {
+            save: Some(lsp_types::TextDocumentSyncSaveOptions::Supported(true)),
+            change: Some(lsp_types::TextDocumentSyncKind::INCREMENTAL),
+            ..Default::default()
+        };
+        let workspace_cap = lsp_types::WorkspaceServerCapabilities {
+            workspace_folders: Some(lsp_types::WorkspaceFoldersServerCapabilities {
+                supported: Some(true),
+                change_notifications: Some(lsp_types::OneOf::Left(true)),
+            }),
+            ..Default::default()
+        };
+        let server_cap = lsp_types::ServerCapabilities {
+            text_document_sync: Some(lsp_types::TextDocumentSyncCapability::Options(sync_options)),
+            workspace: Some(workspace_cap),
+            ..Default::default()
+        };
+        let init_res = lsp_types::InitializeResult {
+            capabilities: server_cap,
+            ..Default::default()
+        };
         Ok(init_res)
     }
     async fn initialized(&self, _p: lsp_types::InitializedParams) {
