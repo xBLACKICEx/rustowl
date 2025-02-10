@@ -167,8 +167,7 @@ where
     fn stmt_location_to_range(&self, bb: BasicBlock, stmt_index: usize) -> Option<Range> {
         self.bb_map
             .get(&bb)
-            .map(|bb| bb.statements.get(stmt_index))
-            .flatten()
+            .and_then(|bb| bb.statements.get(stmt_index))
             .map(|stmt| range_from_span(&self.source, stmt.source_info.span, self.offset))
     }
     fn rich_locations_to_ranges(&self, locations: &[RichLocation]) -> Vec<Range> {
