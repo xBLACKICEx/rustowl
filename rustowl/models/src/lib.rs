@@ -26,11 +26,7 @@ impl Local {
 pub struct Loc(pub u32);
 impl Loc {
     pub fn new(source: &str, byte_pos: u32, offset: u32) -> Self {
-        let byte_pos = if byte_pos < offset {
-            0
-        } else {
-            byte_pos - offset
-        };
+        let byte_pos = byte_pos.saturating_sub(offset);
         for (i, (byte, _)) in source.char_indices().enumerate() {
             if byte_pos <= byte as u32 {
                 return Self(i as u32);
