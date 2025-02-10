@@ -58,7 +58,12 @@ fn override_queries(_session: &rustc_session::Session, local: &mut Providers) {
 fn mir_borrowck(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ProvidedValue<'_> {
     log::info!("start borrowck of {def_id:?}");
 
-    let analyzer = MirAnalyzer::new(unsafe { std::mem::transmute(tcx) }, def_id);
+    let analyzer = MirAnalyzer::new(
+        unsafe {
+            std::mem::transmute::<rustc_middle::ty::TyCtxt<'_>, rustc_middle::ty::TyCtxt<'_>>(tcx)
+        },
+        def_id,
+    );
     {
         let mut locked = TASKS.lock().unwrap();
         locked.spawn_on(analyzer, &HANDLE);
