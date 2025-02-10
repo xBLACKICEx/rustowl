@@ -497,7 +497,7 @@ impl utils::MirVisitor for CalcDecos {
                         self.decorations.push(Deco::Move {
                             local,
                             range: *range,
-                            hover_text: format!("variable moved"),
+                            hover_text: "variable moved".to_string(),
                             is_display: true,
                         });
                     }
@@ -514,14 +514,14 @@ impl utils::MirVisitor for CalcDecos {
                             self.decorations.push(Deco::MutBorrow {
                                 local,
                                 range: *range,
-                                hover_text: format!("mutable borrow"),
+                                hover_text: "mutable borrow".to_string(),
                                 is_display: true,
                             });
                         } else {
                             self.decorations.push(Deco::ImmBorrow {
                                 local,
                                 range: *range,
-                                hover_text: format!("immutable borrow"),
+                                hover_text: "immutable borrow".to_string(),
                                 is_display: true,
                             });
                         }
@@ -563,7 +563,7 @@ impl utils::MirVisitor for CalcDecos {
                 self.decorations.push(Deco::Call {
                     local,
                     range: *fn_span,
-                    hover_text: format!("function call"),
+                    hover_text: "function call".to_string(),
                     is_display: true,
                 });
             }
