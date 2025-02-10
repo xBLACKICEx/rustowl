@@ -85,6 +85,11 @@ pub enum MirVariable {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(transparent)]
 pub struct MirVariables(HashMap<u32, MirVariable>);
+impl Default for MirVariables {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl MirVariables {
     pub fn new() -> Self {
         Self(HashMap::new())
