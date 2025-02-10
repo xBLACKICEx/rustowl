@@ -4,7 +4,7 @@ mod utils;
 use mktemp::Temp;
 use models::*;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
@@ -669,7 +669,7 @@ impl Backend {
         }
     }
 
-    async fn decos(&self, filepath: &PathBuf, position: Loc) -> Vec<Deco> {
+    async fn decos(&self, filepath: &Path, position: Loc) -> Vec<Deco> {
         let mut selected = SelectLocal::new(position);
         if let Some(analyzed) = &*self.analyzed.read().await {
             for (mir_filename, file) in analyzed.0.iter() {
