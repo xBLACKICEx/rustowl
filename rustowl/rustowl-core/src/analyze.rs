@@ -316,20 +316,17 @@ where
                                 let (place, rval) = &**v;
                                 let target_local_index = place.local.as_u32();
                                 let rv = match rval {
-                                    Rvalue::Use(usage) => match usage {
-                                        Operand::Move(p) => {
-                                            let local = p.local;
-                                            Some(MirRval::Move {
-                                                target_local_index: local.as_u32(),
-                                                range: range_from_span(
-                                                    source,
-                                                    statement.source_info.span,
-                                                    offset,
-                                                ),
-                                            })
-                                        }
-                                        _ => None,
-                                    },
+                                    Rvalue::Use(Operand::Move(p)) => {
+                                        let local = p.local;
+                                        Some(MirRval::Move {
+                                            target_local_index: local.as_u32(),
+                                            range: range_from_span(
+                                                source,
+                                                statement.source_info.span,
+                                                offset,
+                                            ),
+                                        })
+                                    }
                                     Rvalue::Ref(_region, kind, place) => {
                                         let mutable = match kind {
                                             BorrowKind::Mut { .. } => true,
