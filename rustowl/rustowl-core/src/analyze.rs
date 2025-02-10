@@ -391,15 +391,13 @@ where
         while i < len {
             let mut j = i + 1;
             while j < len {
-                if !erase_subset
+                let cond_j_i = !erase_subset
                     && ((ranges[j].from <= ranges[i].from && ranges[i].until < ranges[j].until)
-                        || (ranges[j].from < ranges[i].from && ranges[i].until <= ranges[j].until))
-                {
-                    ranges.remove(j);
-                } else if erase_subset
+                        || (ranges[j].from < ranges[i].from && ranges[i].until <= ranges[j].until));
+                let cond_i_j = erase_subset
                     && ((ranges[i].from <= ranges[j].from && ranges[j].until < ranges[i].until)
-                        || (ranges[i].from < ranges[j].from && ranges[j].until <= ranges[i].until))
-                {
+                        || (ranges[i].from < ranges[j].from && ranges[j].until <= ranges[i].until));
+                if cond_j_i || cond_i_j {
                     ranges.remove(j);
                 } else {
                     j += 1;
