@@ -161,7 +161,7 @@ where
         })
     }
 
-    fn sort_locs(v: &mut Vec<(BasicBlock, usize)>) {
+    fn sort_locs(v: &mut [(BasicBlock, usize)]) {
         v.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
     }
     fn stmt_location_to_range(&self, bb: BasicBlock, stmt_index: usize) -> Option<Range> {
