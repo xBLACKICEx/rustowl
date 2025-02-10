@@ -107,9 +107,7 @@ where
                 .borrow_set
                 .local_map
                 .iter()
-                .map(|(local, borrow_idc)| {
-                    (*local, borrow_idc.iter().map(|v| v.clone()).collect())
-                }),
+                .map(|(local, borrow_idc)| (*local, borrow_idc.iter().copied().collect())),
         );
         let mut borrow_locals = HashMap::new();
         for (local, borrow_idc) in local_borrows.iter() {
