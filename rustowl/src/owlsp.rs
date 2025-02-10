@@ -238,22 +238,20 @@ impl SelectLocal {
 }
 impl utils::MirVisitor for SelectLocal {
     fn visit_decl(&mut self, decl: &MirDecl) {
-        match decl {
-            MirDecl::User {
-                local_index,
-                fn_id,
-                span,
-                ..
-            } => {
-                self.current_fn_id = *fn_id;
-                self.select(*local_index, *span);
-            }
-            _ => {}
+        if let MirDecl::User {
+            local_index,
+            fn_id,
+            span,
+            ..
+        } = decl
+        {
+            self.current_fn_id = *fn_id;
+            self.select(*local_index, *span);
         }
     }
     fn visit_stmt(&mut self, stmt: &MirStatement) {
-        match stmt {
-            MirStatement::Assign { rval, .. } => match rval {
+        if let MirStatement::Assign { rval, .. } = stmt {
+            match rval {
                 Some(MirRval::Move {
                     target_local_index,
                     range,
@@ -268,19 +266,16 @@ impl utils::MirVisitor for SelectLocal {
                     self.select(*target_local_index, *range);
                 }
                 _ => {}
-            },
-            _ => {}
+            }
         }
     }
     fn visit_term(&mut self, term: &MirTerminator) {
-        match term {
-            MirTerminator::Call {
-                destination_local_index,
-                fn_span,
-            } => {
-                self.select(*destination_local_index, *fn_span);
-            }
-            _ => {}
+        if let MirTerminator::Call {
+            destination_local_index,
+            fn_span,
+        } = term
+        {
+            self.select(*destination_local_index, *fn_span);
         }
     }
 }
@@ -453,48 +448,46 @@ impl CalcDecos {
 }
 impl utils::MirVisitor for CalcDecos {
     fn visit_decl(&mut self, decl: &MirDecl) {
-        match decl {
-            MirDecl::User {
-                local_index,
-                fn_id,
-                lives,
-                drop_range,
-                must_live_at,
-                name,
-                ..
-            } => {
-                self.current_fn_id = *fn_id;
-                let local = Local::new(*local_index, *fn_id);
-                if self.locals.contains(&local) {
-                    // merge Drop object lives
-                    let mut drop_copy_live = lives.clone();
-                    drop_copy_live.extend_from_slice(drop_range);
-                    drop_copy_live = utils::eliminated_ranges(drop_copy_live.clone());
-                    for range in &drop_copy_live {
-                        self.decorations.push(Deco::Lifetime {
-                            local,
-                            range: *range,
-                            hover_text: format!("lifetime of variable `{}`", name),
-                            is_display: true,
-                        });
-                    }
-                    let outlive = utils::exclude_ranges(must_live_at.clone(), drop_copy_live);
-                    for range in outlive {
-                        self.decorations.push(Deco::Outlive {
-                            local,
-                            range,
-                            hover_text: format!("variable `{}` is required to live here", name),
-                            is_display: true,
-                        });
-                    }
+        if let MirDecl::User {
+            local_index,
+            fn_id,
+            lives,
+            drop_range,
+            must_live_at,
+            name,
+            ..
+        } = decl
+        {
+            self.current_fn_id = *fn_id;
+            let local = Local::new(*local_index, *fn_id);
+            if self.locals.contains(&local) {
+                // merge Drop object lives
+                let mut drop_copy_live = lives.clone();
+                drop_copy_live.extend_from_slice(drop_range);
+                drop_copy_live = utils::eliminated_ranges(drop_copy_live.clone());
+                for range in &drop_copy_live {
+                    self.decorations.push(Deco::Lifetime {
+                        local,
+                        range: *range,
+                        hover_text: format!("lifetime of variable `{}`", name),
+                        is_display: true,
+                    });
+                }
+                let outlive = utils::exclude_ranges(must_live_at.clone(), drop_copy_live);
+                for range in outlive {
+                    self.decorations.push(Deco::Outlive {
+                        local,
+                        range,
+                        hover_text: format!("variable `{}` is required to live here", name),
+                        is_display: true,
+                    });
                 }
             }
-            _ => {}
         }
     }
     fn visit_stmt(&mut self, stmt: &MirStatement) {
-        match stmt {
-            MirStatement::Assign { rval, .. } => match rval {
+        if let MirStatement::Assign { rval, .. } = stmt {
+            match rval {
                 Some(MirRval::Move {
                     target_local_index,
                     range,
@@ -535,51 +528,45 @@ impl utils::MirVisitor for CalcDecos {
                     }
                 }
                 _ => {}
-            },
-            _ => {}
+            }
         }
     }
     fn visit_term(&mut self, term: &MirTerminator) {
-        match term {
-            MirTerminator::Call {
-                destination_local_index,
-                fn_span,
-            } => {
-                let local = Local::new(*destination_local_index, self.current_fn_id);
-                if self.locals.contains(&local) {
-                    let mut i = 0;
-                    for deco in &self.decorations {
-                        match deco {
-                            Deco::Call { range, .. } => {
-                                if utils::is_super_range(*fn_span, *range) {
-                                    return;
-                                }
-                            }
-                            _ => {}
+        if let MirTerminator::Call {
+            destination_local_index,
+            fn_span,
+        } = term
+        {
+            let local = Local::new(*destination_local_index, self.current_fn_id);
+            if self.locals.contains(&local) {
+                let mut i = 0;
+                for deco in &self.decorations {
+                    if let Deco::Call { range, .. } = deco {
+                        if utils::is_super_range(*fn_span, *range) {
+                            return;
                         }
                     }
-                    while i < self.decorations.len() {
-                        let range = match &self.decorations[i] {
-                            Deco::Call { range, .. } => Some(range),
-                            _ => None,
-                        };
-                        if let Some(range) = range {
-                            if utils::is_super_range(*range, *fn_span) {
-                                self.decorations.remove(i);
-                                continue;
-                            }
-                        }
-                        i += 1;
-                    }
-                    self.decorations.push(Deco::Call {
-                        local,
-                        range: *fn_span,
-                        hover_text: format!("function call"),
-                        is_display: true,
-                    });
                 }
+                while i < self.decorations.len() {
+                    let range = match &self.decorations[i] {
+                        Deco::Call { range, .. } => Some(range),
+                        _ => None,
+                    };
+                    if let Some(range) = range {
+                        if utils::is_super_range(*range, *fn_span) {
+                            self.decorations.remove(i);
+                            continue;
+                        }
+                    }
+                    i += 1;
+                }
+                self.decorations.push(Deco::Call {
+                    local,
+                    range: *fn_span,
+                    hover_text: format!("function call"),
+                    is_display: true,
+                });
             }
-            _ => {}
         }
     }
 }
