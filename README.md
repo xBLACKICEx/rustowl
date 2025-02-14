@@ -23,6 +23,7 @@ RustOwl visualizes those by using underlines:
 - 🟥 red: lifetime error - diff of lifetime between actual and expected
 
 Currently, we offer VSCode extension, Neovim plugin and Emacs package.
+For these editors, move the text cursor over the variable or function call you want to inspect and wait for 2 seconds to visualize the information.
 We implemented LSP server `cargo owlsp` with an extended protocol.
 So, RustOwl can be used easily from other editor.
 
