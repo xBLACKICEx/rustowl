@@ -16,11 +16,11 @@ When you save Rust source code, it is analyzed, and the ownership and lifetimes 
 
 RustOwl visualizes those by using underlines:
 
-- green: variable's actual lifetime
-- blue: immutable borrowing
-- purple: mutable borrowing
-- orange: value moved / function call
-- red: lifetime error - diff of lifetime between actual and expected
+- 🟩 green: variable's actual lifetime
+- 🟦 blue: immutable borrowing
+- 🟪 purple: mutable borrowing
+- 🟧 orange: value moved / function call
+- 🟥 red: lifetime error - diff of lifetime between actual and expected
 
 Currently, we offer VSCode extension, Neovim plugin and Emacs package.
 We implemented LSP server `cargo owlsp` with an extended protocol.
