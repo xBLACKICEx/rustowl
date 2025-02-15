@@ -59,7 +59,7 @@ curl -L "https://github.com/cordx56/rustowl/releases/download/v0.1.1/install.sh"
 
 You can install VSCode extension from [this link](https://marketplace.visualstudio.com/items?itemName=cordx56.rustowl-vscode).
 
-Also, you can download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.1.0/rustowl-vscode-0.1.1.vsix).
+Also, you can download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.1.1/rustowl-vscode-0.1.1.vsix).
 
 ## Other editor support
 
