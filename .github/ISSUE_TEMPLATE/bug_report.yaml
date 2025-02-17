@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a bug to help us improve rustowl
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug!
+
+        Please provide the following information to help us understand and resolve the issue effectively.
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Bug Description
+      description: Describe the issue you encountered.
+      placeholder: Provide a clear and concise description of the problem, including what you expected to happen and what actually occurred.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Provide details about your setup.
+      placeholder: |
+        - OS: [e.g., Windows 11, macOS Sequoia 15.2, Ubuntu 24.04]
+        - rustowl Version: [e.g., v0.1.1]
+        - Editor: [e.g., VSCode 1.96.4, Neovim, Emacs]
+    validations:
+      required: true
+  - type: textarea
+    id: additional-info
+    attributes:
+      label: Additional Information
+      description: |
+        Please include the output of [`istioctl bug-report`](https://istio.io/help/bugs/#generating-a-cluster-state-archive).
+        If you are unable to do so, please ensure you have collected the relevant debugging information manually and attached below;
+        issue without enough information will not be resolvable.
