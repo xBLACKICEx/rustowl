@@ -23,8 +23,10 @@ body:
       description: Provide details about your setup.
       placeholder: |
         - OS: [e.g., Windows 11, macOS Sequoia 15.2, Ubuntu 24.04]
-        - rustowl Version: [e.g., v0.1.1]
-        - Editor: [e.g., VSCode 1.96.4, Neovim, Emacs]
+        - rustc Version: [e.g., 1.84.1 (e71f9a9a9 2025-01-27)]
+        - rustup Version: [e.g., 1.27.1 (54dd3d00f 2024-04-24)]
+        - RustOwl Version: [e.g., v0.1.1]
+        - Editor: [e.g., VSCode 1.97, Neovim, Emacs]
     validations:
       required: true
   - type: textarea
