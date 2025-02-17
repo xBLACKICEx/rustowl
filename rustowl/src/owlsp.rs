@@ -588,6 +588,8 @@ fn search_cargo(p: &PathBuf) -> Vec<PathBuf> {
     res
 }
 
+type Subprocess = Option<u32>;
+
 #[derive(Debug)]
 struct Backend {
     #[allow(unused)]
@@ -595,6 +597,7 @@ struct Backend {
     roots: Arc<RwLock<HashMap<PathBuf, PathBuf>>>,
     analyzed: Arc<RwLock<Option<Workspace>>>,
     processes: Arc<RwLock<JoinSet<()>>>,
+    subprocesses: Arc<RwLock<Vec<Subprocess>>>,
 }
 
 impl Backend {
@@ -604,6 +607,7 @@ impl Backend {
             roots: Arc::new(RwLock::new(HashMap::new())),
             analyzed: Arc::new(RwLock::new(None)),
             processes: Arc::new(RwLock::new(JoinSet::new())),
+            subprocesses: Arc::new(RwLock::new(vec![])),
         }
     }
     async fn set_roots(&self, uri: &lsp_types::Url) {
@@ -623,7 +627,18 @@ impl Backend {
         }
     }
 
-    async fn analzye(&self) {
+    async fn abort_subprocess(&self) {
+        while let Some(pid) = self.subprocesses.write().await.pop() {
+            if let Some(pid) = pid {
+                #[cfg(unix)]
+                unsafe {
+                    libc::killpg(pid.try_into().unwrap(), libc::SIGTERM);
+                }
+            }
+        }
+    }
+
+    async fn analyze(&self) {
         // wait for rust-analyzer
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         {
@@ -632,21 +647,30 @@ impl Backend {
         let roots = { self.roots.read().await.clone() };
         let mut join = self.processes.write().await;
         join.shutdown().await;
+        self.abort_subprocess().await;
         for (root, target) in roots {
-            let mut child = process::Command::new("rustup")
-                .arg("run")
-                .arg(TOOLCHAIN_VERSION)
-                .arg("cargo")
-                .arg("owl")
-                .arg(&root)
-                .arg(&target)
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .unwrap();
+            let mut child = unsafe {
+                process::Command::new("rustup")
+                    .arg("run")
+                    .arg(TOOLCHAIN_VERSION)
+                    .arg("cargo")
+                    .arg("owl")
+                    .arg(&root)
+                    .arg(&target)
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::null())
+                    .kill_on_drop(true)
+                    .pre_exec(|| {
+                        #[cfg(unix)]
+                        libc::setsid();
+                        Ok(())
+                    })
+                    .spawn()
+                    .unwrap()
+            };
             let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines();
             let analyzed = self.analyzed.clone();
-            tokio::spawn(async move {
+            join.spawn(async move {
                 while let Ok(Some(line)) = stdout.next_line().await {
                     if let Ok(ws) = serde_json::from_str::<Workspace>(&line) {
                         let write = &mut *analyzed.write().await;
@@ -658,9 +682,11 @@ impl Backend {
                     }
                 }
             });
+            let pid = child.id();
             join.spawn(async move {
                 let _ = child.wait().await;
             });
+            self.subprocesses.write().await.push(pid);
         }
     }
     async fn cleanup_targets(&self) {
@@ -721,6 +747,15 @@ impl Backend {
     }
 }
 
+impl Drop for Backend {
+    fn drop(&mut self) {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            self.shutdown().await.unwrap();
+        });
+    }
+}
+
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(
@@ -753,13 +788,24 @@ impl LanguageServer for Backend {
             capabilities: server_cap,
             ..Default::default()
         };
+        let health_checker = async move {
+            if let Some(process_id) = params.process_id {
+                loop {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+                    if !process_alive::state(process_alive::Pid::from(process_id)).is_alive() {
+                        panic!("The client process is dead");
+                    }
+                }
+            }
+        };
+        tokio::spawn(health_checker);
         Ok(init_res)
     }
     async fn initialized(&self, _p: lsp_types::InitializedParams) {
-        self.analzye().await;
+        self.analyze().await;
     }
     async fn did_save(&self, _params: lsp_types::DidSaveTextDocumentParams) {
-        self.analzye().await;
+        self.analyze().await;
     }
     async fn did_change(&self, _params: lsp_types::DidChangeTextDocumentParams) {
         *self.analyzed.write().await = None;
@@ -773,12 +819,13 @@ impl LanguageServer for Backend {
         for added in params.event.added {
             self.set_roots(&added.uri).await;
         }
-        self.analzye().await;
+        self.analyze().await;
     }
 
     async fn shutdown(&self) -> jsonrpc::Result<()> {
         self.cleanup_targets().await;
         self.processes.write().await.shutdown().await;
+        self.abort_subprocess().await;
         Ok(())
     }
 }
