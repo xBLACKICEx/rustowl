@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a bug to help us improve rustowl
+description: Report a bug to help us improve RustOwl
 body:
   - type: markdown
     attributes:
