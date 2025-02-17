@@ -8,6 +8,11 @@ body:
         Thank you for taking the time to report a bug!
 
         Please provide the following information to help us understand and resolve the issue effectively.
+
+        Before submitting a new issue, please check if a similar issue already exists by searching the issue list in this repository.
+
+        If you find a duplicate, kindly close your issue and add your details as a comment on the existing one.
+
   - type: textarea
     id: bug-description
     attributes:
@@ -16,6 +21,7 @@ body:
       placeholder: Provide a clear and concise description of the problem, including what you expected to happen and what actually occurred.
     validations:
       required: true
+
   - type: textarea
     id: environment
     attributes:
@@ -29,6 +35,7 @@ body:
         - Editor: [e.g., VSCode 1.97, Neovim, Emacs]
     validations:
       required: true
+
   - type: textarea
     id: additional-info
     attributes:
