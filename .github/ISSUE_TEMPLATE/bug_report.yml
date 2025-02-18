@@ -5,13 +5,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for taking the time to report a bug!
+        Thank you for reporting a bug!
 
-        Please provide the following information to help us understand and resolve the issue effectively.
+        Before submitting, please search existing issues to avoid duplicates. If a similar issue exists, comment there instead of opening a new one.
 
-        Before submitting a new issue, please check if a similar issue already exists by searching the issue list in this repository.
-
-        If you find a duplicate, kindly close your issue and add your details as a comment on the existing one.
+        To help us resolve the issue efficiently, please provide the necessary details below.
 
   - type: textarea
     id: bug-description
