@@ -1,7 +1,6 @@
 local M = {}
 
 local state = { show = false }
-local hl_ns = vim.api.nvim_create_namespace('rustowl')
 
 ---@class RustOwlHoverOptions
 ---@field enabled? boolean
@@ -23,47 +22,9 @@ local options = {
   },
 }
 
----@param bufnr? number
-function M.show(bufnr)
-  local util = require('lspconfig.util')
-
-  bufnr = util.validate_bufnr(bufnr or 0)
-  local clients = util.get_lsp_clients { bufnr = bufnr, name = 'rustowlsp' }
-  for _, client in ipairs(clients) do
-    local line, col = unpack(vim.api.nvim_win_get_cursor(0))
-    client:request(
-      'rustowl/cursor',
-      {
-        position = { line = line - 1, character = col },
-        document = vim.lsp.util.make_text_document_params(),
-      },
-      function(_, result, _)
-        if result ~= nil then
-          for _, deco in ipairs(result['decorations']) do
-            local start = { deco['range']['start']['line'], deco['range']['start']['character'] }
-            local finish = { deco['range']['end']['line'], deco['range']['end']['character'] }
-            vim.highlight.range(
-              bufnr,
-              hl_ns,
-              deco['type'],
-              start,
-              finish,
-              { regtype = 'v', inclusive = true }
-            )
-          end
-        end
-      end,
-      bufnr
-    )
-  end
-
-  state.show = true
-end
-
----@param bufnr? number
-function M.hide(bufnr)
-  vim.api.nvim_buf_clear_namespace(bufnr or 0, hl_ns, 0, -1)
-  state.show = false
+---@return RustOwlOptions
+function M.get_options()
+  return options
 end
 
 ---@param bufnr? number
@@ -72,6 +33,12 @@ function M.toggle(bufnr)
   action(bufnr)
 end
 
+M.enable = require('rustowl.hover').enable
+
+M.disable = require('rustowl.hover').disable
+
+M.toggle = require('rustowl.hover').toggle
+
 ---@param opts? RustOwlOptions
 function M.setup(opts)
   ---@type RustOwlOptions
@@ -79,8 +46,7 @@ function M.setup(opts)
   require('lspconfig').rustowlsp.setup(options.client)
 
   if options.trigger.hover.enabled then
-    local idle_time = options.trigger.hover.idle_time
-    require('rustowl.hover').create_lsp_attach_autocmd(idle_time)
+    require('rustowl.hover').create_lsp_attach_autocmd()
   end
 end
 
