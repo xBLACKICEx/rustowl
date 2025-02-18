@@ -628,9 +628,9 @@ impl Backend {
     }
 
     async fn abort_subprocess(&self) {
+        #[cfg(unix)]
         while let Some(pid) = self.subprocesses.write().await.pop() {
             if let Some(pid) = pid {
-                #[cfg(unix)]
                 unsafe {
                     libc::killpg(pid.try_into().unwrap(), libc::SIGTERM);
                 }
@@ -649,25 +649,25 @@ impl Backend {
         join.shutdown().await;
         self.abort_subprocess().await;
         for (root, target) in roots {
-            let mut child = unsafe {
-                process::Command::new("rustup")
-                    .arg("run")
-                    .arg(TOOLCHAIN_VERSION)
-                    .arg("cargo")
-                    .arg("owl")
-                    .arg(&root)
-                    .arg(&target)
-                    .stdout(std::process::Stdio::piped())
-                    .stderr(std::process::Stdio::null())
-                    .kill_on_drop(true)
-                    .pre_exec(|| {
-                        #[cfg(unix)]
-                        libc::setsid();
-                        Ok(())
-                    })
-                    .spawn()
-                    .unwrap()
-            };
+            let mut command = process::Command::new("rustup");
+            command
+                .arg("run")
+                .arg(TOOLCHAIN_VERSION)
+                .arg("cargo")
+                .arg("owl")
+                .arg(&root)
+                .arg(&target)
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null())
+                .kill_on_drop(true);
+            #[cfg(unix)]
+            unsafe {
+                command.pre_exec(|| {
+                    libc::setsid();
+                    Ok(())
+                });
+            }
+            let mut child = command.spawn().unwrap();
             let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines();
             let analyzed = self.analyzed.clone();
             join.spawn(async move {
