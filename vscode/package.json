@@ -25,6 +25,24 @@
   "activationEvents": [
     "onLanguage:rust"
   ],
+  "contributes": {
+    "configuration": {
+      "title": "rustowl",
+      "properties": {
+        "rustowl.underlineThickness": {
+          "type": "string",
+          "default": "3",
+          "enum": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ],
+          "description": "The stroke thickness of the underline line"
+        }
+      }
+    }
+  },
   "main": "./dist/extension.js",
   "scripts": {
     "vscode:prepublish": "yarn run package",
