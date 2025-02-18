@@ -1,6 +1,6 @@
 name: Bug report
 description: Report a bug to help us improve RustOwl
-labels: kind/bug
+labels: enhancement
 body:
   - type: markdown
     attributes:
