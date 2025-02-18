@@ -22,6 +22,10 @@ simple_logger = { version = "5.0.0", features = ["stderr"] }
 tokio.workspace = true
 tower-lsp = "0.20.0"
 mktemp = "0.5.1"
+process_alive = "0.1.1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.169"
 
 [[bin]]
 name = "cargo-owl"
