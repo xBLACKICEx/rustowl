@@ -749,9 +749,17 @@ impl Backend {
 
 impl Drop for Backend {
     fn drop(&mut self) {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(err) => {
+                log::error!("failed to create async runtime for graceful shutdown: {err}");
+                return;
+            }
+        };
         rt.block_on(async {
-            self.shutdown().await.unwrap();
+            if let Err(err) = self.shutdown().await {
+                log::error!("failed to shutdown the server gracefully: {err}");
+            };
         });
     }
 }
