@@ -74,6 +74,24 @@ Add to plugin manager:
 { "cordx56/rustowl", dependencies = { "neovim/nvim-lspconfig" } }
 ```
 
+Configure example:
+
+```lua
+lspconfig.rustowl.setup {
+    trigger = {
+        hover = false,
+    },
+}
+
+keymap(
+    "n",
+    "<c-o>",
+    require("rustowl").rustowl_cursor,
+    { noremap = true, silent = true }
+)
+```
+
+
 ### Emacs
 
 Elpaca example:
