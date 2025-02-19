@@ -7,7 +7,7 @@ function M.enable(bufnr, line, col)
   local util = require('lspconfig.util')
 
   bufnr = util.validate_bufnr(bufnr or 0)
-  local clients = util.get_lsp_clients({ bufnr = bufnr, name = 'rustowlsp' })
+  local clients = util.get_lsp_clients({ bufnr = bufnr, name = 'rustowl' })
   local params = {
     position = { line = line - 1, character = col },
     document = vim.lsp.util.make_text_document_params(),

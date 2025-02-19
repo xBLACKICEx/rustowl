@@ -3,7 +3,7 @@ local M = {}
 ---@class RustOwlOptions
 ---@field auto_enable? boolean Enable RustOwl immediately
 ---@field idle_time? number Time in milliseconds to hover with the cursor before triggering RustOwl
----@field client? vim.lsp.ClientConfig | {} LSP client configuration that gets passed to `require('lspconfig').rustowlsp.setup()`
+---@field client? vim.lsp.ClientConfig | {} LSP client configuration that gets passed to `require('lspconfig').rustowl.setup()`
 local options = {
   auto_enable = true,
   idle_time = 500,
@@ -25,7 +25,7 @@ M.toggle = require('rustowl.show-on-hover').toggle
 function M.setup(opts)
   ---@type RustOwlOptions
   options = vim.tbl_deep_extend('keep', opts or {}, options)
-  require('lspconfig').rustowlsp.setup(options.client)
+  require('lspconfig').rustowl.setup(options.client)
 
   if options.auto_enable then
     require('rustowl.show-on-hover').enable_on_lsp_attach()
