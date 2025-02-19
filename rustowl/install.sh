@@ -1,6 +1,6 @@
 #!/bin/sh
 
-VERSION="v0.1.1"
+VERSION="v0.1.2"
 
 install_rust() {
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -q -y --profile minimal
