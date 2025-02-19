@@ -34,22 +34,12 @@ export function activate(context: vscode.ExtensionContext) {
   );
   client.start();
 
-  const lifetimeDecorationType = vscode.window.createTextEditorDecorationType({
-    textDecoration: "underline solid 3px hsla(125, 80%, 60%, 0.8)",
-  });
-  const moveDecorationType = vscode.window.createTextEditorDecorationType({
-    textDecoration: "underline solid 3px hsla(35, 80%, 60%, 0.8)",
-  });
-  const imBorrowDecorationType = vscode.window.createTextEditorDecorationType({
-    textDecoration: "underline solid 3px hsla(230, 80%, 60%, 0.8)",
-  });
-  const mBorrowDecorationType = vscode.window.createTextEditorDecorationType({
-    textDecoration: "underline solid 3px hsla(300, 80%, 60%, 0.8)",
-  });
-  const outLiveDecorationType = vscode.window.createTextEditorDecorationType({
-    textDecoration: "underline solid 3px hsla(0, 80%, 60%, 0.8)",
-  });
-  const emptyDecorationType = vscode.window.createTextEditorDecorationType({});
+  let lifetimeDecorationType = vscode.window.createTextEditorDecorationType({});
+  let moveDecorationType = vscode.window.createTextEditorDecorationType({});
+  let imBorrowDecorationType = vscode.window.createTextEditorDecorationType({});
+  let mBorrowDecorationType = vscode.window.createTextEditorDecorationType({});
+  let outLiveDecorationType = vscode.window.createTextEditorDecorationType({});
+  let emptyDecorationType = vscode.window.createTextEditorDecorationType({});
 
   // update decoration
   const updateDecoration = (
@@ -62,6 +52,26 @@ export function activate(context: vscode.ExtensionContext) {
         new vscode.Position(range.end.line, range.end.character),
       );
     };
+
+    const { underlineThickness } = vscode.workspace.getConfiguration("rustowl");
+
+    lifetimeDecorationType = vscode.window.createTextEditorDecorationType({
+      textDecoration: `underline solid ${underlineThickness}px hsla(125, 80%, 60%, 0.8)`,
+    });
+    moveDecorationType = vscode.window.createTextEditorDecorationType({
+      textDecoration: `underline solid ${underlineThickness}px hsla(35, 80%, 60%, 0.8)`,
+    });
+    imBorrowDecorationType = vscode.window.createTextEditorDecorationType({
+      textDecoration: `underline solid ${underlineThickness}px hsla(230, 80%, 60%, 0.8)`,
+    });
+    mBorrowDecorationType = vscode.window.createTextEditorDecorationType({
+      textDecoration: `underline solid ${underlineThickness}px hsla(300, 80%, 60%, 0.8)`,
+    });
+    outLiveDecorationType = vscode.window.createTextEditorDecorationType({
+      textDecoration: `underline solid ${underlineThickness}px hsla(0, 80%, 60%, 0.8)`,
+    });
+    emptyDecorationType = vscode.window.createTextEditorDecorationType({});
+
     const lifetime: vscode.DecorationOptions[] = [];
     const immut: vscode.DecorationOptions[] = [];
     const mut: vscode.DecorationOptions[] = [];
@@ -97,12 +107,13 @@ export function activate(context: vscode.ExtensionContext) {
     editor.setDecorations(outLiveDecorationType, outlive);
     editor.setDecorations(emptyDecorationType, messages);
   };
-  const resetDecoration = (editor: vscode.TextEditor) => {
-    editor.setDecorations(lifetimeDecorationType, []);
-    editor.setDecorations(moveDecorationType, []);
-    editor.setDecorations(imBorrowDecorationType, []);
-    editor.setDecorations(mBorrowDecorationType, []);
-    editor.setDecorations(outLiveDecorationType, []);
+  const resetDecoration = () => {
+    lifetimeDecorationType.dispose();
+    moveDecorationType.dispose();
+    imBorrowDecorationType.dispose();
+    mBorrowDecorationType.dispose();
+    outLiveDecorationType.dispose();
+    emptyDecorationType.dispose();
   };
 
   // events
@@ -124,7 +135,7 @@ export function activate(context: vscode.ExtensionContext) {
   vscode.window.onDidChangeTextEditorSelection(
     (ev) => {
       if (ev.textEditor === activeEditor) {
-        resetDecoration(ev.textEditor);
+        resetDecoration();
         if (decoTimer) {
           clearTimeout(decoTimer);
           decoTimer = null;
