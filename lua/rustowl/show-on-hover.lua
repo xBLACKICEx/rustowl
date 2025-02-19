@@ -8,21 +8,21 @@ local function is_enabled()
   return state.augroup ~= nil
 end
 
-function M.create_lsp_attach_autocmd()
+function M.enable_on_lsp_attach()
   local augroup = vim.api.nvim_create_augroup('RustOwlLspAttach', {})
 
   vim.api.nvim_create_autocmd('LspAttach', {
     group = augroup,
     callback = function(event)
-      -- TODO: add setting for auto-enabling or not
       M.enable(event.buf)
     end,
   })
 end
 
+--- Enable RustOwl
 ---@param bufnr? number
 function M.enable(bufnr)
-  local idle_time_ms = assert(require('rustowl').get_options().trigger.hover.idle_time)
+  local idle_time_ms = assert(require('rustowl').get_options().idle_time)
 
   local timer = nil
 
@@ -66,6 +66,7 @@ function M.enable(bufnr)
   start_timer()
 end
 
+--- Disable RustOwl
 ---@param bufnr? number
 function M.disable(bufnr)
   require('rustowl.highlight').disable(bufnr)
@@ -77,6 +78,7 @@ function M.disable(bufnr)
   state.augroup = nil
 end
 
+--- Toggle RustOwl on or off
 ---@param bufnr? number
 function M.toggle(bufnr)
   local action = is_enabled() and M.disable or M.enable
