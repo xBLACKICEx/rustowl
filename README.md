@@ -76,10 +76,49 @@ If you would like to implement a client, please refer to the [owlsp specificatio
 
 ### Neovim
 
-Add to plugin manager:
+Minimal setup with [lazy.nvim](https://github.com/folke/lazy.nvim):
 
+```lua
+{
+  'cordx56/rustowl',
+  dependencies = { 'neovim/nvim-lspconfig' },
+  build = ':!cd rustowl && cargo install --path . --locked',
+  opts = {},
+}
 ```
-{ "cordx56/rustowl", dependencies = { "neovim/nvim-lspconfig" } }
+
+<details>
+<summary>Recommended configuration: <b>Click to expand</b></summary>
+
+```lua
+{
+  'cordx56/rustowl',
+  dependencies = { 'neovim/nvim-lspconfig' },
+  build = ':!cd rustowl && cargo install --path . --locked',
+  ft = 'rust', -- Lazy loading
+  opts = {
+    auto_enable = false,
+    client = {
+      on_attach = function(_, buffer)
+        vim.keymap.set('n', '<leader>o', function()
+          require('rustowl').toggle(buffer)
+        end, { buffer = buffer, desc = 'Toggle RustOwl' })
+      end
+    },
+  },
+}
+```
+
+</details>
+
+Default options:
+
+```lua
+{
+  auto_enable = true, -- Enable RustOwl immediately
+  idle_time = 500, -- Time in milliseconds to hover with the cursor before triggering RustOwl
+  client = {}, -- LSP client configuration that gets passed to `require('lspconfig').rustowlsp.setup()`
+}
 ```
 
 ### Emacs

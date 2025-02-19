@@ -1,7 +1,7 @@
 local M = {}
 
 ---@class RustOwlOptions
----@field enabled? boolean
+---@field auto_enable? boolean Enable RustOwl immediately
 ---@field idle_time? number Time in milliseconds to hover with the cursor before triggering RustOwl
 ---@field client? vim.lsp.ClientConfig | {} LSP client configuration that gets passed to `require('lspconfig').rustowlsp.setup()`
 local options = {
