@@ -42,7 +42,7 @@ function M.enable(bufnr)
 
     timer:start(idle_time_ms, 0, vim.schedule_wrap(function()
       local line, col = unpack(vim.api.nvim_win_get_cursor(0))
-      require('rustowl.lsp').highlight(bufnr, line, col)
+      require('rustowl.highlight').enable(bufnr, line, col)
     end))
   end
 
@@ -52,7 +52,7 @@ function M.enable(bufnr)
     group = state.augroup,
     buffer = bufnr,
     callback = function()
-      require('rustowl.lsp').clear_highlight(bufnr)
+      require('rustowl.highlight').disable(bufnr)
       start_timer()
     end,
   })
@@ -68,7 +68,7 @@ end
 
 ---@param bufnr? number
 function M.disable(bufnr)
-  require('rustowl.lsp').clear_highlight(bufnr)
+  require('rustowl.highlight').disable(bufnr)
 
   if is_enabled() then
     vim.api.nvim_del_augroup_by_id(state.augroup)

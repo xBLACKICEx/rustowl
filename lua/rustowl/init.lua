@@ -33,11 +33,11 @@ function M.toggle(bufnr)
   action(bufnr)
 end
 
-M.enable = require('rustowl.hover').enable
+M.enable = require('rustowl.show-on-hover').enable
 
-M.disable = require('rustowl.hover').disable
+M.disable = require('rustowl.show-on-hover').disable
 
-M.toggle = require('rustowl.hover').toggle
+M.toggle = require('rustowl.show-on-hover').toggle
 
 ---@param opts? RustOwlOptions
 function M.setup(opts)
@@ -46,7 +46,7 @@ function M.setup(opts)
   require('lspconfig').rustowlsp.setup(options.client)
 
   if options.trigger.hover.enabled then
-    require('rustowl.hover').create_lsp_attach_autocmd()
+    require('rustowl.show-on-hover').create_lsp_attach_autocmd()
   end
 end
 

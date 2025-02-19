@@ -3,7 +3,7 @@ local M = {}
 local hl_ns = vim.api.nvim_create_namespace('rustowl')
 
 ---@param bufnr? number
-function M.highlight(bufnr, line, col)
+function M.enable(bufnr, line, col)
   local util = require('lspconfig.util')
 
   bufnr = util.validate_bufnr(bufnr or 0)
@@ -38,7 +38,7 @@ function M.highlight(bufnr, line, col)
 end
 
 ---@param bufnr? number
-function M.clear_highlight(bufnr)
+function M.disable(bufnr)
   vim.api.nvim_buf_clear_namespace(bufnr or 0, hl_ns, 0, -1)
 end
 
