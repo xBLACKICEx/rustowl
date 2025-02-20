@@ -1,6 +1,6 @@
 #!/bin/sh
 
-VERSION="v0.1.2"
+VERSION="0.1.3"
 
 install_rust() {
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -q -y --profile minimal
@@ -13,7 +13,7 @@ install_rustowl() {
     fi
     TMP="$(mktemp -d)"
     cd "$TMP"
-    curl -L "https://github.com/cordx56/rustowl/archive/refs/tags/$VERSION.tar.gz" > rustowl.tar.gz
+    curl -L "https://github.com/cordx56/rustowl/archive/refs/tags/v$VERSION.tar.gz" > rustowl.tar.gz
     tar -xvf rustowl.tar.gz
     cd rustowl-*/rustowl
     cargo install --path . --locked
