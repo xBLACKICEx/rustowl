@@ -492,22 +492,6 @@ where
                 }
             }
         }
-        let mut region_locations = HashMap::new();
-        for (location_idx, region_idc) in output.origin_live_on_entry.iter() {
-            for region_idx in region_idc {
-                let insert = match region_locations.get_mut(region_idx) {
-                    Some(v) => v,
-                    None => {
-                        region_locations.insert(*region_idx, Vec::new());
-                        region_locations.get_mut(region_idx).unwrap()
-                    }
-                };
-                insert.push(
-                    self.location_table
-                        .to_location(location_idx.as_usize().into()),
-                );
-            }
-        }
 
         HashMap::from_iter(local_must_regions.iter().map(|(local, regions)| {
             (
