@@ -465,7 +465,6 @@ where
 
     fn live_range_from_region(&self, output: &PoloniusOutput) -> HashMap<Local, Vec<Range>> {
         let mut region_locations = HashMap::new();
-        let mut region_locations_idc: HashMap<_, BTreeSet<_>> = HashMap::new();
         for (location_idx, region_idc) in output.origin_live_on_entry.iter() {
             for region_idx in region_idc {
                 let insert = match region_locations.get_mut(region_idx) {
@@ -479,7 +478,6 @@ where
                     self.location_table
                         .to_location(location_idx.as_usize().into()),
                 );
-                region_locations_idc.append(region_idx, *location_idx);
             }
         }
 
