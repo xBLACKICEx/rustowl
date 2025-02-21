@@ -205,14 +205,10 @@ where
         for (loc_idx, locals) in self.output_datafrog.var_drop_live_on_entry.iter() {
             let location = self.location_table.to_location(loc_idx.as_usize().into());
             for local in locals {
-                let insert = match local_live_locs.get_mut(local) {
-                    Some(v) => v,
-                    None => {
-                        local_live_locs.insert(*local, Vec::new());
-                        local_live_locs.get_mut(local).unwrap()
-                    }
-                };
-                insert.push(location);
+                local_live_locs
+                    .entry(*local)
+                    .or_insert_with(Vec::new)
+                    .push(location);
             }
         }
         HashMap::from_iter(
@@ -441,14 +437,10 @@ where
                 .to_location(location_idx.as_usize().into());
             for borrow_idx in borrow_idc {
                 if let Some(local) = self.borrow_locals.get(borrow_idx) {
-                    let locations = match local_loan_live_at.get_mut(local) {
-                        Some(v) => v,
-                        None => {
-                            local_loan_live_at.insert(*local, Vec::new());
-                            local_loan_live_at.get_mut(local).unwrap()
-                        }
-                    };
-                    locations.push(location);
+                    local_loan_live_at
+                        .entry(*local)
+                        .or_insert_with(Vec::new)
+                        .push(location);
                 }
             }
         }
@@ -466,18 +458,14 @@ where
     fn live_range_from_region(&self, output: &PoloniusOutput) -> HashMap<Local, Vec<Range>> {
         let mut region_locations = HashMap::new();
         for (location_idx, region_idc) in output.origin_live_on_entry.iter() {
+            let location = self
+                .location_table
+                .to_location(location_idx.as_usize().into());
             for region_idx in region_idc {
-                let insert = match region_locations.get_mut(region_idx) {
-                    Some(v) => v,
-                    None => {
-                        region_locations.insert(*region_idx, Vec::new());
-                        region_locations.get_mut(region_idx).unwrap()
-                    }
-                };
-                insert.push(
-                    self.location_table
-                        .to_location(location_idx.as_usize().into()),
-                );
+                region_locations
+                    .entry(*region_idx)
+                    .or_insert_with(Vec::new)
+                    .push(location);
             }
         }
 
