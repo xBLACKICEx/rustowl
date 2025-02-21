@@ -1,12 +1,19 @@
 local lspconfig = require('lspconfig')
 local configs = require('lspconfig.configs')
 
-vim.api.nvim_set_hl(0, 'lifetime', { undercurl = true, sp = '#00cc00' })
-vim.api.nvim_set_hl(0, 'imm_borrow', { undercurl = true, sp = '#0000cc' })
-vim.api.nvim_set_hl(0, 'mut_borrow', { undercurl = true, sp = '#cc00cc' })
-vim.api.nvim_set_hl(0, 'move', { undercurl = true, sp = '#cccc00' })
-vim.api.nvim_set_hl(0, 'call', { undercurl = true, sp = '#cccc00' })
-vim.api.nvim_set_hl(0, 'outlive', { undercurl = true, sp = '#cc0000' })
+local highlights = {
+  lifetime = '#00cc00',
+  imm_borrow = '#0000cc',
+  mut_borrow = '#cc00cc',
+  move = '#cccc00',
+  call = '#cccc00',
+  outlive = '#cc0000',
+}
+
+for hl_name, color in pairs(highlights) do
+  local options = { undercurl = true, default = true, sp = color }
+  vim.api.nvim_set_hl(0, hl_name, options)
+end
 
 if not configs.rustowl then
   configs.rustowl = {
