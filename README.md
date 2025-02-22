@@ -52,14 +52,14 @@ For Windows, please clone this repository and build RustOwl manually.
 To install RustOwl command, run the command below.
 
 ```bash
-curl -L "https://github.com/cordx56/rustowl/releases/download/v0.1.3/install.sh" | sh
+curl -L "https://github.com/cordx56/rustowl/releases/download/v0.1.4/install.sh" | sh
 ```
 
 ### VSCode
 
 You can install VSCode extension from [this link](https://marketplace.visualstudio.com/items?itemName=cordx56.rustowl-vscode).
 
-Also, you can download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.1.3/rustowl-vscode-0.1.3.vsix).
+Also, you can download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.1.4/rustowl-vscode-0.1.4.vsix).
 
 ## Other editor support
 
