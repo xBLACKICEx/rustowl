@@ -67,8 +67,7 @@ fn mir_borrowck(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ProvidedValue<'_> {
     };
     if current == mir_len {
         RUNTIME.lock().unwrap().block_on(async move {
-            let mut locked = TASKS.lock().unwrap();
-            while let Some(task) = { locked.join_next() }.await {
+            while let Some(task) = { TASKS.lock().unwrap().join_next().await } {
                 let (filename, analyzed) = task.unwrap().analyze();
                 log::info!("analyzed one item of {}", filename);
                 let ws = Workspace(HashMap::from([(
