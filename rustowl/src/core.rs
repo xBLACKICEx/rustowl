@@ -8,10 +8,10 @@ use rustc_middle::{
     mir::BorrowCheckResult, query::queries::mir_borrowck::ProvidedValue, ty::TyCtxt,
     util::Providers,
 };
-use rustc_session::{config, EarlyDiagCtxt};
+use rustc_session::{EarlyDiagCtxt, config};
 use rustowl::models::*;
 use std::collections::HashMap;
-use std::sync::{atomic::AtomicBool, LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex, atomic::AtomicBool};
 use tokio::{
     runtime::{Builder, Handle, Runtime},
     task::JoinSet,
@@ -67,7 +67,8 @@ fn mir_borrowck(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ProvidedValue<'_> {
     };
     if current == mir_len {
         RUNTIME.lock().unwrap().block_on(async move {
-            while let Some(task) = { TASKS.lock().unwrap().join_next() }.await {
+            let mut locked = TASKS.lock().unwrap();
+            while let Some(task) = { locked.join_next() }.await {
                 let (filename, analyzed) = task.unwrap().analyze();
                 log::info!("analyzed one item of {}", filename);
                 let ws = Workspace(HashMap::from([(

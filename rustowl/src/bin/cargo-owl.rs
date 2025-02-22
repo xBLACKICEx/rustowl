@@ -1,7 +1,7 @@
 use rustowl::toolchain_version;
 use std::env;
 use std::path::PathBuf;
-use std::process::{exit, Command};
+use std::process::{Command, exit};
 
 #[allow(unused)]
 use toolchain_version::TOOLCHAIN_VERSION;
