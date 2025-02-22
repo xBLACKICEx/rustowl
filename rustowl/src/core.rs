@@ -2,7 +2,6 @@ mod analyze;
 mod from_rustc;
 
 use analyze::MirAnalyzer;
-use rustc_driver::{Callbacks, RunCompiler};
 use rustc_hir::def_id::LocalDefId;
 use rustc_interface::interface;
 use rustc_middle::{
@@ -12,15 +11,16 @@ use rustc_middle::{
 use rustc_session::{config, EarlyDiagCtxt};
 use rustowl::models::*;
 use std::collections::HashMap;
-use std::sync::{atomic::AtomicBool, Arc, LazyLock, Mutex};
+use std::sync::{atomic::AtomicBool, LazyLock, Mutex};
 use tokio::{
     runtime::{Builder, Handle, Runtime},
     task::JoinSet,
 };
 
 pub struct RustcCallback;
-impl Callbacks for RustcCallback {}
+impl rustc_driver::Callbacks for RustcCallback {}
 
+static ATOMIC_TRUE: AtomicBool = AtomicBool::new(true);
 static TASKS: LazyLock<Mutex<JoinSet<MirAnalyzer<'static>>>> =
     LazyLock::new(|| Mutex::new(JoinSet::new()));
 static RUNTIME: LazyLock<Mutex<Runtime>> = LazyLock::new(|| {
@@ -92,8 +92,9 @@ fn mir_borrowck(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ProvidedValue<'_> {
 }
 
 pub struct AnalyzerCallback;
-impl Callbacks for AnalyzerCallback {
+impl rustc_driver::Callbacks for AnalyzerCallback {
     fn config(&mut self, config: &mut interface::Config) {
+        config.using_internal_features = &ATOMIC_TRUE;
         config.opts.unstable_opts.mir_opt_level = Some(0);
         config.opts.unstable_opts.polonius = config::Polonius::Next;
         config.opts.incremental = None;
@@ -104,21 +105,18 @@ impl Callbacks for AnalyzerCallback {
 
 pub fn run_compiler() -> i32 {
     let ctxt = EarlyDiagCtxt::new(config::ErrorOutputType::default());
-    let args = rustc_driver::args::raw_args(&ctxt).unwrap();
+    let args = rustc_driver::args::raw_args(&ctxt);
     let args = &args[1..];
     for arg in args {
         if arg == "-vV" || arg.starts_with("--print") {
             let mut callback = RustcCallback;
-            let runner = RunCompiler::new(args, &mut callback);
-            return rustc_driver::catch_with_exit_code(|| runner.run());
+            return rustc_driver::catch_with_exit_code(|| {
+                rustc_driver::run_compiler(args, &mut callback)
+            });
         }
     }
     let mut callback = AnalyzerCallback;
-    let mut runner = RunCompiler::new(args, &mut callback);
-    runner.set_make_codegen_backend(None);
     rustc_driver::catch_with_exit_code(|| {
-        runner
-            .set_using_internal_features(Arc::new(AtomicBool::new(true)))
-            .run()
+        rustc_driver::run_compiler(args, &mut callback);
     })
 }

@@ -105,7 +105,7 @@ where
         let local_borrows: HashMap<Local, Vec<BorrowIndex>> = HashMap::from_iter(
             facts
                 .borrow_set
-                .local_map
+                .local_map()
                 .iter()
                 .map(|(local, borrow_idc)| (*local, borrow_idc.iter().copied().collect())),
         );
