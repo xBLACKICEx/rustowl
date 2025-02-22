@@ -33,7 +33,7 @@ Here we describe how to start using RustOwl with VSCode.
 
 ### Prerequisite
 
-- `curl`, `rustup` and `cargo` installed
+- `rustup` and `cargo` installed
 - Visual Studio Code (VSCode) installed
 
 We tested this guide on macOS Sequoia 15.2 on arm64 architecture with VSCode 1.96.4 and `rustup` 1.27.1.
@@ -45,14 +45,13 @@ After installation, the extension will automatically run RustOwl when you save a
 The initial analysis may take some time, but from the second run onward, compile caching is used to reduce the analysis time.
 
 We tested on Windows 11 Education 23H2 on amd64 architecture.
-For Windows, please clone this repository and build RustOwl manually.
 
 ### Install RustOwl
 
 To install RustOwl command, run the command below.
 
 ```bash
-curl -L "https://github.com/cordx56/rustowl/releases/download/v0.1.4/install.sh" | sh
+rustup run nightly-2025-02-22 cargo install rustowl
 ```
 
 ### VSCode
