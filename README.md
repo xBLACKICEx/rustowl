@@ -103,6 +103,10 @@ Elpaca example:
     :files (:defaults "emacs/*")))
 ```
 
+### RustRover / IntelliJ IDEs
+
+There is a [third-party repository](https://github.com/siketyan/intellij-rustowl) that supports IntelliJ IDEs.
+
 
 ## Build manually
 
