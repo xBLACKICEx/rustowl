@@ -1,1 +1,1 @@
-pub const TOOLCHAIN_VERSION: &str = "nightly-2025-02-21";
+pub const TOOLCHAIN_VERSION: &str = "nightly-2025-02-22";
