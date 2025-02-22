@@ -1,8 +1,10 @@
-mod toolchain_version;
-mod utils;
+//! # RustOwl cargo-owlsp
+//!
+//! An LSP server for visualizing ownership and lifetimes in Rust, designed for debugging and optimization.
 
 use mktemp::Temp;
-use models::*;
+use rustowl::models::*;
+use rustowl::utils;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -15,8 +17,6 @@ use tokio::{
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
-
-use toolchain_version::TOOLCHAIN_VERSION;
 
 #[allow(unused)]
 #[derive(serde::Serialize, Clone, Debug)]
@@ -649,11 +649,8 @@ impl Backend {
         join.shutdown().await;
         self.abort_subprocess().await;
         for (root, target) in roots {
-            let mut command = process::Command::new("rustup");
+            let mut command = process::Command::new("cargo");
             command
-                .arg("run")
-                .arg(TOOLCHAIN_VERSION)
-                .arg("cargo")
                 .arg("owl")
                 .arg(&root)
                 .arg(&target)

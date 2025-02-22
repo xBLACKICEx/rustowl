@@ -1,24 +1,7 @@
-#![feature(rustc_private)]
-
-pub extern crate indexmap;
-pub extern crate polonius_engine;
-pub extern crate rustc_borrowck;
-pub extern crate rustc_driver;
-pub extern crate rustc_errors;
-pub extern crate rustc_hash;
-pub extern crate rustc_hir;
-pub extern crate rustc_index;
-pub extern crate rustc_interface;
-pub extern crate rustc_middle;
-pub extern crate rustc_session;
-pub extern crate rustc_span;
-pub extern crate smallvec;
-
 mod analyze;
 mod from_rustc;
 
 use analyze::MirAnalyzer;
-use models::*;
 use rustc_driver::{Callbacks, RunCompiler};
 use rustc_hir::def_id::LocalDefId;
 use rustc_interface::interface;
@@ -27,6 +10,7 @@ use rustc_middle::{
     util::Providers,
 };
 use rustc_session::{config, EarlyDiagCtxt};
+use rustowl::models::*;
 use std::collections::HashMap;
 use std::sync::{atomic::AtomicBool, Arc, LazyLock, Mutex};
 use tokio::{

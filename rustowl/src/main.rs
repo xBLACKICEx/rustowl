@@ -1,55 +1,28 @@
-mod toolchain_version;
+//! # RustOwl rustowlc
+//!
+//! A compiler implementation for visualizing ownership and lifetimes in Rust, designed for debugging and optimization.
 
-use std::env;
-use std::path::PathBuf;
-use std::process::{exit, Command};
+#![feature(rustc_private)]
 
-#[allow(unused)]
-use toolchain_version::TOOLCHAIN_VERSION;
+pub extern crate indexmap;
+pub extern crate polonius_engine;
+pub extern crate rustc_borrowck;
+pub extern crate rustc_driver;
+pub extern crate rustc_errors;
+pub extern crate rustc_hash;
+pub extern crate rustc_hir;
+pub extern crate rustc_index;
+pub extern crate rustc_interface;
+pub extern crate rustc_middle;
+pub extern crate rustc_session;
+pub extern crate rustc_span;
+pub extern crate smallvec;
+
+pub mod core;
+
+use std::process::exit;
 
 fn main() {
     simple_logger::init().unwrap();
-
-    let self_path = PathBuf::from(env::args().next().unwrap());
-    let root_dir = PathBuf::from(env::args().nth(2).unwrap_or(".".to_owned()));
-    let target_dir = PathBuf::from(env::args().nth(3).unwrap_or("./target".to_owned()));
-
-    #[cfg(windows)]
-    {
-        let triple_suffix = env::var("RUSTUP_TOOLCHAIN")
-            .unwrap()
-            .split("-")
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .take(4)
-            .rev()
-            .collect::<Vec<_>>()
-            .join("-");
-        let mut paths = env::split_paths(&env::var_os("Path").unwrap())
-            .collect::<std::collections::VecDeque<_>>();
-        paths.push_front(
-            env::var("RUSTUP_HOME")
-                .map(|path| format!("{path}\\toolchains\\{TOOLCHAIN_VERSION}-{triple_suffix}\\bin"))
-                .unwrap()
-                .into(),
-        );
-        unsafe {
-            env::set_var("Path", env::join_paths(paths).unwrap());
-        }
-    }
-
-    let mut command = Command::new("cargo");
-    command
-        .env(
-            "RUSTC_WORKSPACE_WRAPPER",
-            self_path.with_file_name("rustowlc"),
-        )
-        .env("CARGO_TARGET_DIR", &target_dir)
-        .env_remove("RUSTC_WRAPPER")
-        .arg("check")
-        .current_dir(&root_dir);
-
-    let code = command.spawn().unwrap().wait().unwrap().code().unwrap();
-    exit(code);
+    exit(core::run_compiler())
 }

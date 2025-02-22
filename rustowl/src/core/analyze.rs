@@ -1,5 +1,4 @@
-use crate::from_rustc::LocationTableSim;
-use models::*;
+use super::from_rustc::LocationTableSim;
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::{
     get_body_with_borrowck_facts, BorrowIndex, ConsumerOptions, PoloniusInput, PoloniusOutput,
@@ -14,6 +13,7 @@ use rustc_middle::{
     ty::TyCtxt,
 };
 use rustc_span::{source_map::SourceMap, Span};
+use rustowl::models::*;
 use std::collections::{BTreeSet, HashMap};
 use std::future::Future;
 use std::hash::Hash;

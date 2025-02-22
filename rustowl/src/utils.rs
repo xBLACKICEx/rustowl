@@ -1,4 +1,4 @@
-use models::*;
+use crate::models::*;
 
 pub fn is_super_range(r1: Range, r2: Range) -> bool {
     (r1.from < r2.from && r2.until <= r1.until) || (r1.from <= r2.from && r2.until < r1.until)

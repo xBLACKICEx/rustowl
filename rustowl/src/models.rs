@@ -1,13 +1,7 @@
+#![allow(unused)]
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
-#[derive(Clone, Debug)]
-pub enum Error {
-    SyntaxError,
-    UnknownError,
-    LocalDeclareNotFound,
-    LocalIsNotUserVariable,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Local {

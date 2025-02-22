@@ -46,7 +46,7 @@ impl From<usize> for LocationIndex {
     }
 }
 
-/// https://github.com/rust-lang/rust/blob/759e07f063fb8e6306ff1bdaeb70af56a878b415/compiler/rustc_borrowck/src/location.rs
+/// <https://github.com/rust-lang/rust/blob/759e07f063fb8e6306ff1bdaeb70af56a878b415/compiler/rustc_borrowck/src/location.rs>
 pub struct LocationTableSim {
     _num_points: usize,
     statements_before_block: IndexVec<BasicBlock, usize>,
