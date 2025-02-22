@@ -1,8 +1,8 @@
 use super::from_rustc::LocationTableSim;
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::{
-    get_body_with_borrowck_facts, BorrowIndex, ConsumerOptions, PoloniusInput, PoloniusOutput,
-    RichLocation, RustcFacts,
+    BorrowIndex, ConsumerOptions, PoloniusInput, PoloniusOutput, RichLocation, RustcFacts,
+    get_body_with_borrowck_facts,
 };
 use rustc_hir::def_id::LocalDefId;
 use rustc_middle::{
@@ -12,7 +12,7 @@ use rustc_middle::{
     },
     ty::TyCtxt,
 };
-use rustc_span::{source_map::SourceMap, Span};
+use rustc_span::{Span, source_map::SourceMap};
 use rustowl::models::*;
 use std::collections::{BTreeSet, HashMap};
 use std::future::Future;
@@ -308,7 +308,7 @@ where
                                 target_local_index: local.as_u32(),
                                 range: range_from_span(source, statement.source_info.span, offset),
                             }),
-                            StatementKind::Assign(ref v) => {
+                            StatementKind::Assign(v) => {
                                 let (place, rval) = &**v;
                                 let target_local_index = place.local.as_u32();
                                 let rv = match rval {
