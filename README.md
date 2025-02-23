@@ -82,7 +82,7 @@ Minimal setup with [lazy.nvim](https://github.com/folke/lazy.nvim):
 {
   'cordx56/rustowl',
   dependencies = { 'neovim/nvim-lspconfig' },
-  build = ':!cd rustowl && cargo install --path . --locked',
+  build = 'cd rustowl && cargo install --path . --locked',
   opts = {},
 }
 ```
@@ -94,7 +94,7 @@ Minimal setup with [lazy.nvim](https://github.com/folke/lazy.nvim):
 {
   'cordx56/rustowl',
   dependencies = { 'neovim/nvim-lspconfig' },
-  build = ':!cd rustowl && cargo install --path . --locked',
+  build = 'cd rustowl && cargo install --path . --locked',
   ft = 'rust', -- Lazy loading
   opts = {
     auto_enable = false,
