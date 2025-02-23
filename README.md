@@ -49,10 +49,17 @@ For Windows, please clone this repository and build RustOwl manually.
 
 ### Install RustOwl
 
-To install RustOwl command, run the command below.
+Install from crates.io:
 
 ```bash
-curl -L "https://github.com/cordx56/rustowl/releases/download/v0.1.4/install.sh" | sh
+rustup toolchain install nightly-2025-02-22 --profile minimal -c rust-src,cargo,rustc-dev,llvm-tools-preview
+rustup run nightly-2025-02-22 cargo install rustowl --locked
+```
+
+Or, install from GitHub release:
+
+```bash
+curl -L "https://github.com/cordx56/rustowl/releases/latest/download/install.sh" | sh
 ```
 
 ### VSCode
