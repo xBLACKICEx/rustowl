@@ -72,7 +72,7 @@ Also, you can download VSCode extension file ( `.vsix` ) from [this link](https:
 
 We support Neovim and Emacs.
 You can also create your own LSP client.
-If you would like to implement a client, please refer to the [owlsp specification](docs/lsp-spec).
+If you would like to implement a client, please refer to the [owlsp specification](docs/lsp-spec.md).
 
 ### Neovim
 

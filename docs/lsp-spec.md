@@ -17,9 +17,8 @@ Here, we describe the types we will use in this document.
 
 ### `Decoration`
 
-<pre><code>
-{
-    "type": OprType,
+<pre><code>{
+    "type": <a href="#oprtype">OprType</a>,
     "range": <a href="https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#range">Range</a>,
     "hover_text": Option&lt;String&gt;,
     "is_display": bool
@@ -34,8 +33,7 @@ We describe the custom methods used in owlsp.
 
 #### Request payload
 
-<pre><code>
-{
+<pre><code>{
     "position": <a href="https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#position">Position</a>,
     "document": {
         "uri": <a href="https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#documentUri">DocumentUri</a>
@@ -45,8 +43,7 @@ We describe the custom methods used in owlsp.
 
 #### Response payload
 
-<pre><code>
-{
-    "decorations": [Decoration]
+<pre><code>{
+    "decorations": [<a href="#decoration">Decoration</a>]
 }
 </code></pre>
