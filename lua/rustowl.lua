@@ -121,7 +121,7 @@ if not configs.rustowl then
         local idle_time = tonumber(user_opts.idle_time) or 2000
 
         user_opts.on_attach = function(client, bufnr)
-            rustowl_on_attach(trigger.hover or true, client, bufnr, idle_time)
+            rustowl_on_attach(trigger.hover, client, bufnr, idle_time)
 
             if type(user) == 'function' then
                 user(client, bufnr)
