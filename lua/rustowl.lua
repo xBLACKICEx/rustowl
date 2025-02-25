@@ -10,6 +10,15 @@ vim.api.nvim_set_hl(0, 'move', { undercurl = true, sp = '#cccc00' })
 vim.api.nvim_set_hl(0, 'call', { undercurl = true, sp = '#cccc00' })
 vim.api.nvim_set_hl(0, 'outlive', { undercurl = true, sp = '#cc0000' })
 
+local hl_priorities = {
+	lifetime = 200,
+	imm_borrow = 201,
+	mut_borrow = 202,
+	move = 203,
+	call = 204,
+	outlive = 205,
+}
+
 local function show_rustowl(bufnr)
     bufnr = util.validate_bufnr(bufnr)
     local clients = util.get_lsp_clients { bufnr = bufnr, name = 'rustowl' }
@@ -35,7 +44,7 @@ local function show_rustowl(bufnr)
                             deco['type'],
                             start,
                             finish,
-                            { regtype = "v", inclusive = true }
+                            { regtype = "v", inclusive = true, priority = hl_priorities[deco["type"]] }
                         )
                     end
                 end
