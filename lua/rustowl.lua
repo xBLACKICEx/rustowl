@@ -10,15 +10,6 @@ vim.api.nvim_set_hl(0, 'move', { undercurl = true, sp = '#cccc00' })
 vim.api.nvim_set_hl(0, 'call', { undercurl = true, sp = '#cccc00' })
 vim.api.nvim_set_hl(0, 'outlive', { undercurl = true, sp = '#cc0000' })
 
-local hl_priorities = {
-	lifetime = 200,
-	imm_borrow = 201,
-	mut_borrow = 202,
-	move = 203,
-	call = 204,
-	outlive = 205,
-}
-
 local function show_rustowl(bufnr)
     bufnr = util.validate_bufnr(bufnr)
     local clients = util.get_lsp_clients { bufnr = bufnr, name = 'rustowl' }
@@ -36,16 +27,18 @@ local function show_rustowl(bufnr)
             function(err, result, ctx)
                 if result ~= nil then
                     for _, deco in ipairs(result['decorations']) do
-                        local start = { deco['range']['start']['line'], deco['range']['start']['character'] }
-                        local finish = { deco['range']['end']['line'], deco['range']['end']['character'] }
-                        vim.highlight.range(
-                            bufnr,
-                            hlns,
-                            deco['type'],
-                            start,
-                            finish,
-                            { regtype = "v", inclusive = true, priority = hl_priorities[deco["type"]] }
-                        )
+                        if deco['is_display'] == true then
+                            local start = { deco['range']['start']['line'], deco['range']['start']['character'] }
+                            local finish = { deco['range']['end']['line'], deco['range']['end']['character'] }
+                            vim.highlight.range(
+                                bufnr,
+                                hlns,
+                                deco['type'],
+                                start,
+                                finish,
+                                { regtype = "v", inclusive = true }
+                            )
+                        end
                     end
                 end
             end,
@@ -143,7 +136,7 @@ end
 
 return {
     rustowl_cursor = function(...)
-        args = {...}
+        args = { ... }
         bufnr = args[1] or vim.api.nvim_get_current_buf()
         show_rustowl(bufnr)
     end,
