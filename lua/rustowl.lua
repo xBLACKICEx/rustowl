@@ -27,16 +27,18 @@ local function show_rustowl(bufnr)
             function(err, result, ctx)
                 if result ~= nil then
                     for _, deco in ipairs(result['decorations']) do
-                        local start = { deco['range']['start']['line'], deco['range']['start']['character'] }
-                        local finish = { deco['range']['end']['line'], deco['range']['end']['character'] }
-                        vim.highlight.range(
-                            bufnr,
-                            hlns,
-                            deco['type'],
-                            start,
-                            finish,
-                            { regtype = "v", inclusive = true }
-                        )
+                        if deco['is_display'] == true then
+                            local start = { deco['range']['start']['line'], deco['range']['start']['character'] }
+                            local finish = { deco['range']['end']['line'], deco['range']['end']['character'] }
+                            vim.highlight.range(
+                                bufnr,
+                                hlns,
+                                deco['type'],
+                                start,
+                                finish,
+                                { regtype = "v", inclusive = true }
+                            )
+                        end
                     end
                 end
             end,
@@ -134,7 +136,7 @@ end
 
 return {
     rustowl_cursor = function(...)
-        args = {...}
+        args = { ... }
         bufnr = args[1] or vim.api.nvim_get_current_buf()
         show_rustowl(bufnr)
     end,
