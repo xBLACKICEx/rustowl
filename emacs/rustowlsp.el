@@ -113,9 +113,6 @@
     (cancel-timer rustowlsp-cursor-timer)
     (setq rustowlsp-cursor-timer nil)))
 
-;;;###autoload
-(enable-rustowlsp-cursor)
-
 ;; RustOwl visualization
 (defun rustowlsp-line-col-to-pos (line col)
   (save-excursion
