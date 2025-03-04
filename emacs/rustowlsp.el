@@ -15,6 +15,12 @@
 
 ;;; Code:
 
+(defgroup rustowlsp ()
+  "Visualize Ownership and Lifetimes in Rust"
+  :group 'tools
+  :prefix "rustowlsp-"
+  :link '(url-link "https://github.com/cordx56/rustowl"))
+
 ;;;###autoload
 (with-eval-after-load 'lsp-mode
   (lsp-register-client
