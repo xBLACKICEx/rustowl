@@ -110,3 +110,6 @@
   (interactive)
   (mapc #'delete-overlay rustowl-overlays)
   (setq rustowl-overlays nil))
+
+(provide 'rustowlsp)
+;;; rustowlsp.el ends here
