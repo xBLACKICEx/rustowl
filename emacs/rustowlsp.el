@@ -1,12 +1,29 @@
+;;; rustowlsp.el --- Visualize Ownership and Lifetimes in Rust -*- lexical-binding: t; -*-
+
+;; Copyright (C) cordx56
+
+;; Author: cordx56
+;; Keywords: tools
+
+;; Version: 1.0.0
+;; Package-Requires: ((emacs "24.1"))
+;; URL: https://github.com/cordx56/rustowl
+
+;; SPDX-License-Identifier: MPL-2.0
+
+;;; Commentary:
+
+;;; Code:
+
 ;;;###autoload
 (with-eval-after-load 'lsp-mode
   (lsp-register-client
-    (make-lsp-client
-      :new-connection (lsp-stdio-connection '("cargo" "owlsp"))
-      :major-modes '(rust-mode)
-      :server-id 'rustowlsp
-      :priority -1
-      :add-on? t)))
+   (make-lsp-client
+    :new-connection (lsp-stdio-connection '("cargo" "owlsp"))
+    :major-modes '(rust-mode)
+    :server-id 'rustowlsp
+    :priority -1
+    :add-on? t)))
 
 (defun rustowlsp-cursor (params)
   (lsp-request-async
