@@ -15,6 +15,8 @@
 
 ;;; Code:
 
+(require 'lsp-mode)
+
 (defgroup rustowlsp ()
   "Visualize Ownership and Lifetimes in Rust"
   :group 'tools
