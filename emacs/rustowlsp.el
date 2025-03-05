@@ -6,7 +6,7 @@
 ;; Keywords: tools
 
 ;; Version: 1.0.0
-;; Package-Requires: ((emacs "24.1") (lsp "9.0.0"))
+;; Package-Requires: ((emacs "24.1") (lsp-mode "9.0.0"))
 ;; URL: https://github.com/cordx56/rustowl
 
 ;; SPDX-License-Identifier: MPL-2.0
