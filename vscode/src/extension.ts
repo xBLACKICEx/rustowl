@@ -53,22 +53,29 @@ export function activate(context: vscode.ExtensionContext) {
       );
     };
 
-    const { underlineThickness } = vscode.workspace.getConfiguration("rustowl");
+    const {
+      underlineThickness,
+      lifetimeColor,
+      moveCallColor,
+      immutableBorrowColor,
+      mutableBorrowColor,
+      outliveColor,
+    } = vscode.workspace.getConfiguration("rustowl");
 
     lifetimeDecorationType = vscode.window.createTextEditorDecorationType({
-      textDecoration: `underline solid ${underlineThickness}px hsla(125, 80%, 60%, 0.8)`,
+      textDecoration: `underline solid ${underlineThickness}px ${lifetimeColor}`,
     });
     moveDecorationType = vscode.window.createTextEditorDecorationType({
-      textDecoration: `underline solid ${underlineThickness}px hsla(35, 80%, 60%, 0.8)`,
+      textDecoration: `underline solid ${underlineThickness}px ${moveCallColor}`,
     });
     imBorrowDecorationType = vscode.window.createTextEditorDecorationType({
-      textDecoration: `underline solid ${underlineThickness}px hsla(230, 80%, 60%, 0.8)`,
+      textDecoration: `underline solid ${underlineThickness}px ${immutableBorrowColor}`,
     });
     mBorrowDecorationType = vscode.window.createTextEditorDecorationType({
-      textDecoration: `underline solid ${underlineThickness}px hsla(300, 80%, 60%, 0.8)`,
+      textDecoration: `underline solid ${underlineThickness}px ${mutableBorrowColor}`,
     });
     outLiveDecorationType = vscode.window.createTextEditorDecorationType({
-      textDecoration: `underline solid ${underlineThickness}px hsla(0, 80%, 60%, 0.8)`,
+      textDecoration: `underline solid ${underlineThickness}px ${outliveColor}`,
     });
     emptyDecorationType = vscode.window.createTextEditorDecorationType({});
 
@@ -134,6 +141,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
   vscode.window.onDidChangeTextEditorSelection(
     (ev) => {
+      const { displayDelay } = vscode.workspace.getConfiguration("rustowl");
       if (ev.textEditor === activeEditor) {
         resetDecoration();
         if (decoTimer) {
@@ -155,7 +163,7 @@ export function activate(context: vscode.ExtensionContext) {
           if (data.success) {
             updateDecoration(ev.textEditor, data.data);
           }
-        }, 2000);
+        }, displayDelay);
       }
     },
     null,
