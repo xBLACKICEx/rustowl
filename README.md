@@ -7,7 +7,7 @@
         Visualize ownership and lifetimes in Rust for debugging and optimization
     </p>
     <p>
-        <img src="docs/readme-screenshot.png" />
+        <img src="docs/readme-screenshot-2.png" />
     </p>
 </div>
 
