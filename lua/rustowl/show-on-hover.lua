@@ -44,10 +44,14 @@ function M.enable(bufnr)
     timer = t
     assert(timer, err)
 
-    timer:start(idle_time_ms, 0, vim.schedule_wrap(function()
-      local line, col = unpack(vim.api.nvim_win_get_cursor(0))
-      require('rustowl.highlight').enable(line, col, bufnr)
-    end))
+    timer:start(
+      idle_time_ms,
+      0,
+      vim.schedule_wrap(function()
+        local line, col = unpack(vim.api.nvim_win_get_cursor(0))
+        require('rustowl.highlight').enable(line, col, bufnr)
+      end)
+    )
   end
 
   state.augroup = vim.api.nvim_create_augroup('RustOwl', { clear = true })

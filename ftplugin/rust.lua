@@ -37,10 +37,7 @@ if not vim.g.loaded_rustowl then
 
   local function rustowl_user_cmd(opts)
     if vim.bo[0].filetype ~= 'rust' then
-      vim.notify(
-        'Rustowl: Current buffer is not a rust file.',
-        vim.log.levels.ERROR
-      )
+      vim.notify('Rustowl: Current buffer is not a rust file.', vim.log.levels.ERROR)
       return
     end
     local fargs = opts.fargs

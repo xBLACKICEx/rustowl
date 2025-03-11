@@ -6,14 +6,18 @@ M.get_rustowl_clients = function(filter)
   filter = vim.tbl_deep_extend('force', filter or {}, {
     name = 'rustowl',
   })
-  return vim.lsp.get_clients(filter)
+  ---@diagnostic disable-next-line: deprecated
+  return type(vim.lsp.get_clients) == 'function' and vim.lsp.get_clients(filter) or vim.lsp.get_active_clients(filter)
 end
 
 ---Start / attach the LSP client
 ---@return integer|nil client_id The LSP client ID
 M.start = function()
   local config = require('rustowl.config')
-  return vim.lsp.start(config.client)
+  local root_dir = config.client.root_dir()
+  ---@type vim.lsp.ClientConfig
+  local client_config = vim.tbl_deep_extend('force', config.client, { root_dir = root_dir })
+  return vim.lsp.start(client_config)
 end
 
 ---Compatibility for a breaking change in Nvim 0.11
