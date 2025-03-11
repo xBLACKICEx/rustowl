@@ -12,7 +12,7 @@ vim.api.nvim_set_hl(0, 'outlive', { undercurl = true, sp = '#cc0000' })
 
 local function show_rustowl(bufnr)
     bufnr = util.validate_bufnr(bufnr)
-    local clients = util.get_lsp_clients { bufnr = bufnr, name = 'rustowl' }
+    local clients = util.get_lsp_clients { bufnr = bufnr, name = 'rustowlsp' }
     for _, client in ipairs(clients) do
         local line, col = unpack(vim.api.nvim_win_get_cursor(0))
         client.request(
@@ -47,8 +47,7 @@ local function show_rustowl(bufnr)
     end
 end
 
-
-local function rustowl_on_attach(hover, client, bufnr, idle_time_ms)
+local function rustowl_on_attach(client, bufnr, idle_time_ms)
     local timer = nil
     local augroup = vim.api.nvim_create_augroup('RustOwlCmd', { clear = true })
 
@@ -81,9 +80,7 @@ local function rustowl_on_attach(hover, client, bufnr, idle_time_ms)
             buffer = bufnr,
             callback = function()
                 vim.api.nvim_buf_clear_namespace(bufnr, hlns, 0, -1)
-                if hover == true then
-                    start_timer()
-                end
+                start_timer()
             end
         }
     )
@@ -100,9 +97,8 @@ local function rustowl_on_attach(hover, client, bufnr, idle_time_ms)
     start_timer()
 end
 
-
-if not configs.rustowl then
-    configs.rustowl = {
+if not configs.rustowlsp then
+    configs.rustowlsp = {
         default_config = {
             cmd = { 'cargo', 'owlsp' },
             root_dir = lspconfig.util.root_pattern('Cargo.toml', '.git'),
@@ -112,32 +108,20 @@ if not configs.rustowl then
         },
         idle_time = 2000,
     }
-
-    local orig_setup = lspconfig.rustowl.setup
-    lspconfig.rustowl.setup = function(user_opts)
-        user_opts = user_opts or {}
-        local user = user_opts.on_attach
-        local trigger = user_opts.trigger or {
-            hover = true,
-        }
-        local idle_time = tonumber(user_opts.idle_time) or 2000
-
-        user_opts.on_attach = function(client, bufnr)
-            rustowl_on_attach(trigger.hover, client, bufnr, idle_time)
-
-            if type(user) == 'function' then
-                user(client, bufnr)
-            end
-        end
-        orig_setup(user_opts)
-    end
 end
 
+local orig_setup = lspconfig.rustowlsp.setup
+lspconfig.rustowlsp.setup = function(user_opts)
+    user_opts = user_opts or {}
+    local user = user_opts.on_attach
+    local idle_time = tonumber(user_opts.idle_time) or 2000
 
-return {
-    rustowl_cursor = function(...)
-        args = { ... }
-        bufnr = args[1] or vim.api.nvim_get_current_buf()
-        show_rustowl(bufnr)
-    end,
-}
+    user_opts.on_attach = function(client, bufnr)
+        rustowl_on_attach(client, bufnr, idle_time)
+
+        if type(user) == 'function' then
+            user(client, bufnr)
+        end
+    end
+    orig_setup(user_opts)
+end
