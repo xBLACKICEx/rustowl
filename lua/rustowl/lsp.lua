@@ -29,8 +29,7 @@ end
 --- @param client vim.lsp.Client
 --- @param method string LSP method name.
 --- @param params table? LSP request params.
---- @return boolean status indicating if the notification was successful.
----                        If it is false, then the client has shutdown.
+--- @return boolean status indicating if the notification was successful. If it is false, then the client has shutdown.
 local function client_notify(client, method, params)
   local info = debug.getinfo(client.notify, 'u')
   if info.nparams > 0 then
