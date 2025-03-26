@@ -10,7 +10,7 @@ repository = "https://github.com/cordx56/rustowl"
 license = "MPL-2.0"
 keywords = ["visualization", "ownership", "lifetime", "lsp"]
 categories = ["development-tools", "visualization"]
-default-run = "cargo-owl"
+default-run = "rustowl"
 
 [dependencies]
 serde = { version = "1.0.210", features = ["derive"] }

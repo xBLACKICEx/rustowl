@@ -651,9 +651,11 @@ impl Backend {
         for (root, target) in roots {
             let mut command = process::Command::new("cargo");
             command
-                .arg("owl")
-                .arg(&root)
-                .arg(&target)
+                .arg("check")
+                .env("CARGO_TARGET_DIR", &target)
+                .env("RUSTC_WORKSPACE_WRAPPER", "rustowlc")
+                .env_remove("RUSTC_WRAPPER")
+                .current_dir(&root)
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::null())
                 .kill_on_drop(true);
@@ -837,6 +839,8 @@ impl LanguageServer for Backend {
 
 #[tokio::main]
 async fn main() {
+    rustowl::toolchain_version::setup_dylib_var();
+
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
