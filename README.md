@@ -122,7 +122,7 @@ Default options:
 When opening a Rust file, the Neovim plugin creates the `Rustowl` user command:
 
 ```vim
-:RustOwl {subcommand}
+:Rustowl {subcommand}
 ```
 
 where `{subcommand}` can be one of:
