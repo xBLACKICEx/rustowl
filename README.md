@@ -1,7 +1,6 @@
 <div align="center">
     <h1>
-      🦉<br />
-      RustOwl
+      <img src="docs/rustowl-logo.svg" width="300" alt="RustOwl">
     </h1>
     <p>
         Visualize ownership and lifetimes in Rust for debugging and optimization
