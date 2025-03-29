@@ -571,23 +571,6 @@ impl utils::MirVisitor for CalcDecos {
     }
 }
 
-fn search_cargo(p: &PathBuf) -> Vec<PathBuf> {
-    let mut res = Vec::new();
-    if let Ok(mut paths) = std::fs::read_dir(p) {
-        while let Some(Ok(path)) = paths.next() {
-            if let Ok(meta) = path.metadata() {
-                if meta.is_dir() {
-                    res.extend_from_slice(&search_cargo(&path.path()));
-                } else if path.file_name() == "Cargo.toml" {
-                    let dir = path.path().parent().unwrap().to_path_buf();
-                    res.push(dir);
-                }
-            }
-        }
-    }
-    res
-}
-
 type Subprocess = Option<u32>;
 
 #[derive(Debug)]
@@ -598,6 +581,7 @@ struct Backend {
     analyzed: Arc<RwLock<Option<Workspace>>>,
     processes: Arc<RwLock<JoinSet<()>>>,
     subprocesses: Arc<RwLock<Vec<Subprocess>>>,
+    work_done_progress: Arc<RwLock<bool>>,
 }
 
 impl Backend {
@@ -608,22 +592,28 @@ impl Backend {
             analyzed: Arc::new(RwLock::new(None)),
             processes: Arc::new(RwLock::new(JoinSet::new())),
             subprocesses: Arc::new(RwLock::new(vec![])),
+            work_done_progress: Arc::new(RwLock::new(false)),
         }
     }
     async fn set_roots(&self, uri: &lsp_types::Url) {
         let path = uri.to_file_path().unwrap();
+        let dir = if path.is_dir() {
+            path
+        } else {
+            path.parent().unwrap().to_path_buf()
+        };
         let mut write = self.roots.write().await;
-        'entries: for path in search_cargo(&path) {
-            for (root, target) in write.clone().into_iter() {
-                if root.starts_with(&path) {
-                    write.remove(&root);
-                    write.insert(path, target);
-                    continue 'entries;
-                } else if path.starts_with(&root) {
-                    continue 'entries;
-                }
+        if let Ok(metadata) = cargo_metadata::MetadataCommand::new()
+            .current_dir(&dir)
+            .exec()
+        {
+            let path = metadata.workspace_root;
+            if !write.contains_key(path.as_std_path()) {
+                write.insert(
+                    path.as_std_path().to_path_buf(),
+                    Temp::new_dir().unwrap().to_path_buf(),
+                );
             }
-            write.insert(path, Temp::new_dir().unwrap().to_path_buf());
         }
     }
 
@@ -662,7 +652,7 @@ impl Backend {
                 .env_remove("RUSTC_WRAPPER")
                 .current_dir(&root)
                 .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::null())
+                .stderr(std::process::Stdio::piped())
                 .kill_on_drop(true);
             #[cfg(unix)]
             unsafe {
@@ -686,6 +676,99 @@ impl Backend {
                     }
                 }
             });
+
+            // progress report
+            if *self.work_done_progress.read().await {
+                let client = self.client.clone();
+                let mut stderr = BufReader::new(child.stderr.take().unwrap()).lines();
+                join.spawn(async move {
+                    if let Ok(metadata) = cargo_metadata::MetadataCommand::new().exec() {
+                        let deps: Vec<_> = metadata
+                            .workspace_packages()
+                            .iter()
+                            .map(|v| v.dependencies.iter().map(|dep| dep.name.clone()))
+                            .flatten()
+                            .collect();
+                        let mut deps = HashMap::<String, bool>::from_iter(
+                            deps.into_iter().map(|v| (v, false)),
+                        );
+                        let token = format!("{}", uuid::Uuid::new_v4());
+                        let token = lsp_types::NumberOrString::String(token);
+                        client
+                            .send_request::<lsp_types::request::WorkDoneProgressCreate>(
+                                lsp_types::WorkDoneProgressCreateParams {
+                                    token: token.clone(),
+                                },
+                            )
+                            .await
+                            .ok();
+
+                        let to_compile = deps.len();
+                        let value = lsp_types::ProgressParamsValue::WorkDone(
+                            lsp_types::WorkDoneProgress::Begin(lsp_types::WorkDoneProgressBegin {
+                                title: "RustOwl checking".to_owned(),
+                                cancellable: Some(false),
+                                message: Some(format!("0 / {to_compile}")),
+                                percentage: Some(0),
+                            }),
+                        );
+                        client
+                            .send_notification::<lsp_types::notification::Progress>(
+                                lsp_types::ProgressParams {
+                                    token: token.clone(),
+                                    value,
+                                },
+                            )
+                            .await;
+                        while let Ok(Some(line)) = stderr.next_line().await {
+                            if let Some(krate) =
+                                line.trim().split_whitespace().nth(1).map(|v| v.to_owned())
+                            {
+                                let compiled_count =
+                                    deps.iter().filter(|(_, compiled)| **compiled).count();
+                                let to_compile = deps.len();
+                                if let Some(compiled) = deps.get_mut(&krate) {
+                                    *compiled = true;
+                                    let value = lsp_types::ProgressParamsValue::WorkDone(
+                                        lsp_types::WorkDoneProgress::Report(
+                                            lsp_types::WorkDoneProgressReport {
+                                                cancellable: Some(false),
+                                                message: Some(format!(
+                                                    "{compiled_count} / {to_compile}"
+                                                )),
+                                                percentage: Some(
+                                                    (compiled_count * 100 / to_compile) as u32,
+                                                ),
+                                            },
+                                        ),
+                                    );
+                                    client
+                                        .send_notification::<lsp_types::notification::Progress>(
+                                            lsp_types::ProgressParams {
+                                                token: token.clone(),
+                                                value,
+                                            },
+                                        )
+                                        .await;
+                                }
+                            }
+                        }
+                        let value = lsp_types::ProgressParamsValue::WorkDone(
+                            lsp_types::WorkDoneProgress::End(lsp_types::WorkDoneProgressEnd {
+                                message: None,
+                            }),
+                        );
+                        client
+                            .send_notification::<lsp_types::notification::Progress>(
+                                lsp_types::ProgressParams {
+                                    token: token.clone(),
+                                    value,
+                                },
+                            )
+                            .await;
+                    }
+                });
+            }
             let pid = child.id();
             join.spawn(async move {
                 let _ = child.wait().await;
@@ -810,6 +893,15 @@ impl LanguageServer for Backend {
                 }
             }
         };
+        if params
+            .capabilities
+            .window
+            .map(|v| v.work_done_progress)
+            .flatten()
+            .unwrap_or(false)
+        {
+            *self.work_done_progress.write().await = true;
+        }
         tokio::spawn(health_checker);
         Ok(init_res)
     }

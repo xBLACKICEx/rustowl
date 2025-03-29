@@ -7,6 +7,11 @@ import {
   Executable,
   TransportKind,
   LanguageClientOptions,
+  ProgressType,
+  WorkDoneProgressCreateRequest,
+  WorkDoneProgressCreateParams,
+  WorkDoneProgressReport,
+  WorkDoneProgressEnd,
 } from "vscode-languageclient/node";
 
 let client: LanguageClient | undefined = undefined;
@@ -32,6 +37,13 @@ export function activate(context: vscode.ExtensionContext) {
     clientOptions,
   );
   client.start();
+
+  const statusBar = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    0,
+  );
+  statusBar.text = "RustOwl";
+  statusBar.show();
 
   let lifetimeDecorationType = vscode.window.createTextEditorDecorationType({});
   let moveDecorationType = vscode.window.createTextEditorDecorationType({});
@@ -167,6 +179,23 @@ export function activate(context: vscode.ExtensionContext) {
     },
     null,
     context.subscriptions,
+  );
+
+  let token: string = "";
+  client.onProgress(new ProgressType<WorkDoneProgressReport>(), token, (p) => {
+    if (p.message) {
+      statusBar.tooltip = p.message;
+      statusBar.show();
+    }
+  });
+  client.onProgress(new ProgressType<WorkDoneProgressEnd>(), token, (_p) => {
+    statusBar.tooltip = undefined;
+  });
+  client.onRequest(
+    WorkDoneProgressCreateRequest.method,
+    (e: WorkDoneProgressCreateParams) => {
+      token = e.token.toString();
+    },
   );
 }
 

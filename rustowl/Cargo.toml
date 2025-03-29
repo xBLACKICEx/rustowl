@@ -21,6 +21,8 @@ tokio = { version = "1.43.0", features = ["rt", "rt-multi-thread", "macros", "sy
 tower-lsp = "0.20.0"
 mktemp = "0.5.1"
 process_alive = "0.1.1"
+cargo_metadata = "0.19.2"
+uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.169"
