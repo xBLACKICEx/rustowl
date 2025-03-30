@@ -638,6 +638,41 @@ impl Backend {
         let mut join = self.processes.write().await;
         join.shutdown().await;
         self.abort_subprocess().await;
+
+        // progress report
+        let progress_token = if *self.work_done_progress.read().await {
+            let token = format!("{}", uuid::Uuid::new_v4());
+            Some(lsp_types::NumberOrString::String(token))
+        } else {
+            None
+        };
+        let client = self.client.clone();
+        if let Some(token) = &progress_token {
+            client
+                .send_request::<lsp_types::request::WorkDoneProgressCreate>(
+                    lsp_types::WorkDoneProgressCreateParams {
+                        token: token.clone(),
+                    },
+                )
+                .await
+                .ok();
+
+            let value = lsp_types::ProgressParamsValue::WorkDone(
+                lsp_types::WorkDoneProgress::Begin(lsp_types::WorkDoneProgressBegin {
+                    title: "RustOwl checking".to_owned(),
+                    cancellable: Some(false),
+                    message: None,
+                    percentage: None,
+                }),
+            );
+            client
+                .send_notification::<lsp_types::notification::Progress>(lsp_types::ProgressParams {
+                    token: token.clone(),
+                    value,
+                })
+                .await;
+        }
+
         for (root, target) in roots {
             let mut command = process::Command::new("rustup");
             command
@@ -652,7 +687,7 @@ impl Backend {
                 .env_remove("RUSTC_WRAPPER")
                 .current_dir(&root)
                 .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null())
                 .kill_on_drop(true);
             #[cfg(unix)]
             unsafe {
@@ -677,82 +712,20 @@ impl Backend {
                 }
             });
 
-            // progress report
-            if *self.work_done_progress.read().await {
-                let client = self.client.clone();
-                let mut stderr = BufReader::new(child.stderr.take().unwrap()).lines();
-                join.spawn(async move {
-                    if let Ok(metadata) = cargo_metadata::MetadataCommand::new().exec() {
-                        let deps: Vec<_> = metadata
-                            .workspace_packages()
-                            .iter()
-                            .map(|v| v.dependencies.iter().map(|dep| dep.name.clone()))
-                            .flatten()
-                            .collect();
-                        let mut deps = HashMap::<String, bool>::from_iter(
-                            deps.into_iter().map(|v| (v, false)),
-                        );
-                        let token = format!("{}", uuid::Uuid::new_v4());
-                        let token = lsp_types::NumberOrString::String(token);
-                        client
-                            .send_request::<lsp_types::request::WorkDoneProgressCreate>(
-                                lsp_types::WorkDoneProgressCreateParams {
-                                    token: token.clone(),
-                                },
-                            )
-                            .await
-                            .ok();
-
-                        let to_compile = deps.len();
-                        let value = lsp_types::ProgressParamsValue::WorkDone(
-                            lsp_types::WorkDoneProgress::Begin(lsp_types::WorkDoneProgressBegin {
-                                title: "RustOwl checking".to_owned(),
-                                cancellable: Some(false),
-                                message: Some(format!("0 / {to_compile}")),
-                                percentage: Some(0),
-                            }),
-                        );
-                        client
-                            .send_notification::<lsp_types::notification::Progress>(
-                                lsp_types::ProgressParams {
-                                    token: token.clone(),
-                                    value,
-                                },
-                            )
-                            .await;
-                        while let Ok(Some(line)) = stderr.next_line().await {
-                            if let Some(krate) =
-                                line.trim().split_whitespace().nth(1).map(|v| v.to_owned())
-                            {
-                                let compiled_count =
-                                    deps.iter().filter(|(_, compiled)| **compiled).count();
-                                let to_compile = deps.len();
-                                if let Some(compiled) = deps.get_mut(&krate) {
-                                    *compiled = true;
-                                    let value = lsp_types::ProgressParamsValue::WorkDone(
-                                        lsp_types::WorkDoneProgress::Report(
-                                            lsp_types::WorkDoneProgressReport {
-                                                cancellable: Some(false),
-                                                message: Some(format!(
-                                                    "{compiled_count} / {to_compile}"
-                                                )),
-                                                percentage: Some(
-                                                    (compiled_count * 100 / to_compile) as u32,
-                                                ),
-                                            },
-                                        ),
-                                    );
-                                    client
-                                        .send_notification::<lsp_types::notification::Progress>(
-                                            lsp_types::ProgressParams {
-                                                token: token.clone(),
-                                                value,
-                                            },
-                                        )
-                                        .await;
-                                }
-                            }
-                        }
+            let pid = child.id();
+            let client = self.client.clone();
+            let subprocesses = self.subprocesses.clone();
+            let token = progress_token.clone();
+            join.spawn(async move {
+                let _ = child.wait().await;
+                let mut write = subprocesses.write().await;
+                *write = write
+                    .iter()
+                    .filter(|v| **v != pid)
+                    .map(|v| v.clone())
+                    .collect();
+                if write.len() == 0 {
+                    if let Some(token) = token {
                         let value = lsp_types::ProgressParamsValue::WorkDone(
                             lsp_types::WorkDoneProgress::End(lsp_types::WorkDoneProgressEnd {
                                 message: None,
@@ -760,18 +733,11 @@ impl Backend {
                         );
                         client
                             .send_notification::<lsp_types::notification::Progress>(
-                                lsp_types::ProgressParams {
-                                    token: token.clone(),
-                                    value,
-                                },
+                                lsp_types::ProgressParams { token, value },
                             )
                             .await;
                     }
-                });
-            }
-            let pid = child.id();
-            join.spawn(async move {
-                let _ = child.wait().await;
+                }
             });
             self.subprocesses.write().await.push(pid);
         }
