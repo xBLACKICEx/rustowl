@@ -111,12 +111,20 @@ export const zLspType = z.union([
   z.literal("outlive"),
 ]);
 export const zLspCursorResponse = z.object({
+  is_analyzed: z.boolean(),
   decorations: z
-    .object({
-      type: zLspType,
-      range: zLspRange,
-      hover_text: z.string().nullish(),
-      is_display: z.boolean(),
-    })
+    .union([
+      z.object({
+        type: zLspType,
+        range: zLspRange,
+        hover_text: z.string().nullish(),
+        is_display: z.boolean(),
+      }),
+      z.object({
+        type: z.literal("message"),
+        range: zLspRange,
+        message: z.string(),
+      }),
+    ])
     .array(),
 });
