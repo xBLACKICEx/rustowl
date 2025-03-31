@@ -25,103 +25,179 @@ enum Deco<R = Range> {
     Lifetime {
         local: Local,
         range: R,
+        hover_text: String,
+        is_display: bool,
     },
     ImmBorrow {
         local: Local,
         range: R,
+        hover_text: String,
+        is_display: bool,
     },
     MutBorrow {
         local: Local,
         range: R,
+        hover_text: String,
+        is_display: bool,
     },
     Move {
         local: Local,
         range: R,
+        hover_text: String,
+        is_display: bool,
     },
     Call {
         local: Local,
         range: R,
+        hover_text: String,
+        is_display: bool,
     },
     Outlive {
         local: Local,
         range: R,
-    },
-
-    Message {
-        local: Local,
-        range: R,
-        message: String,
+        hover_text: String,
+        is_display: bool,
     },
 }
 impl Deco<Range> {
     fn to_lsp_range(&self, s: &str) -> Deco<lsp_types::Range> {
-        fn get_start_end(s: &str, range: Range) -> (lsp_types::Position, lsp_types::Position) {
-            let start = utils::index_to_line_char(s, range.from.0);
-            let end = utils::index_to_line_char(s, range.until.0);
-            let start = lsp_types::Position {
-                line: start.0,
-                character: start.1,
-            };
-            let end = lsp_types::Position {
-                line: end.0,
-                character: end.1,
-            };
-            (start, end)
-        }
-
         match self.clone() {
-            Deco::Lifetime { local, range } => {
-                let (start, end) = get_start_end(s, range);
+            Deco::Lifetime {
+                local,
+                range,
+                hover_text,
+                is_display,
+            } => {
+                let start = utils::index_to_line_char(s, range.from.0);
+                let end = utils::index_to_line_char(s, range.until.0);
+                let start = lsp_types::Position {
+                    line: start.0,
+                    character: start.1,
+                };
+                let end = lsp_types::Position {
+                    line: end.0,
+                    character: end.1,
+                };
                 Deco::Lifetime {
                     local,
                     range: lsp_types::Range { start, end },
+                    hover_text,
+                    is_display,
                 }
             }
-            Deco::ImmBorrow { local, range } => {
-                let (start, end) = get_start_end(s, range);
+            Deco::ImmBorrow {
+                local,
+                range,
+                hover_text,
+                is_display,
+            } => {
+                let start = utils::index_to_line_char(s, range.from.0);
+                let end = utils::index_to_line_char(s, range.until.0);
+                let start = lsp_types::Position {
+                    line: start.0,
+                    character: start.1,
+                };
+                let end = lsp_types::Position {
+                    line: end.0,
+                    character: end.1,
+                };
                 Deco::ImmBorrow {
                     local,
                     range: lsp_types::Range { start, end },
+                    hover_text,
+                    is_display,
                 }
             }
-            Deco::MutBorrow { local, range } => {
-                let (start, end) = get_start_end(s, range);
+            Deco::MutBorrow {
+                local,
+                range,
+                hover_text,
+                is_display,
+            } => {
+                let start = utils::index_to_line_char(s, range.from.0);
+                let end = utils::index_to_line_char(s, range.until.0);
+                let start = lsp_types::Position {
+                    line: start.0,
+                    character: start.1,
+                };
+                let end = lsp_types::Position {
+                    line: end.0,
+                    character: end.1,
+                };
                 Deco::MutBorrow {
                     local,
                     range: lsp_types::Range { start, end },
+                    hover_text,
+                    is_display,
                 }
             }
-            Deco::Move { local, range } => {
-                let (start, end) = get_start_end(s, range);
+            Deco::Move {
+                local,
+                range,
+                hover_text,
+                is_display,
+            } => {
+                let start = utils::index_to_line_char(s, range.from.0);
+                let end = utils::index_to_line_char(s, range.until.0);
+                let start = lsp_types::Position {
+                    line: start.0,
+                    character: start.1,
+                };
+                let end = lsp_types::Position {
+                    line: end.0,
+                    character: end.1,
+                };
                 Deco::Move {
                     local,
                     range: lsp_types::Range { start, end },
+                    hover_text,
+                    is_display,
                 }
             }
-            Deco::Call { local, range } => {
-                let (start, end) = get_start_end(s, range);
+            Deco::Call {
+                local,
+                range,
+                hover_text,
+                is_display,
+            } => {
+                let start = utils::index_to_line_char(s, range.from.0);
+                let end = utils::index_to_line_char(s, range.until.0);
+                let start = lsp_types::Position {
+                    line: start.0,
+                    character: start.1,
+                };
+                let end = lsp_types::Position {
+                    line: end.0,
+                    character: end.1,
+                };
                 Deco::Call {
                     local,
                     range: lsp_types::Range { start, end },
+                    hover_text,
+                    is_display,
                 }
             }
-            Deco::Outlive { local, range } => {
-                let (start, end) = get_start_end(s, range);
+            Deco::Outlive {
+                local,
+                range,
+                hover_text,
+                is_display,
+            } => {
+                let start = utils::index_to_line_char(s, range.from.0);
+                let end = utils::index_to_line_char(s, range.until.0);
+                let start = lsp_types::Position {
+                    line: start.0,
+                    character: start.1,
+                };
+                let end = lsp_types::Position {
+                    line: end.0,
+                    character: end.1,
+                };
                 Deco::Outlive {
                     local,
                     range: lsp_types::Range { start, end },
-                }
-            }
-            Deco::Message {
-                local,
-                range,
-                message,
-            } => {
-                let (start, end) = get_start_end(s, range);
-                Deco::Message {
-                    local,
-                    range: lsp_types::Range { start, end },
-                    message,
+                    hover_text,
+                    is_display,
                 }
             }
         }
@@ -226,7 +302,6 @@ impl CalcDecos {
             Deco::Move { .. } => 3,
             Deco::Call { .. } => 4,
             Deco::Outlive { .. } => 5,
-            Deco::Message { .. } => 6,
         }
     }
 
@@ -244,24 +319,34 @@ impl CalcDecos {
                 | Deco::MutBorrow { range, .. }
                 | Deco::Move { range, .. }
                 | Deco::Call { range, .. }
-                | Deco::Outlive { range, .. }
-                | Deco::Message { range, .. } => *range,
+                | Deco::Outlive { range, .. } => *range,
             };
 
             let mut j = 0;
             while j < i {
                 let prev = &self.decorations[j];
-                let prev_range = match prev {
-                    Deco::Lifetime { range, .. }
-                    | Deco::ImmBorrow { range, .. }
-                    | Deco::MutBorrow { range, .. }
-                    | Deco::Move { range, .. }
-                    | Deco::Call { range, .. }
-                    | Deco::Outlive { range, .. }
-                    | Deco::Message { range, .. } => *range,
+                let (prev_range, prev_is_display) = match prev {
+                    Deco::Lifetime {
+                        range, is_display, ..
+                    }
+                    | Deco::ImmBorrow {
+                        range, is_display, ..
+                    }
+                    | Deco::MutBorrow {
+                        range, is_display, ..
+                    }
+                    | Deco::Move {
+                        range, is_display, ..
+                    }
+                    | Deco::Call {
+                        range, is_display, ..
+                    }
+                    | Deco::Outlive {
+                        range, is_display, ..
+                    } => (*range, *is_display),
                 };
-                let prev_is_message = matches!(prev, Deco::Message { .. });
-                if !prev_is_message {
+
+                if !prev_is_display {
                     j += 1;
                     continue;
                 }
@@ -273,48 +358,79 @@ impl CalcDecos {
 
                         for range in non_overlapping {
                             let new_deco = match prev {
-                                Deco::Lifetime { local, .. } => Deco::Lifetime {
+                                Deco::Lifetime {
+                                    local, hover_text, ..
+                                } => Deco::Lifetime {
                                     local: *local,
                                     range,
+                                    hover_text: hover_text.clone(),
+                                    is_display: true,
                                 },
-                                Deco::ImmBorrow { local, .. } => Deco::ImmBorrow {
+                                Deco::ImmBorrow {
+                                    local, hover_text, ..
+                                } => Deco::ImmBorrow {
                                     local: *local,
                                     range,
+                                    hover_text: hover_text.clone(),
+                                    is_display: true,
                                 },
-                                Deco::MutBorrow { local, .. } => Deco::MutBorrow {
+                                Deco::MutBorrow {
+                                    local, hover_text, ..
+                                } => Deco::MutBorrow {
                                     local: *local,
                                     range,
+                                    hover_text: hover_text.clone(),
+                                    is_display: true,
                                 },
-                                Deco::Move { local, .. } => Deco::Move {
+                                Deco::Move {
+                                    local, hover_text, ..
+                                } => Deco::Move {
                                     local: *local,
                                     range,
+                                    hover_text: hover_text.clone(),
+                                    is_display: true,
                                 },
-                                Deco::Call { local, .. } => Deco::Call {
+                                Deco::Call {
+                                    local, hover_text, ..
+                                } => Deco::Call {
                                     local: *local,
                                     range,
+                                    hover_text: hover_text.clone(),
+                                    is_display: true,
                                 },
-                                Deco::Outlive { local, .. } => Deco::Outlive {
+                                Deco::Outlive {
+                                    local, hover_text, ..
+                                } => Deco::Outlive {
                                     local: *local,
                                     range,
-                                },
-                                Deco::Message { local, message, .. } => Deco::Message {
-                                    local: *local,
-                                    range,
-                                    message: message.to_owned(),
+                                    hover_text: hover_text.clone(),
+                                    is_display: true,
                                 },
                             };
                             new_decos.push(new_deco);
                         }
 
                         match &mut self.decorations[j] {
-                            Deco::Lifetime { range, .. }
-                            | Deco::ImmBorrow { range, .. }
-                            | Deco::MutBorrow { range, .. }
-                            | Deco::Move { range, .. }
-                            | Deco::Call { range, .. }
-                            | Deco::Outlive { range, .. }
-                            | Deco::Message { range, .. } => {
+                            Deco::Lifetime {
+                                range, is_display, ..
+                            }
+                            | Deco::ImmBorrow {
+                                range, is_display, ..
+                            }
+                            | Deco::MutBorrow {
+                                range, is_display, ..
+                            }
+                            | Deco::Move {
+                                range, is_display, ..
+                            }
+                            | Deco::Call {
+                                range, is_display, ..
+                            }
+                            | Deco::Outlive {
+                                range, is_display, ..
+                            } => {
                                 *range = common;
+                                *is_display = false;
                             }
                         }
 
@@ -353,21 +469,18 @@ impl utils::MirVisitor for CalcDecos {
                     self.decorations.push(Deco::Lifetime {
                         local,
                         range: *range,
+                        hover_text: format!("lifetime of variable `{}`", name),
+                        is_display: true,
                     });
-                    self.decorations.push(Deco::Message {
-                        local,
-                        range: *range,
-                        message: format!("lifetime of variable `{}`", name),
-                    })
                 }
                 let outlive = utils::exclude_ranges(must_live_at.clone(), drop_copy_live);
                 for range in outlive {
-                    self.decorations.push(Deco::Outlive { local, range });
-                    self.decorations.push(Deco::Message {
+                    self.decorations.push(Deco::Outlive {
                         local,
                         range,
-                        message: format!("variable `{}` is required to live here", name),
-                    })
+                        hover_text: format!("variable `{}` is required to live here", name),
+                        is_display: true,
+                    });
                 }
             }
         }
@@ -384,12 +497,9 @@ impl utils::MirVisitor for CalcDecos {
                         self.decorations.push(Deco::Move {
                             local,
                             range: *range,
+                            hover_text: "variable moved".to_string(),
+                            is_display: true,
                         });
-                        self.decorations.push(Deco::Message {
-                            local,
-                            range: *range,
-                            message: "variable moved".to_string(),
-                        })
                     }
                 }
                 Some(MirRval::Borrow {
@@ -404,22 +514,16 @@ impl utils::MirVisitor for CalcDecos {
                             self.decorations.push(Deco::MutBorrow {
                                 local,
                                 range: *range,
+                                hover_text: "mutable borrow".to_string(),
+                                is_display: true,
                             });
-                            self.decorations.push(Deco::Message {
-                                local,
-                                range: *range,
-                                message: "mutable borrow".to_string(),
-                            })
                         } else {
                             self.decorations.push(Deco::ImmBorrow {
                                 local,
                                 range: *range,
+                                hover_text: "immutable borrow".to_string(),
+                                is_display: true,
                             });
-                            self.decorations.push(Deco::Message {
-                                local,
-                                range: *range,
-                                message: "immutable borrow".to_string(),
-                            })
                         }
                     }
                 }
@@ -459,12 +563,9 @@ impl utils::MirVisitor for CalcDecos {
                 self.decorations.push(Deco::Call {
                     local,
                     range: *fn_span,
+                    hover_text: "function call".to_string(),
+                    is_display: true,
                 });
-                self.decorations.push(Deco::Message {
-                    local,
-                    range: *fn_span,
-                    message: "function call".to_string(),
-                })
             }
         }
     }
