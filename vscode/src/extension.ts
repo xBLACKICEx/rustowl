@@ -30,7 +30,7 @@ export function activate(context: vscode.ExtensionContext) {
     "rustowl",
     "RustOwl",
     serverOptions,
-    clientOptions
+    clientOptions,
   );
   client.start();
 
@@ -39,7 +39,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const statusBar = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
-    0
+    0,
   );
   statusBar.text = "RustOwl";
   statusBar.show();
@@ -54,12 +54,12 @@ export function activate(context: vscode.ExtensionContext) {
   // update decoration
   const updateDecoration = (
     editor: vscode.TextEditor,
-    data: zInfer<typeof zLspCursorResponse>
+    data: zInfer<typeof zLspCursorResponse>,
   ) => {
     const rangeToRange = (range: zInfer<typeof zLspRange>) => {
       return new vscode.Range(
         new vscode.Position(range.start.line, range.start.character),
-        new vscode.Position(range.end.line, range.end.character)
+        new vscode.Position(range.end.line, range.end.character),
       );
     };
 
@@ -135,7 +135,7 @@ export function activate(context: vscode.ExtensionContext) {
   const rustowlHoverRequest = async (
     textEditor: vscode.TextEditor,
     select: vscode.Position,
-    uri: vscode.Uri
+    uri: vscode.Uri,
   ) => {
     const req = client?.sendRequest("rustowl/cursor", {
       position: {
@@ -149,8 +149,10 @@ export function activate(context: vscode.ExtensionContext) {
     if (data.success) {
       if (data.data.is_analyzed) {
         if (data.data.decorations.length === 0) {
+          statusBar.text = "$(alert) RustOwl";
           statusBar.tooltip = "analyze failed";
         } else {
+          statusBar.text = "$(check) RustOwl";
           statusBar.tooltip = "analyze finished";
         }
         statusBar.command = {
@@ -169,7 +171,7 @@ export function activate(context: vscode.ExtensionContext) {
       await rustowlHoverRequest(
         activeEditor,
         activeEditor?.selection.active,
-        activeEditor?.document.uri
+        activeEditor?.document.uri,
       );
     }
   });
@@ -180,13 +182,13 @@ export function activate(context: vscode.ExtensionContext) {
       activeEditor = editor;
     },
     null,
-    context.subscriptions
+    context.subscriptions,
   );
   //let timeout: NodeJS.Timeout | undefined = undefined;
   vscode.workspace.onDidSaveTextDocument(
     (_ev) => {},
     null,
-    context.subscriptions
+    context.subscriptions,
   );
   vscode.window.onDidChangeTextEditorSelection(
     (ev) => {
@@ -205,7 +207,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
     },
     null,
-    context.subscriptions
+    context.subscriptions,
   );
 }
 

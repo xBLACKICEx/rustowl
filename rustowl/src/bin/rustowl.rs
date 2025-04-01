@@ -573,6 +573,15 @@ impl utils::MirVisitor for CalcDecos {
 
 type Subprocess = Option<u32>;
 
+#[derive(serde::Deserialize, Clone, Debug)]
+#[serde(tag = "reason", rename_all = "kebab-case")]
+enum CargoCheckMessage {
+    #[allow(unused)]
+    CompilerArtifact {},
+    #[allow(unused)]
+    BuildFinished {},
+}
+
 #[derive(Debug)]
 struct Backend {
     #[allow(unused)]
@@ -639,41 +648,51 @@ impl Backend {
         join.shutdown().await;
         self.abort_subprocess().await;
 
-        // progress report
-        let progress_token = if *self.work_done_progress.read().await {
-            let token = format!("{}", uuid::Uuid::new_v4());
-            Some(lsp_types::NumberOrString::String(token))
-        } else {
-            None
-        };
-        let client = self.client.clone();
-        if let Some(token) = &progress_token {
-            client
-                .send_request::<lsp_types::request::WorkDoneProgressCreate>(
-                    lsp_types::WorkDoneProgressCreateParams {
-                        token: token.clone(),
-                    },
-                )
-                .await
-                .ok();
-
-            let value = lsp_types::ProgressParamsValue::WorkDone(
-                lsp_types::WorkDoneProgress::Begin(lsp_types::WorkDoneProgressBegin {
-                    title: "RustOwl checking".to_owned(),
-                    cancellable: Some(false),
-                    message: None,
-                    percentage: None,
-                }),
-            );
-            client
-                .send_notification::<lsp_types::notification::Progress>(lsp_types::ProgressParams {
-                    token: token.clone(),
-                    value,
-                })
-                .await;
-        }
-
         for (root, target) in roots {
+            // progress report
+            let dep_count = cargo_metadata::MetadataCommand::new()
+                .current_dir(&root)
+                .exec()
+                .ok()
+                .map(|v| v.resolve)
+                .flatten()
+                .map(|v| v.nodes.len())
+                .unwrap_or(0);
+            let progress_token = if *self.work_done_progress.read().await {
+                let token = format!("{}", uuid::Uuid::new_v4());
+                Some(lsp_types::NumberOrString::String(token))
+            } else {
+                None
+            };
+            let client = self.client.clone();
+            if let Some(token) = &progress_token {
+                client
+                    .send_request::<lsp_types::request::WorkDoneProgressCreate>(
+                        lsp_types::WorkDoneProgressCreateParams {
+                            token: token.clone(),
+                        },
+                    )
+                    .await
+                    .ok();
+
+                let value = lsp_types::ProgressParamsValue::WorkDone(
+                    lsp_types::WorkDoneProgress::Begin(lsp_types::WorkDoneProgressBegin {
+                        title: "RustOwl checking".to_owned(),
+                        cancellable: Some(false),
+                        message: Some(format!("0 / {dep_count}")),
+                        percentage: Some(0),
+                    }),
+                );
+                client
+                    .send_notification::<lsp_types::notification::Progress>(
+                        lsp_types::ProgressParams {
+                            token: token.clone(),
+                            value,
+                        },
+                    )
+                    .await;
+            }
+
             let mut command = process::Command::new("rustup");
             command
                 .args([
@@ -681,6 +700,8 @@ impl Backend {
                     rustowl::toolchain_version::TOOLCHAIN_VERSION,
                     "cargo",
                     "check",
+                    "--all-targets",
+                    "--message-format=json",
                 ])
                 .env("CARGO_TARGET_DIR", &target)
                 .env("RUSTC_WORKSPACE_WRAPPER", "rustowlc")
@@ -699,8 +720,32 @@ impl Backend {
             let mut child = command.spawn().unwrap();
             let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines();
             let analyzed = self.analyzed.clone();
+            let token = progress_token.clone();
             join.spawn(async move {
+                let mut build_count = 0;
                 while let Ok(Some(line)) = stdout.next_line().await {
+                    if let Ok(CargoCheckMessage::CompilerArtifact { .. }) =
+                        serde_json::from_str(&line)
+                    {
+                        if let Some(token) = token.clone() {
+                            build_count += 1;
+                            let percentage = (build_count * 100 / dep_count).min(100);
+                            let value = lsp_types::ProgressParamsValue::WorkDone(
+                                lsp_types::WorkDoneProgress::Report(
+                                    lsp_types::WorkDoneProgressReport {
+                                        cancellable: Some(false),
+                                        message: Some(format!("{build_count} / {dep_count}")),
+                                        percentage: Some(percentage as u32),
+                                    },
+                                ),
+                            );
+                            client
+                                .send_notification::<lsp_types::notification::Progress>(
+                                    lsp_types::ProgressParams { token, value },
+                                )
+                                .await;
+                        }
+                    }
                     if let Ok(ws) = serde_json::from_str::<Workspace>(&line) {
                         let write = &mut *analyzed.write().await;
                         if let Some(write) = write {
