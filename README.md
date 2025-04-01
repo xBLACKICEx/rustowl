@@ -82,6 +82,7 @@ Minimal setup with [lazy.nvim](https://github.com/folke/lazy.nvim):
 {
   'cordx56/rustowl',
   build = 'cd rustowl && cargo install --path . --locked',
+  lazy = false, -- This plugin is already lazy
   opts = {},
 }
 ```
