@@ -6,6 +6,7 @@ use mktemp::Temp;
 use rustowl::models::*;
 use rustowl::utils;
 use std::collections::HashMap;
+use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::{
@@ -846,6 +847,34 @@ impl LanguageServer for Backend {
 async fn main() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
+
+    #[cfg(windows)]
+    {
+        let home = PathBuf::from(
+            String::from_utf8_lossy(
+                &process::Command::new("rustup")
+                    .args(["show", "home"])
+                    .stdout(std::process::Stdio::piped())
+                    .spawn()
+                    .unwrap()
+                    .wait_with_output()
+                    .await
+                    .unwrap()
+                    .stdout,
+            )
+            .trim(),
+        );
+        let mut paths = env::split_paths(&env::var_os("Path").unwrap())
+            .collect::<std::collections::VecDeque<_>>();
+        paths.push_front(
+            home.join("toolchains")
+                .join(rustowl::toolchain_version::TOOLCHAIN_VERSION)
+                .join("bin"),
+        );
+        unsafe {
+            env::set_var("Path", env::join_paths(paths).unwrap());
+        }
+    }
 
     let (service, socket) = LspService::build(Backend::new)
         .custom_method("rustowl/cursor", Backend::cursor)
