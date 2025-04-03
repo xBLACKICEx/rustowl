@@ -13,6 +13,6 @@ fn main() {
     let mut stdout = child.stdout.unwrap();
     let mut output = String::new();
     stdout.read_to_string(&mut output).unwrap();
-    let toolchain = output.split_whitespace().nth(0).unwrap().trim();
+    let toolchain = output.split_whitespace().next().unwrap().trim();
     println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={toolchain}");
 }

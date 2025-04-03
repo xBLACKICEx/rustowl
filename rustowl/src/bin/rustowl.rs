@@ -671,8 +671,7 @@ impl Backend {
                 .current_dir(&root)
                 .exec()
                 .ok()
-                .map(|v| v.resolve)
-                .flatten()
+                .and_then(|v| v.resolve)
                 .map(|v| v.nodes.len())
                 .unwrap_or(0);
             let progress_token = if *self.work_done_progress.read().await {
@@ -793,11 +792,7 @@ impl Backend {
                 let _ = child.wait().await;
                 log::info!("check finished");
                 let mut write = subprocesses.write().await;
-                *write = write
-                    .iter()
-                    .filter(|v| **v != pid)
-                    .map(|v| v.clone())
-                    .collect();
+                *write = write.iter().filter(|v| **v != pid).copied().collect();
                 if let Ok(mut cache_file) = tokio::fs::OpenOptions::new()
                     .write(true)
                     .create(true)
@@ -810,7 +805,7 @@ impl Backend {
                         .await
                         .ok();
                 }
-                if write.len() == 0 {
+                if write.is_empty() {
                     if let Some(token) = token {
                         let value = lsp_types::ProgressParamsValue::WorkDone(
                             lsp_types::WorkDoneProgress::End(lsp_types::WorkDoneProgressEnd {
@@ -942,8 +937,7 @@ impl LanguageServer for Backend {
         if params
             .capabilities
             .window
-            .map(|v| v.work_done_progress)
-            .flatten()
+            .and_then(|v| v.work_done_progress)
             .unwrap_or(false)
         {
             *self.work_done_progress.write().await = true;
@@ -1000,15 +994,12 @@ async fn main() {
         .get_matches();
 
     if let Some(arg) = matches.subcommand() {
-        match arg {
-            ("check", _) => {
-                if check(env::current_dir().unwrap()).await {
-                    std::process::exit(0);
-                } else {
-                    std::process::exit(1);
-                }
+        if let ("check", _) = arg {
+            if check(env::current_dir().unwrap()).await {
+                std::process::exit(0);
+            } else {
+                std::process::exit(1);
             }
-            _ => {}
         }
     } else {
         let stdin = tokio::io::stdin();
@@ -1027,7 +1018,7 @@ async fn check(path: PathBuf) -> bool {
     let backend = service.inner();
     backend.set_roots(path).await;
     backend.analyze().await;
-    while let Some(_) = backend.processes.write().await.join_next().await {}
+    while backend.processes.write().await.join_next().await.is_some() {}
     backend
         .analyzed
         .read()
