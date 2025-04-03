@@ -26,37 +26,37 @@ enum Deco<R = Range> {
         local: Local,
         range: R,
         hover_text: String,
-        is_display: bool,
+        overlapped: bool,
     },
     ImmBorrow {
         local: Local,
         range: R,
         hover_text: String,
-        is_display: bool,
+        overlapped: bool,
     },
     MutBorrow {
         local: Local,
         range: R,
         hover_text: String,
-        is_display: bool,
+        overlapped: bool,
     },
     Move {
         local: Local,
         range: R,
         hover_text: String,
-        is_display: bool,
+        overlapped: bool,
     },
     Call {
         local: Local,
         range: R,
         hover_text: String,
-        is_display: bool,
+        overlapped: bool,
     },
     Outlive {
         local: Local,
         range: R,
         hover_text: String,
-        is_display: bool,
+        overlapped: bool,
     },
 }
 impl Deco<Range> {
@@ -66,7 +66,7 @@ impl Deco<Range> {
                 local,
                 range,
                 hover_text,
-                is_display,
+                overlapped,
             } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
@@ -82,14 +82,14 @@ impl Deco<Range> {
                     local,
                     range: lsp_types::Range { start, end },
                     hover_text,
-                    is_display,
+                    overlapped,
                 }
             }
             Deco::ImmBorrow {
                 local,
                 range,
                 hover_text,
-                is_display,
+                overlapped,
             } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
@@ -105,14 +105,14 @@ impl Deco<Range> {
                     local,
                     range: lsp_types::Range { start, end },
                     hover_text,
-                    is_display,
+                    overlapped,
                 }
             }
             Deco::MutBorrow {
                 local,
                 range,
                 hover_text,
-                is_display,
+                overlapped,
             } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
@@ -128,14 +128,14 @@ impl Deco<Range> {
                     local,
                     range: lsp_types::Range { start, end },
                     hover_text,
-                    is_display,
+                    overlapped,
                 }
             }
             Deco::Move {
                 local,
                 range,
                 hover_text,
-                is_display,
+                overlapped,
             } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
@@ -151,14 +151,14 @@ impl Deco<Range> {
                     local,
                     range: lsp_types::Range { start, end },
                     hover_text,
-                    is_display,
+                    overlapped,
                 }
             }
             Deco::Call {
                 local,
                 range,
                 hover_text,
-                is_display,
+                overlapped,
             } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
@@ -174,14 +174,14 @@ impl Deco<Range> {
                     local,
                     range: lsp_types::Range { start, end },
                     hover_text,
-                    is_display,
+                    overlapped,
                 }
             }
             Deco::Outlive {
                 local,
                 range,
                 hover_text,
-                is_display,
+                overlapped,
             } => {
                 let start = utils::index_to_line_char(s, range.from.0);
                 let end = utils::index_to_line_char(s, range.until.0);
@@ -197,7 +197,7 @@ impl Deco<Range> {
                     local,
                     range: lsp_types::Range { start, end },
                     hover_text,
-                    is_display,
+                    overlapped,
                 }
             }
         }
@@ -325,28 +325,28 @@ impl CalcDecos {
             let mut j = 0;
             while j < i {
                 let prev = &self.decorations[j];
-                let (prev_range, prev_is_display) = match prev {
+                let (prev_range, prev_overlapped) = match prev {
                     Deco::Lifetime {
-                        range, is_display, ..
+                        range, overlapped, ..
                     }
                     | Deco::ImmBorrow {
-                        range, is_display, ..
+                        range, overlapped, ..
                     }
                     | Deco::MutBorrow {
-                        range, is_display, ..
+                        range, overlapped, ..
                     }
                     | Deco::Move {
-                        range, is_display, ..
+                        range, overlapped, ..
                     }
                     | Deco::Call {
-                        range, is_display, ..
+                        range, overlapped, ..
                     }
                     | Deco::Outlive {
-                        range, is_display, ..
-                    } => (*range, *is_display),
+                        range, overlapped, ..
+                    } => (*range, *overlapped),
                 };
 
-                if !prev_is_display {
+                if !prev_overlapped {
                     j += 1;
                     continue;
                 }
@@ -364,7 +364,7 @@ impl CalcDecos {
                                     local: *local,
                                     range,
                                     hover_text: hover_text.clone(),
-                                    is_display: true,
+                                    overlapped: true,
                                 },
                                 Deco::ImmBorrow {
                                     local, hover_text, ..
@@ -372,7 +372,7 @@ impl CalcDecos {
                                     local: *local,
                                     range,
                                     hover_text: hover_text.clone(),
-                                    is_display: true,
+                                    overlapped: true,
                                 },
                                 Deco::MutBorrow {
                                     local, hover_text, ..
@@ -380,7 +380,7 @@ impl CalcDecos {
                                     local: *local,
                                     range,
                                     hover_text: hover_text.clone(),
-                                    is_display: true,
+                                    overlapped: true,
                                 },
                                 Deco::Move {
                                     local, hover_text, ..
@@ -388,7 +388,7 @@ impl CalcDecos {
                                     local: *local,
                                     range,
                                     hover_text: hover_text.clone(),
-                                    is_display: true,
+                                    overlapped: true,
                                 },
                                 Deco::Call {
                                     local, hover_text, ..
@@ -396,7 +396,7 @@ impl CalcDecos {
                                     local: *local,
                                     range,
                                     hover_text: hover_text.clone(),
-                                    is_display: true,
+                                    overlapped: true,
                                 },
                                 Deco::Outlive {
                                     local, hover_text, ..
@@ -404,7 +404,7 @@ impl CalcDecos {
                                     local: *local,
                                     range,
                                     hover_text: hover_text.clone(),
-                                    is_display: true,
+                                    overlapped: true,
                                 },
                             };
                             new_decos.push(new_deco);
@@ -412,25 +412,25 @@ impl CalcDecos {
 
                         match &mut self.decorations[j] {
                             Deco::Lifetime {
-                                range, is_display, ..
+                                range, overlapped, ..
                             }
                             | Deco::ImmBorrow {
-                                range, is_display, ..
+                                range, overlapped, ..
                             }
                             | Deco::MutBorrow {
-                                range, is_display, ..
+                                range, overlapped, ..
                             }
                             | Deco::Move {
-                                range, is_display, ..
+                                range, overlapped, ..
                             }
                             | Deco::Call {
-                                range, is_display, ..
+                                range, overlapped, ..
                             }
                             | Deco::Outlive {
-                                range, is_display, ..
+                                range, overlapped, ..
                             } => {
                                 *range = common;
-                                *is_display = false;
+                                *overlapped = false;
                             }
                         }
 
@@ -470,7 +470,7 @@ impl utils::MirVisitor for CalcDecos {
                         local,
                         range: *range,
                         hover_text: format!("lifetime of variable `{}`", name),
-                        is_display: true,
+                        overlapped: true,
                     });
                 }
                 let outlive = utils::exclude_ranges(must_live_at.clone(), drop_copy_live);
@@ -479,7 +479,7 @@ impl utils::MirVisitor for CalcDecos {
                         local,
                         range,
                         hover_text: format!("variable `{}` is required to live here", name),
-                        is_display: true,
+                        overlapped: true,
                     });
                 }
             }
@@ -498,7 +498,7 @@ impl utils::MirVisitor for CalcDecos {
                             local,
                             range: *range,
                             hover_text: "variable moved".to_string(),
-                            is_display: true,
+                            overlapped: true,
                         });
                     }
                 }
@@ -515,14 +515,14 @@ impl utils::MirVisitor for CalcDecos {
                                 local,
                                 range: *range,
                                 hover_text: "mutable borrow".to_string(),
-                                is_display: true,
+                                overlapped: true,
                             });
                         } else {
                             self.decorations.push(Deco::ImmBorrow {
                                 local,
                                 range: *range,
                                 hover_text: "immutable borrow".to_string(),
-                                is_display: true,
+                                overlapped: true,
                             });
                         }
                     }
@@ -564,7 +564,7 @@ impl utils::MirVisitor for CalcDecos {
                     local,
                     range: *fn_span,
                     hover_text: "function call".to_string(),
-                    is_display: true,
+                    overlapped: true,
                 });
             }
         }
@@ -898,12 +898,8 @@ impl LanguageServer for Backend {
         &self,
         params: lsp_types::InitializeParams,
     ) -> jsonrpc::Result<lsp_types::InitializeResult> {
-        if let Some(wss) = params.workspace_folders {
-            for ws in wss {
-                self.set_roots(ws.uri.to_file_path().unwrap()).await;
-            }
-        }
         let sync_options = lsp_types::TextDocumentSyncOptions {
+            open_close: Some(true),
             save: Some(lsp_types::TextDocumentSyncSaveOptions::Supported(true)),
             change: Some(lsp_types::TextDocumentSyncKind::INCREMENTAL),
             ..Default::default()
@@ -945,8 +941,12 @@ impl LanguageServer for Backend {
         tokio::spawn(health_checker);
         Ok(init_res)
     }
-    async fn initialized(&self, _p: lsp_types::InitializedParams) {
-        self.analyze().await;
+    async fn did_open(&self, params: lsp_types::DidOpenTextDocumentParams) {
+        if params.text_document.language_id == "rust" {
+            self.set_roots(params.text_document.uri.to_file_path().unwrap())
+                .await;
+            self.analyze().await;
+        }
     }
     async fn did_save(&self, _params: lsp_types::DidSaveTextDocumentParams) {
         self.analyze().await;

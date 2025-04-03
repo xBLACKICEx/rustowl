@@ -21,9 +21,11 @@ Here, we describe the types we will use in this document.
     "type": <a href="#oprtype">OprType</a>,
     "range": <a href="https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#range">Range</a>,
     "hover_text": Option&lt;String&gt;,
-    "is_display": bool
+    "overlapped": bool
 }
 </code></pre>
+
+`overlapped` field indicates that the decoration is overlapped and should be hidden.
 
 ## Methods
 
