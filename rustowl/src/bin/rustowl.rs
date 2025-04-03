@@ -9,7 +9,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process,
     sync::RwLock,
     task::JoinSet,
@@ -604,7 +604,8 @@ impl Backend {
             work_done_progress: Arc::new(RwLock::new(false)),
         }
     }
-    async fn set_roots(&self, path: PathBuf) {
+    /// returns `true` if the root was not registered
+    async fn set_roots(&self, path: PathBuf) -> bool {
         let dir = if path.is_dir() {
             path
         } else {
@@ -623,25 +624,13 @@ impl Backend {
                 .join("owl");
             tokio::fs::create_dir_all(&target).await.unwrap();
 
-            // read cache
-            if let Ok(mut cache) = tokio::fs::File::open(target.join("cache.json")).await {
-                let mut buf = Vec::new();
-                cache.read_to_end(&mut buf).await.ok();
-                if let Ok(cache) = serde_json::from_slice(&buf) {
-                    let locked = &mut *self.analyzed.write().await;
-                    if let Some(analyzed) = locked {
-                        analyzed.merge(cache);
-                    } else {
-                        *locked = Some(cache);
-                    }
-                }
-            }
-
             if !write.contains_key(path.as_std_path()) {
                 log::info!("add {} to watch list", path);
                 write.insert(path.as_std_path().to_path_buf(), target);
+                return true;
             }
         }
+        false
     }
 
     async fn abort_subprocess(&self) {
@@ -656,9 +645,11 @@ impl Backend {
     }
 
     async fn analyze(&self) {
-        // wait for rust-analyzer
+        log::info!("stop running analysis processes");
+        self.processes.write().await.shutdown().await;
         log::info!("wait 100ms for rust-analyzer");
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
         log::info!("start analysis");
         let roots = { self.roots.read().await.clone() };
         let mut join = self.processes.write().await;
@@ -667,12 +658,13 @@ impl Backend {
 
         for (root, target) in roots {
             // progress report
-            let dep_count = cargo_metadata::MetadataCommand::new()
+            let meta = cargo_metadata::MetadataCommand::new()
                 .current_dir(&root)
                 .exec()
-                .ok()
-                .and_then(|v| v.resolve)
-                .map(|v| v.nodes.len())
+                .ok();
+            let dep_count = meta
+                .as_ref()
+                .and_then(|v| v.resolve.as_ref().map(|w| w.nodes.len()))
                 .unwrap_or(0);
             let progress_token = if *self.work_done_progress.read().await {
                 let token = format!("{}", uuid::Uuid::new_v4());
@@ -709,6 +701,19 @@ impl Backend {
                     .await;
             }
 
+            if let Some(package_name) = meta.and_then(|v| v.root_package().cloned()).map(|v| v.name)
+            {
+                log::info!("clear cargo cache");
+                let mut command = process::Command::new("cargo");
+                command
+                    .args(["clean", "--package", &package_name])
+                    .env("CARGO_TARGET_DIR", &target)
+                    .current_dir(&root)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null());
+                command.spawn().unwrap().wait().await.ok();
+            }
+
             log::info!("start checking {}", root.display());
             let mut command = process::Command::new("rustup");
             command
@@ -718,6 +723,8 @@ impl Backend {
                     "cargo",
                     "check",
                     "--all-targets",
+                    "--all-features",
+                    "--keep-going",
                     "--message-format=json",
                 ])
                 .env("CARGO_TARGET_DIR", &target)
@@ -942,9 +949,11 @@ impl LanguageServer for Backend {
         Ok(init_res)
     }
     async fn did_open(&self, params: lsp_types::DidOpenTextDocumentParams) {
-        if params.text_document.language_id == "rust" {
-            self.set_roots(params.text_document.uri.to_file_path().unwrap())
-                .await;
+        if params.text_document.language_id == "rust"
+            && self
+                .set_roots(params.text_document.uri.to_file_path().unwrap())
+                .await
+        {
             self.analyze().await;
         }
     }
@@ -954,16 +963,6 @@ impl LanguageServer for Backend {
     async fn did_change(&self, _params: lsp_types::DidChangeTextDocumentParams) {
         *self.analyzed.write().await = None;
         self.processes.write().await.shutdown().await;
-    }
-
-    async fn did_change_workspace_folders(
-        &self,
-        params: lsp_types::DidChangeWorkspaceFoldersParams,
-    ) -> () {
-        for added in params.event.added {
-            self.set_roots(added.uri.to_file_path().unwrap()).await;
-        }
-        self.analyze().await;
     }
 
     async fn shutdown(&self) -> jsonrpc::Result<()> {

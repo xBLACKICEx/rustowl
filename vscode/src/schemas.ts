@@ -118,7 +118,7 @@ export const zLspCursorResponse = z.object({
         type: zLspType,
         range: zLspRange,
         hover_text: z.string().nullish(),
-        is_display: z.boolean(),
+        overlapped: z.boolean(),
       }),
       z.object({
         type: z.literal("message"),
