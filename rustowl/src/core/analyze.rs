@@ -94,11 +94,13 @@ where
         let filename = source_map.span_to_filename(facts.body.span);
         let source_file = source_map.get_source_file(&filename).unwrap();
         let offset = source_file.start_pos.0;
-        let filename = filename
-            .display(rustc_span::FileNameDisplayPreference::Local)
-            .to_string_lossy()
-            .to_string();
-        let source = std::fs::read_to_string(&filename).unwrap();
+        let filename = source_map.path_mapping().to_local_embeddable_absolute_path(
+            rustc_span::RealFileName::LocalPath(filename.into_local_path().unwrap()),
+            &rustc_span::RealFileName::LocalPath(std::env::current_dir().unwrap()),
+        );
+        let path = filename.to_path(rustc_span::FileNameDisplayPreference::Local);
+        let source = std::fs::read_to_string(path).unwrap();
+        let filename = path.to_string_lossy().to_string();
         log::info!("facts of {fn_id:?} prepared; start analyze of {fn_id:?}");
 
         // local -> all borrows on that local
@@ -508,6 +510,7 @@ where
     /// analyze MIR to get JSON-serializable, TypeScript friendly representation
     pub fn analyze(self) -> (String, Function) {
         let decls = self.collect_decls();
+
         let basic_blocks = self.basic_blocks;
 
         (

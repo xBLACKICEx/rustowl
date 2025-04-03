@@ -120,10 +120,26 @@ pub struct File {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(transparent)]
-pub struct Workspace(pub HashMap<String, File>);
+pub struct Workspace(pub HashMap<String, Crate>);
 impl Workspace {
-    pub fn merge(mut self, other: Self) -> Self {
+    pub fn merge(&mut self, other: Self) {
         let Workspace(files) = other;
+        for (file, krate) in files {
+            if let Some(insert) = self.0.get_mut(&file) {
+                insert.merge(krate);
+            } else {
+                self.0.insert(file, krate);
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(transparent)]
+pub struct Crate(pub HashMap<String, File>);
+impl Crate {
+    pub fn merge(&mut self, other: Self) {
+        let Crate(files) = other;
         for (file, mir) in files {
             if let Some(insert) = self.0.get_mut(&file) {
                 insert.items.extend_from_slice(&mir.items);
@@ -131,7 +147,6 @@ impl Workspace {
                 self.0.insert(file, mir);
             }
         }
-        self
     }
 }
 

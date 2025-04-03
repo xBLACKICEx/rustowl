@@ -2,14 +2,14 @@
 //!
 //! An LSP server for visualizing ownership and lifetimes in Rust, designed for debugging and optimization.
 
-use mktemp::Temp;
 use rustowl::models::*;
 use rustowl::utils;
 use std::collections::HashMap;
+use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::{
-    io::{AsyncBufReadExt, BufReader},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     process,
     sync::RwLock,
     task::JoinSet,
@@ -604,8 +604,7 @@ impl Backend {
             work_done_progress: Arc::new(RwLock::new(false)),
         }
     }
-    async fn set_roots(&self, uri: &lsp_types::Url) {
-        let path = uri.to_file_path().unwrap();
+    async fn set_roots(&self, path: PathBuf) {
         let dir = if path.is_dir() {
             path
         } else {
@@ -617,11 +616,30 @@ impl Backend {
             .exec()
         {
             let path = metadata.workspace_root;
+            let target = metadata
+                .target_directory
+                .as_std_path()
+                .to_path_buf()
+                .join("owl");
+            tokio::fs::create_dir_all(&target).await.unwrap();
+
+            // read cache
+            if let Ok(mut cache) = tokio::fs::File::open(target.join("cache.json")).await {
+                let mut buf = Vec::new();
+                cache.read_to_end(&mut buf).await.ok();
+                if let Ok(cache) = serde_json::from_slice(&buf) {
+                    let locked = &mut *self.analyzed.write().await;
+                    if let Some(analyzed) = locked {
+                        analyzed.merge(cache);
+                    } else {
+                        *locked = Some(cache);
+                    }
+                }
+            }
+
             if !write.contains_key(path.as_std_path()) {
-                write.insert(
-                    path.as_std_path().to_path_buf(),
-                    Temp::new_dir().unwrap().to_path_buf(),
-                );
+                log::info!("add {} to watch list", path);
+                write.insert(path.as_std_path().to_path_buf(), target);
             }
         }
     }
@@ -639,10 +657,9 @@ impl Backend {
 
     async fn analyze(&self) {
         // wait for rust-analyzer
+        log::info!("wait 100ms for rust-analyzer");
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        {
-            *self.analyzed.write().await = None;
-        }
+        log::info!("start analysis");
         let roots = { self.roots.read().await.clone() };
         let mut join = self.processes.write().await;
         join.shutdown().await;
@@ -693,6 +710,7 @@ impl Backend {
                     .await;
             }
 
+            log::info!("start checking {}", root.display());
             let mut command = process::Command::new("rustup");
             command
                 .args([
@@ -708,7 +726,7 @@ impl Backend {
                 .env_remove("RUSTC_WRAPPER")
                 .current_dir(&root)
                 .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::null())
+                .stderr(std::process::Stdio::piped())
                 .kill_on_drop(true);
             #[cfg(unix)]
             unsafe {
@@ -727,8 +745,9 @@ impl Backend {
                     if let Ok(CargoCheckMessage::CompilerArtifact { .. }) =
                         serde_json::from_str(&line)
                     {
+                        build_count += 1;
+                        log::info!("{build_count} crates checked");
                         if let Some(token) = token.clone() {
-                            build_count += 1;
                             let percentage = (build_count * 100 / dep_count).min(100);
                             let value = lsp_types::ProgressParamsValue::WorkDone(
                                 lsp_types::WorkDoneProgress::Report(
@@ -749,7 +768,7 @@ impl Backend {
                     if let Ok(ws) = serde_json::from_str::<Workspace>(&line) {
                         let write = &mut *analyzed.write().await;
                         if let Some(write) = write {
-                            *write = write.clone().merge(ws);
+                            write.merge(ws);
                         } else {
                             *write = Some(ws);
                         }
@@ -757,18 +776,40 @@ impl Backend {
                 }
             });
 
+            let mut stderr = BufReader::new(child.stderr.take().unwrap()).lines();
+            join.spawn(async move {
+                while let Ok(Some(line)) = stderr.next_line().await {
+                    log::debug!("rustowlc: {line}");
+                }
+            });
+
             let pid = child.id();
             let client = self.client.clone();
             let subprocesses = self.subprocesses.clone();
             let token = progress_token.clone();
+            let cache_target = target.join("cache.json");
+            let analyzed = self.analyzed.clone();
             join.spawn(async move {
                 let _ = child.wait().await;
+                log::info!("check finished");
                 let mut write = subprocesses.write().await;
                 *write = write
                     .iter()
                     .filter(|v| **v != pid)
                     .map(|v| v.clone())
                     .collect();
+                if let Ok(mut cache_file) = tokio::fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .open(cache_target)
+                    .await
+                {
+                    cache_file
+                        .write_all(&serde_json::to_vec(&*analyzed.read().await).unwrap())
+                        .await
+                        .ok();
+                }
                 if write.len() == 0 {
                     if let Some(token) = token {
                         let value = lsp_types::ProgressParamsValue::WorkDone(
@@ -787,28 +828,27 @@ impl Backend {
             self.subprocesses.write().await.push(pid);
         }
     }
-    async fn cleanup_targets(&self) {
-        for (_, target) in self.roots.read().await.iter() {
-            std::fs::remove_dir_all(target).ok();
-        }
-    }
 
     async fn decos(&self, filepath: &Path, position: Loc) -> Vec<Deco> {
         let mut selected = SelectLocal::new(position);
         if let Some(analyzed) = &*self.analyzed.read().await {
-            for (mir_filename, file) in analyzed.0.iter() {
-                if filepath.ends_with(mir_filename) {
-                    for item in &file.items {
-                        utils::mir_visit(item, &mut selected);
+            for (_crate_name, krate) in analyzed.0.iter() {
+                for (filename, file) in krate.0.iter() {
+                    if filepath == PathBuf::from(filename) {
+                        for item in &file.items {
+                            utils::mir_visit(item, &mut selected);
+                        }
                     }
                 }
             }
 
             let mut calc = CalcDecos::new(selected.selected);
-            for (mir_filename, file) in analyzed.0.iter() {
-                if filepath.ends_with(mir_filename) {
-                    for item in &file.items {
-                        utils::mir_visit(item, &mut calc);
+            for (_crate_name, krate) in analyzed.0.iter() {
+                for (filename, file) in krate.0.iter() {
+                    if filepath == PathBuf::from(filename) {
+                        for item in &file.items {
+                            utils::mir_visit(item, &mut calc);
+                        }
                     }
                 }
             }
@@ -847,17 +887,12 @@ impl Backend {
 
 impl Drop for Backend {
     fn drop(&mut self) {
-        let rt = match tokio::runtime::Runtime::new() {
-            Ok(rt) => rt,
-            Err(err) => {
-                log::error!("failed to create async runtime for graceful shutdown: {err}");
-                return;
-            }
-        };
-        rt.block_on(async {
-            if let Err(err) = self.shutdown().await {
-                log::error!("failed to shutdown the server gracefully: {err}");
-            };
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                if let Err(err) = self.shutdown().await {
+                    log::error!("failed to shutdown the server gracefully: {err}");
+                };
+            });
         });
     }
 }
@@ -870,7 +905,7 @@ impl LanguageServer for Backend {
     ) -> jsonrpc::Result<lsp_types::InitializeResult> {
         if let Some(wss) = params.workspace_folders {
             for ws in wss {
-                self.set_roots(&ws.uri).await;
+                self.set_roots(ws.uri.to_file_path().unwrap()).await;
             }
         }
         let sync_options = lsp_types::TextDocumentSyncOptions {
@@ -932,13 +967,12 @@ impl LanguageServer for Backend {
         params: lsp_types::DidChangeWorkspaceFoldersParams,
     ) -> () {
         for added in params.event.added {
-            self.set_roots(&added.uri).await;
+            self.set_roots(added.uri.to_file_path().unwrap()).await;
         }
         self.analyze().await;
     }
 
     async fn shutdown(&self) -> jsonrpc::Result<()> {
-        self.cleanup_targets().await;
         self.processes.write().await.shutdown().await;
         self.abort_subprocess().await;
         Ok(())
@@ -947,11 +981,58 @@ impl LanguageServer for Backend {
 
 #[tokio::main]
 async fn main() {
-    let stdin = tokio::io::stdin();
-    let stdout = tokio::io::stdout();
+    simple_logger::SimpleLogger::new()
+        .with_colors(true)
+        .init()
+        .unwrap();
+    log::set_max_level(log::LevelFilter::Off);
 
-    let (service, socket) = LspService::build(Backend::new)
-        .custom_method("rustowl/cursor", Backend::cursor)
-        .finish();
-    Server::new(stdin, stdout, socket).serve(service).await;
+    let matches = clap::Command::new("RustOwl Language Server")
+        .version(clap::crate_version!())
+        .author(clap::crate_authors!())
+        .arg(
+            clap::Arg::new("io")
+                .long("stdio")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .subcommand_required(false)
+        .subcommand(clap::Command::new("check"))
+        .get_matches();
+
+    if let Some(arg) = matches.subcommand() {
+        match arg {
+            ("check", _) => {
+                if check(env::current_dir().unwrap()).await {
+                    std::process::exit(0);
+                } else {
+                    std::process::exit(1);
+                }
+            }
+            _ => {}
+        }
+    } else {
+        let stdin = tokio::io::stdin();
+        let stdout = tokio::io::stdout();
+
+        let (service, socket) = LspService::build(Backend::new)
+            .custom_method("rustowl/cursor", Backend::cursor)
+            .finish();
+        Server::new(stdin, stdout, socket).serve(service).await;
+    }
+}
+
+async fn check(path: PathBuf) -> bool {
+    log::set_max_level(log::LevelFilter::Info);
+    let (service, _) = LspService::build(Backend::new).finish();
+    let backend = service.inner();
+    backend.set_roots(path).await;
+    backend.analyze().await;
+    while let Some(_) = backend.processes.write().await.join_next().await {}
+    backend
+        .analyzed
+        .read()
+        .await
+        .as_ref()
+        .map(|v| !v.0.is_empty())
+        .unwrap_or(false)
 }
