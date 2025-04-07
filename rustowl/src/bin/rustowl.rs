@@ -980,6 +980,34 @@ async fn main() {
         .unwrap();
     log::set_max_level(log::LevelFilter::Off);
 
+    #[cfg(windows)]
+    {
+        let home = PathBuf::from(
+            String::from_utf8_lossy(
+                &process::Command::new("rustup")
+                    .args(["show", "home"])
+                    .stdout(std::process::Stdio::piped())
+                    .spawn()
+                    .unwrap()
+                    .wait_with_output()
+                    .await
+                    .unwrap()
+                    .stdout,
+            )
+            .trim(),
+        );
+        let mut paths = env::split_paths(&env::var_os("Path").unwrap())
+            .collect::<std::collections::VecDeque<_>>();
+        paths.push_front(
+            home.join("toolchains")
+                .join(rustowl::toolchain_version::TOOLCHAIN_VERSION)
+                .join("bin"),
+        );
+        unsafe {
+            env::set_var("Path", env::join_paths(paths).unwrap());
+        }
+    }
+
     let matches = clap::Command::new("RustOwl Language Server")
         .version(clap::crate_version!())
         .author(clap::crate_authors!())
