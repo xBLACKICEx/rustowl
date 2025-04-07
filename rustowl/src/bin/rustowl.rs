@@ -346,7 +346,7 @@ impl CalcDecos {
                     } => (*range, *overlapped),
                 };
 
-                if !prev_overlapped {
+                if prev_overlapped {
                     j += 1;
                     continue;
                 }
@@ -364,7 +364,7 @@ impl CalcDecos {
                                     local: *local,
                                     range,
                                     hover_text: hover_text.clone(),
-                                    overlapped: true,
+                                    overlapped: false,
                                 },
                                 Deco::ImmBorrow {
                                     local, hover_text, ..
@@ -372,7 +372,7 @@ impl CalcDecos {
                                     local: *local,
                                     range,
                                     hover_text: hover_text.clone(),
-                                    overlapped: true,
+                                    overlapped: false,
                                 },
                                 Deco::MutBorrow {
                                     local, hover_text, ..
@@ -380,7 +380,7 @@ impl CalcDecos {
                                     local: *local,
                                     range,
                                     hover_text: hover_text.clone(),
-                                    overlapped: true,
+                                    overlapped: false,
                                 },
                                 Deco::Move {
                                     local, hover_text, ..
@@ -388,7 +388,7 @@ impl CalcDecos {
                                     local: *local,
                                     range,
                                     hover_text: hover_text.clone(),
-                                    overlapped: true,
+                                    overlapped: false,
                                 },
                                 Deco::Call {
                                     local, hover_text, ..
@@ -396,7 +396,7 @@ impl CalcDecos {
                                     local: *local,
                                     range,
                                     hover_text: hover_text.clone(),
-                                    overlapped: true,
+                                    overlapped: false,
                                 },
                                 Deco::Outlive {
                                     local, hover_text, ..
@@ -404,7 +404,7 @@ impl CalcDecos {
                                     local: *local,
                                     range,
                                     hover_text: hover_text.clone(),
-                                    overlapped: true,
+                                    overlapped: false,
                                 },
                             };
                             new_decos.push(new_deco);
@@ -430,7 +430,7 @@ impl CalcDecos {
                                 range, overlapped, ..
                             } => {
                                 *range = common;
-                                *overlapped = false;
+                                *overlapped = true;
                             }
                         }
 
@@ -470,7 +470,7 @@ impl utils::MirVisitor for CalcDecos {
                         local,
                         range: *range,
                         hover_text: format!("lifetime of variable `{}`", name),
-                        overlapped: true,
+                        overlapped: false,
                     });
                 }
                 let outlive = utils::exclude_ranges(must_live_at.clone(), drop_copy_live);
@@ -479,7 +479,7 @@ impl utils::MirVisitor for CalcDecos {
                         local,
                         range,
                         hover_text: format!("variable `{}` is required to live here", name),
-                        overlapped: true,
+                        overlapped: false,
                     });
                 }
             }
@@ -498,7 +498,7 @@ impl utils::MirVisitor for CalcDecos {
                             local,
                             range: *range,
                             hover_text: "variable moved".to_string(),
-                            overlapped: true,
+                            overlapped: false,
                         });
                     }
                 }
@@ -515,14 +515,14 @@ impl utils::MirVisitor for CalcDecos {
                                 local,
                                 range: *range,
                                 hover_text: "mutable borrow".to_string(),
-                                overlapped: true,
+                                overlapped: false,
                             });
                         } else {
                             self.decorations.push(Deco::ImmBorrow {
                                 local,
                                 range: *range,
                                 hover_text: "immutable borrow".to_string(),
-                                overlapped: true,
+                                overlapped: false,
                             });
                         }
                     }
@@ -564,7 +564,7 @@ impl utils::MirVisitor for CalcDecos {
                     local,
                     range: *fn_span,
                     hover_text: "function call".to_string(),
-                    overlapped: true,
+                    overlapped: false,
                 });
             }
         }

@@ -97,20 +97,20 @@ export function activate(context: vscode.ExtensionContext) {
     const messages: vscode.DecorationOptions[] = [];
     for (const deco of data.decorations) {
       const range = rangeToRange(deco.range);
-      if (deco.type === "lifetime") {
-        lifetime.push({
-          range,
-        });
-      } else if (deco.type === "imm_borrow") {
-        immut.push({ range });
-      } else if (deco.type === "mut_borrow") {
-        mut.push({ range });
-      } else if (deco.type === "call" || deco.type === "move") {
-        moveCall.push({ range });
-      } else if (deco.type === "outlive") {
-        outlive.push({ range });
-      } else if (deco.type === "message") {
-        messages.push({ range, hoverMessage: deco.message });
+      if (!deco.overlapped) {
+        if (deco.type === "lifetime") {
+          lifetime.push({
+            range,
+          });
+        } else if (deco.type === "imm_borrow") {
+          immut.push({ range });
+        } else if (deco.type === "mut_borrow") {
+          mut.push({ range });
+        } else if (deco.type === "call" || deco.type === "move") {
+          moveCall.push({ range });
+        } else if (deco.type === "outlive") {
+          outlive.push({ range });
+        }
       }
       if ("hover_text" in deco && deco.hover_text) {
         messages.push({ range, hoverMessage: deco.hover_text });

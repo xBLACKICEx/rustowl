@@ -113,18 +113,11 @@ export const zLspType = z.union([
 export const zLspCursorResponse = z.object({
   is_analyzed: z.boolean(),
   decorations: z
-    .union([
-      z.object({
-        type: zLspType,
-        range: zLspRange,
-        hover_text: z.string().nullish(),
-        overlapped: z.boolean(),
-      }),
-      z.object({
-        type: z.literal("message"),
-        range: zLspRange,
-        message: z.string(),
-      }),
-    ])
+    .object({
+      type: zLspType,
+      range: zLspRange,
+      hover_text: z.string().nullish(),
+      overlapped: z.boolean(),
+    })
     .array(),
 });
