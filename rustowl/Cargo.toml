@@ -10,7 +10,6 @@ repository = "https://github.com/cordx56/rustowl"
 license = "MPL-2.0"
 keywords = ["visualization", "ownership", "lifetime", "lsp"]
 categories = ["development-tools", "visualization"]
-default-run = "rustowl"
 
 [dependencies]
 serde = { version = "1.0.210", features = ["derive"] }
@@ -27,9 +26,15 @@ clap = { version = "4.5.35", features = ["cargo"] }
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.169"
 
+[features]
+default = ["installer"]
+installer = []
+compiler = []
+
 [[bin]]
 name = "rustowlc"
 path = "src/main.rs"
+required-features = ["compiler"]
 
 [profile.release]
 opt-level = 3
