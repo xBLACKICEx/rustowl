@@ -27,7 +27,7 @@
 (with-eval-after-load 'lsp-mode
   (lsp-register-client
    (make-lsp-client
-    :new-connection (lsp-stdio-connection '("cargo" "owlsp"))
+    :new-connection (lsp-stdio-connection '("rustowl"))
     :major-modes '(rust-mode)
     :server-id 'rustowlsp
     :priority -1

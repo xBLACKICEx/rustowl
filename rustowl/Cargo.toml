@@ -27,7 +27,7 @@ clap = { version = "4.5.35", features = ["cargo"] }
 libc = "0.2.169"
 
 [features]
-default = ["installer"]
+default = []
 installer = []
 compiler = []
 

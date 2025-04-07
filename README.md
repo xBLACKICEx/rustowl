@@ -26,7 +26,7 @@ RustOwl visualizes those by using underlines:
 
 Currently, we offer VSCode extension, Neovim plugin and Emacs package.
 For these editors, move the text cursor over the variable or function call you want to inspect and wait for 2 seconds to visualize the information.
-We implemented LSP server `cargo owlsp` with an extended protocol.
+We implemented LSP server with an extended protocol.
 So, RustOwl can be used easily from other editor.
 
 ## Quick Start
@@ -35,7 +35,7 @@ Here we describe how to start using RustOwl with VSCode.
 
 ### Prerequisite
 
-- `curl`, `rustup` and `cargo` installed
+- `rustup` and `cargo` installed
 - Visual Studio Code (VSCode) installed
 
 We tested this guide on macOS Sequoia 15.2 on arm64 architecture with VSCode 1.96.4 and `rustup` 1.27.1.
@@ -54,8 +54,7 @@ For Windows, please clone this repository and build RustOwl manually.
 Install from crates.io:
 
 ```bash
-rustup toolchain install nightly-2025-02-22 --profile minimal -c rust-src,cargo,rustc-dev,llvm-tools-preview
-rustup run nightly-2025-02-22 cargo install rustowl --locked
+cargo install rustowl -F installer --locked
 ```
 
 Or, install from GitHub release:
