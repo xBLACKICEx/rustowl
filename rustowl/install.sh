@@ -16,7 +16,7 @@ install_rustowl() {
     curl -L "https://github.com/cordx56/rustowl/archive/refs/tags/v$VERSION.tar.gz" > rustowl.tar.gz
     tar -xvf rustowl.tar.gz
     cd rustowl-*/rustowl
-    cargo install --path . --locked
+    cargo install --path . -F installer --locked
     cd ../../
     rm -rf "$TMP"
 }

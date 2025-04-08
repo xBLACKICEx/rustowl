@@ -35,19 +35,18 @@ Here we describe how to start using RustOwl with VSCode.
 
 ### Prerequisite
 
-- `rustup` and `cargo` installed
-- Visual Studio Code (VSCode) installed
+- `rustup` installed
+- Visual Studio Code (VS Code) installed
 
-We tested this guide on macOS Sequoia 15.2 on arm64 architecture with VSCode 1.96.4 and `rustup` 1.27.1.
+We tested this guide on macOS Sequoia 15.3.2 on arm64 architecture with VSCode 1.99.1 and `rustup` 1.28.1.
 
-We also tested this guide on Ubuntu 25.04 on arm64 architecture with VSCode 1.96.4 and `rustup` 1.27.1.
+We also tested this guide on Ubuntu 25.04.
 On Ubuntu, you need to run `apt install build-essential` before installing.
 
 After installation, the extension will automatically run RustOwl when you save any Rust program in cargo workspace.
 The initial analysis may take some time, but from the second run onward, compile caching is used to reduce the analysis time.
 
 We tested on Windows 11 Education 23H2 on amd64 architecture.
-For Windows, please clone this repository and build RustOwl manually.
 
 ### Install RustOwl
 
@@ -67,8 +66,6 @@ curl -L "https://github.com/cordx56/rustowl/releases/latest/download/install.sh"
 
 You can install VSCode extension from [this link](https://marketplace.visualstudio.com/items?itemName=cordx56.rustowl-vscode).
 
-Also, you can download VSCode extension file ( `.vsix` ) from [this link](https://github.com/cordx56/rustowl/releases/download/v0.1.4/rustowl-vscode-0.1.4.vsix).
-
 ## Other editor support
 
 We support Neovim and Emacs.
@@ -82,7 +79,7 @@ Minimal setup with [lazy.nvim](https://github.com/folke/lazy.nvim):
 ```lua
 {
   'cordx56/rustowl',
-  build = 'cd rustowl && cargo install --path . --locked',
+  build = 'cd rustowl && cargo install --path . -F installer --locked',
   lazy = false, -- This plugin is already lazy
   opts = {},
 }
@@ -166,12 +163,12 @@ Here, we describe manual install instructions from source code.
     - You can install `rustup` from [this link](https://rustup.rs/).
     - You need to set up the `PATH` environment variable. To do this, follow the instructions provided by the `rustup` installer. For example, in bash, run `export PATH=$HOME/.cargo/bin:$PATH`.
 
-RustOwl has been tested on macOS Sequoia 15.2 on arm64 architecture with `rustup` 1.27.1.
+RustOwl has been tested on macOS Sequoia 15.3.2 on arm64 architecture with `rustup` 1.28.1.
 We have not tested the installation of dependencies from other package repositories, such as Homebrew.
 You may need to uninstall any Rust-related packages installed through those repositories first.
 Other dependencies are locked in the configuration files and will be installed automatically.
 
-We have also tested this on Ubuntu 25.04 on arm64 architecture with `rustup` 1.27.1.
+We have also tested this on Ubuntu 25.04 on arm64 architecture.
 Additional dependencies may be required.
 We have confirmed that running `apt install build-essential` is necessary on a freshly installed Ubuntu for linking.
 
@@ -179,8 +176,8 @@ We have confirmed that running `apt install build-essential` is necessary on a f
 
 ```bash
 cd rustowl
-cargo install --path . --locked
-cargo owlsp
+cargo install --path . -F installer --locked
+rustowl check
 ```
 
 
