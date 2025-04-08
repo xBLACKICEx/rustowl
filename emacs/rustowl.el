@@ -1,4 +1,4 @@
-;;; rustowlsp.el --- Visualize Ownership and Lifetimes in Rust -*- lexical-binding: t; -*-
+;;; rustowl.el --- Visualize Ownership and Lifetimes in Rust -*- lexical-binding: t; -*-
 
 ;; Copyright (C) cordx56
 
@@ -17,10 +17,10 @@
 
 (require 'lsp-mode)
 
-(defgroup rustowlsp ()
+(defgroup rustowl ()
   "Visualize Ownership and Lifetimes in Rust"
   :group 'tools
-  :prefix "rustowlsp-"
+  :prefix "rustowl-"
   :link '(url-link "https://github.com/cordx56/rustowl"))
 
 ;;;###autoload
@@ -29,11 +29,11 @@
    (make-lsp-client
     :new-connection (lsp-stdio-connection '("rustowl"))
     :major-modes '(rust-mode)
-    :server-id 'rustowlsp
+    :server-id 'rustowl
     :priority -1
     :add-on? t)))
 
-(defun rustowlsp-cursor (params)
+(defun rustowl-cursor (params)
   (lsp-request-async
    "rustowl/cursor"
    params
@@ -45,44 +45,44 @@
                  (start (gethash "start" (gethash "range" deco)))
                  (end (gethash "end" (gethash "range" deco)))
                  (start-pos
-                  (rustowlsp-line-col-to-pos
+                  (rustowl-line-col-to-pos
                    (gethash "line" start)
                    (gethash "character" start)))
                  (end-pos
-                  (rustowlsp-line-col-to-pos
+                  (rustowl-line-col-to-pos
                    (gethash "line" end)
                    (gethash "character" end))))
             (if (not (gethash "overlapped" deco))
               (cond
                ((equal type "lifetime")
-                (rustowlsp-underline start-pos end-pos "#00cc00"))
+                (rustowl-underline start-pos end-pos "#00cc00"))
                ((equal type "imm_borrow")
-                (rustowlsp-underline start-pos end-pos "#0000cc"))
+                (rustowl-underline start-pos end-pos "#0000cc"))
                ((equal type "mut_borrow")
-                (rustowlsp-underline start-pos end-pos "#cc00cc"))
+                (rustowl-underline start-pos end-pos "#cc00cc"))
                ((or (equal type "move") (equal type "call"))
-                (rustowlsp-underline start-pos end-pos "#cccc00"))
+                (rustowl-underline start-pos end-pos "#cccc00"))
                ((equal type "outlive")
-                (rustowlsp-underline start-pos end-pos "#cc0000"))))))
+                (rustowl-underline start-pos end-pos "#cc0000"))))))
         decorations)))
    :mode 'current))
 
 
-(defun rustowlsp-line-number-at-pos ()
+(defun rustowl-line-number-at-pos ()
   (save-excursion
     (goto-char (point))
     (count-lines (point-min) (line-beginning-position))))
-(defun rustowlsp-current-column ()
+(defun rustowl-current-column ()
   (save-excursion
     (let ((start (point)))
       (move-beginning-of-line 1)
       (- start (point)))))
 
-(defun rustowlsp-cursor-call ()
-  (let ((line (rustowlsp-line-number-at-pos))
-        (column (rustowlsp-current-column))
+(defun rustowl-cursor-call ()
+  (let ((line (rustowl-line-number-at-pos))
+        (column (rustowl-current-column))
         (uri (lsp--buffer-uri)))
-    (rustowlsp-cursor `(
+    (rustowl-cursor `(
                         :position ,`(
                                     :line ,line
                                     :character ,column
@@ -93,31 +93,31 @@
                         ))))
 
 ;;;###autoload
-(defvar rustowlsp-cursor-timer nil)
+(defvar rustowl-cursor-timer nil)
 ;;;###autoload
-(defvar rustowlsp-cursor-timeout 2)
+(defvar rustowl-cursor-timeout 2)
 
 ;;;###autoload
-(defun rustowlsp-reset-cursor-timer ()
-  (when rustowlsp-cursor-timer
-    (cancel-timer rustowlsp-cursor-timer))
-  (rustowlsp-clear-overlays)
-  (setq rustowlsp-cursor-timer
-        (run-with-idle-timer rustowlsp-cursor-timeout nil #'rustowlsp-cursor-call)))
+(defun rustowl-reset-cursor-timer ()
+  (when rustowl-cursor-timer
+    (cancel-timer rustowl-cursor-timer))
+  (rustowl-clear-overlays)
+  (setq rustowl-cursor-timer
+        (run-with-idle-timer rustowl-cursor-timeout nil #'rustowl-cursor-call)))
 
 ;;;###autoload
-(defun enable-rustowlsp-cursor ()
-  (add-hook 'post-command-hook #'rustowlsp-reset-cursor-timer))
+(defun enable-rustowl-cursor ()
+  (add-hook 'post-command-hook #'rustowl-reset-cursor-timer))
 
 ;;;###autoload
-(defun disable-rustowlsp-cursor ()
-  (remove-hook 'post-command-hook #'rustowlsp-reset-cursor-timer)
-  (when rustowlsp-cursor-timer
-    (cancel-timer rustowlsp-cursor-timer)
-    (setq rustowlsp-cursor-timer nil)))
+(defun disable-rustowl-cursor ()
+  (remove-hook 'post-command-hook #'rustowl-reset-cursor-timer)
+  (when rustowl-cursor-timer
+    (cancel-timer rustowl-cursor-timer)
+    (setq rustowl-cursor-timer nil)))
 
 ;; RustOwl visualization
-(defun rustowlsp-line-col-to-pos (line col)
+(defun rustowl-line-col-to-pos (line col)
   (save-excursion
     (goto-char (point-min))
     (forward-line line)
@@ -126,16 +126,16 @@
 
 (defvar rustowl-overlays nil)
 
-(defun rustowlsp-underline (start end color)
+(defun rustowl-underline (start end color)
   (let ((overlay (make-overlay start end)))
-    (overlay-put overlay 'face `(:rustowlsp-underline (:color ,color :style wave)))
+    (overlay-put overlay 'face `(:rustowl-underline (:color ,color :style wave)))
     (push overlay rustowl-overlays)
     overlay))
 
-(defun rustowlsp-clear-overlays ()
+(defun rustowl-clear-overlays ()
   (interactive)
   (mapc #'delete-overlay rustowl-overlays)
   (setq rustowl-overlays nil))
 
-(provide 'rustowlsp)
-;;; rustowlsp.el ends here
+(provide 'rustowl)
+;;; rustowl.el ends here
