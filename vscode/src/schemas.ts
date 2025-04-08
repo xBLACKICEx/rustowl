@@ -108,6 +108,7 @@ export const zLspType = z.union([
   z.literal("mut_borrow"),
   z.literal("move"),
   z.literal("call"),
+  z.literal("shared_mut"),
   z.literal("outlive"),
 ]);
 export const zLspCursorResponse = z.object({

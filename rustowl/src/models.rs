@@ -204,7 +204,7 @@ pub struct MirBasicBlock {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "snake_case", tag = "type")]
+#[serde(rename_all = "snake_case")]
 pub struct MirUserDecl {
     pub local_index: u32,
     pub fn_id: u32,

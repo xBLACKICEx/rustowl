@@ -508,10 +508,8 @@ impl utils::MirVisitor for CalcDecos {
         if self.locals.contains(&local) {
             // merge Drop object lives
             let mut drop_copy_live = lives.clone();
-            /*
             drop_copy_live.extend_from_slice(drop_range);
             drop_copy_live = utils::eliminated_ranges(drop_copy_live.clone());
-            */
             for range in &drop_copy_live {
                 self.decorations.push(Deco::Lifetime {
                     local,
@@ -521,14 +519,14 @@ impl utils::MirVisitor for CalcDecos {
                 });
             }
             let mut borrow_ranges = shared_borrow.clone();
-            borrow_ranges.extend_from_slice(&mutable_borrow);
+            borrow_ranges.extend_from_slice(mutable_borrow);
             let shared_mut = utils::common_ranges(&borrow_ranges);
             for range in shared_mut {
                 self.decorations.push(Deco::SharedMut {
                     local,
                     range,
                     hover_text: format!(
-                        "shared and mutable borrows of variable `{name}` live here",
+                        "immutable and mutable borrows of variable `{name}` exist here",
                     ),
                     overlapped: false,
                 });
@@ -1073,14 +1071,27 @@ async fn main() {
         .arg(
             clap::Arg::new("io")
                 .long("stdio")
+                .required(false)
                 .action(clap::ArgAction::SetTrue),
         )
         .subcommand_required(false)
-        .subcommand(clap::Command::new("check"))
+        .subcommand(
+            clap::Command::new("check").arg(
+                clap::Arg::new("log_level")
+                    .long("log")
+                    .required(false)
+                    .action(clap::ArgAction::Set),
+            ),
+        )
         .get_matches();
 
     if let Some(arg) = matches.subcommand() {
-        if let ("check", _) = arg {
+        if let ("check", matches) = arg {
+            let log_level = matches
+                .get_one::<String>("log_level")
+                .cloned()
+                .unwrap_or("info".to_owned());
+            log::set_max_level(log_level.parse().unwrap());
             if check(env::current_dir().unwrap()).await {
                 std::process::exit(0);
             } else {
@@ -1099,7 +1110,6 @@ async fn main() {
 }
 
 async fn check(path: PathBuf) -> bool {
-    log::set_max_level(log::LevelFilter::Info);
     let (service, _) = LspService::build(Backend::new).finish();
     let backend = service.inner();
     backend.set_roots(path).await;

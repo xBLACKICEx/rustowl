@@ -28,6 +28,7 @@ pub fn common_ranges(ranges: &[Range]) -> Vec<Range> {
     eliminated_ranges(common_ranges)
 }
 
+/// merge two ranges, result is superset of two ranges
 pub fn merge_ranges(r1: Range, r2: Range) -> Option<Range> {
     if common_range(r1, r2).is_some() {
         let from = r1.from.min(r2.from);
@@ -38,6 +39,7 @@ pub fn merge_ranges(r1: Range, r2: Range) -> Option<Range> {
     }
 }
 
+/// eliminate common ranges and flatten ranges
 pub fn eliminated_ranges(mut ranges: Vec<Range>) -> Vec<Range> {
     let mut i = 0;
     'outer: while i < ranges.len() {

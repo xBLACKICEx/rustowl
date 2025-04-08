@@ -108,7 +108,7 @@ export function activate(context: vscode.ExtensionContext) {
           mut.push({ range });
         } else if (deco.type === "call" || deco.type === "move") {
           moveCall.push({ range });
-        } else if (deco.type === "outlive") {
+        } else if (deco.type === "shared_mut" || deco.type === "outlive") {
           outlive.push({ range });
         }
       }
