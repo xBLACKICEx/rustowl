@@ -1,5 +1,4 @@
 mod analyze;
-mod from_rustc;
 
 use analyze::MirAnalyzer;
 use rustc_hir::def_id::LocalDefId;
@@ -70,11 +69,15 @@ fn mir_borrowck(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ProvidedValue<'_> {
             while let Some(task) = { TASKS.lock().unwrap().join_next().await } {
                 let (filename, analyzed) = task.unwrap().analyze();
                 log::info!("analyzed one item of {}", filename);
-                let ws = Workspace(HashMap::from([(
+                let krate = Crate(HashMap::from([(
                     filename,
                     File {
                         items: vec![analyzed],
                     },
+                )]));
+                let ws = Workspace(HashMap::from([(
+                    std::env::var("CARGO_CRATE_NAME").unwrap(),
+                    krate,
                 )]));
                 println!("{}", serde_json::to_string(&ws).unwrap());
             }

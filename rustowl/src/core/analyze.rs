@@ -1,8 +1,7 @@
-use super::from_rustc::LocationTableSim;
 use polonius_engine::FactTypes;
 use rustc_borrowck::consumers::{
-    BorrowIndex, ConsumerOptions, PoloniusInput, PoloniusOutput, RichLocation, RustcFacts,
-    get_body_with_borrowck_facts,
+    BorrowSet, ConsumerOptions, PoloniusInput, PoloniusLocationTable, PoloniusOutput, RichLocation,
+    RustcFacts, get_body_with_borrowck_facts,
 };
 use rustc_hir::def_id::LocalDefId;
 use rustc_middle::{
@@ -13,7 +12,7 @@ use rustc_middle::{
     ty::TyCtxt,
 };
 use rustc_span::{Span, source_map::SourceMap};
-use rustowl::models::*;
+use rustowl::{models::*, utils};
 use std::collections::{BTreeSet, HashMap};
 use std::future::Future;
 use std::hash::Hash;
@@ -68,7 +67,8 @@ pub struct MirAnalyzer<'tcx> {
     filename: String,
     source: String,
     offset: u32,
-    location_table: LocationTableSim,
+    location_table: PoloniusLocationTable,
+    borrow_set: BorrowSet<'tcx>,
     body: Body<'tcx>,
     input: PoloniusInput,
     output_insensitive: PoloniusOutput,
@@ -84,33 +84,30 @@ where
 {
     /// initialize analyzer
     pub fn new(tcx: TyCtxt<'tcx>, fn_id: LocalDefId) -> MirAnalyzeFuture<'tcx> {
-        let facts = get_body_with_borrowck_facts(tcx, fn_id, ConsumerOptions::PoloniusOutputFacts);
-        let input = *facts.input_facts.as_ref().unwrap().clone();
+        let mut facts =
+            get_body_with_borrowck_facts(tcx, fn_id, ConsumerOptions::PoloniusOutputFacts);
+        let input = *facts.input_facts.take().unwrap();
         let body = facts.body.clone();
-        let location_table = LocationTableSim::new(&body);
+        let location_table = facts.location_table.take().unwrap();
+        let borrow_set = facts.borrow_set;
 
         let source_map = tcx.sess.source_map();
 
         let filename = source_map.span_to_filename(facts.body.span);
         let source_file = source_map.get_source_file(&filename).unwrap();
         let offset = source_file.start_pos.0;
-        let filename = filename
-            .display(rustc_span::FileNameDisplayPreference::Local)
-            .to_string_lossy()
-            .to_string();
-        let source = std::fs::read_to_string(&filename).unwrap();
+        let filename = source_map.path_mapping().to_local_embeddable_absolute_path(
+            rustc_span::RealFileName::LocalPath(filename.into_local_path().unwrap()),
+            &rustc_span::RealFileName::LocalPath(std::env::current_dir().unwrap()),
+        );
+        let path = filename.to_path(rustc_span::FileNameDisplayPreference::Local);
+        let source = std::fs::read_to_string(path).unwrap();
+        let filename = path.to_string_lossy().to_string();
         log::info!("facts of {fn_id:?} prepared; start analyze of {fn_id:?}");
 
         // local -> all borrows on that local
-        let local_borrows: HashMap<Local, Vec<BorrowIndex>> = HashMap::from_iter(
-            facts
-                .borrow_set
-                .local_map()
-                .iter()
-                .map(|(local, borrow_idc)| (*local, borrow_idc.iter().copied().collect())),
-        );
         let mut borrow_locals = HashMap::new();
-        for (local, borrow_idc) in local_borrows.iter() {
+        for (local, borrow_idc) in borrow_set.local_map().iter() {
             for borrow_idx in borrow_idc {
                 borrow_locals.insert(*borrow_idx, *local);
             }
@@ -149,6 +146,7 @@ where
                 source,
                 offset,
                 location_table,
+                borrow_set,
                 body,
                 input,
                 output_insensitive,
@@ -167,8 +165,14 @@ where
     fn stmt_location_to_range(&self, bb: BasicBlock, stmt_index: usize) -> Option<Range> {
         self.bb_map
             .get(&bb)
-            .and_then(|bb| bb.statements.get(stmt_index))
-            .map(|stmt| range_from_span(&self.source, stmt.source_info.span, self.offset))
+            .map(|bb| {
+                if stmt_index < bb.statements.len() {
+                    bb.statements.get(stmt_index).unwrap().source_info.span
+                } else {
+                    bb.terminator().source_info.span
+                }
+            })
+            .map(|span| range_from_span(&self.source, span, self.offset))
     }
     fn rich_locations_to_ranges(&self, locations: &[RichLocation]) -> Vec<Range> {
         let mut starts = Vec::new();
@@ -203,7 +207,7 @@ where
     fn drop_range(&self) -> HashMap<Local, Vec<Range>> {
         let mut local_live_locs = HashMap::new();
         for (loc_idx, locals) in self.output_datafrog.var_drop_live_on_entry.iter() {
-            let location = self.location_table.to_location(loc_idx.as_usize().into());
+            let location = self.location_table.to_rich_location(*loc_idx);
             for local in locals {
                 local_live_locs
                     .entry(*local)
@@ -211,11 +215,15 @@ where
                     .push(location);
             }
         }
-        HashMap::from_iter(
-            local_live_locs
-                .into_iter()
-                .map(|(local, richs)| (local, self.rich_locations_to_ranges(&richs))),
-        )
+        local_live_locs
+            .into_iter()
+            .map(|(local, locations)| {
+                (
+                    local,
+                    utils::eliminated_ranges(self.rich_locations_to_ranges(&locations)),
+                )
+            })
+            .collect()
     }
 
     /// collect user defined variables from debug info in MIR
@@ -236,46 +244,40 @@ where
             .collect()
     }
     /// collect declared variables in MIR body
-    fn collect_decls(&self) -> Vec<MirDecl> {
+    fn collect_decls(&self) -> Vec<MirUserDecl> {
         let user_vars = self.collect_user_vars();
         let lives = self.get_accurate_live();
+        let (shared, mutable) = self.get_borrow_live();
         let must_live_at = self.get_must_live();
         let drop_range = self.drop_range();
         self.body
             .local_decls
             .iter_enumerated()
+            .filter(|(_, decl)| decl.is_user_variable())
             .map(|(local, decl)| {
                 let local_index = local.as_u32();
                 let ty = decl.ty.to_string();
-                let must_live_at =
-                    Self::merge_common(must_live_at.get(&local).cloned().unwrap_or(Vec::new()));
-                let lives = Self::merge_common(lives.get(&local).cloned().unwrap_or(Vec::new()));
+                let must_live_at = utils::eliminated_ranges(
+                    must_live_at.get(&local).cloned().unwrap_or(Vec::new()),
+                );
+                let lives = lives.get(&local).cloned().unwrap_or(Vec::new());
+                let shared_borrow = shared.get(&local).cloned().unwrap_or(Vec::new());
+                let mutable_borrow = mutable.get(&local).cloned().unwrap_or(Vec::new());
                 let drop = self.is_drop(local);
-                let drop_range =
-                    Self::merge_common(drop_range.get(&local).cloned().unwrap_or(Vec::new()));
-                if decl.is_user_variable() {
-                    let (span, name) = user_vars.get(&local).cloned().unwrap();
-                    MirDecl::User {
-                        local_index,
-                        fn_id: self.fn_id.local_def_index.as_u32(),
-                        name,
-                        span,
-                        ty,
-                        lives,
-                        must_live_at,
-                        drop,
-                        drop_range,
-                    }
-                } else {
-                    MirDecl::Other {
-                        local_index,
-                        fn_id: self.fn_id.local_def_index.as_u32(),
-                        ty,
-                        lives,
-                        must_live_at,
-                        drop,
-                        drop_range,
-                    }
+                let drop_range = drop_range.get(&local).cloned().unwrap_or(Vec::new());
+                let (span, name) = user_vars.get(&local).cloned().unwrap();
+                MirUserDecl {
+                    local_index,
+                    fn_id: self.fn_id.local_def_index.as_u32(),
+                    name,
+                    span,
+                    ty,
+                    lives,
+                    shared_borrow,
+                    mutable_borrow,
+                    must_live_at,
+                    drop,
+                    drop_range,
                 }
             })
             .collect()
@@ -404,50 +406,68 @@ where
         }
         ranges
     }
-    fn merge_common(mut ranges: Vec<Range>) -> Vec<Range> {
-        let mut len = ranges.len();
-        let mut i = 0;
-        while i < len {
-            let mut j = i + 1;
-            while j < len {
-                if (ranges[j].from <= ranges[i].from && ranges[i].from <= ranges[j].until)
-                    || (ranges[j].from <= ranges[i].until && ranges[i].until <= ranges[j].until)
-                {
-                    ranges[i] = Range {
-                        from: ranges[i].from.min(ranges[j].from),
-                        until: ranges[i].until.max(ranges[j].until),
-                    };
-                    ranges.remove(j);
-                } else {
-                    j += 1;
-                }
-                len = ranges.len();
-            }
-            i += 1;
-        }
-        ranges
-    }
 
     fn get_accurate_live(&self) -> HashMap<Local, Vec<Range>> {
         let output = &self.output_datafrog;
-        let mut local_loan_live_at = HashMap::new();
+        let mut lives = HashMap::new();
+        for (location_idx, vars) in output.var_live_on_entry.iter() {
+            let location = self.location_table.to_rich_location(*location_idx);
+            for var in vars {
+                lives.entry(*var).or_insert_with(Vec::new).push(location);
+            }
+        }
+        lives
+            .into_iter()
+            .map(|(local, locations)| {
+                (
+                    local,
+                    utils::eliminated_ranges(self.rich_locations_to_ranges(&locations)),
+                )
+            })
+            .collect()
+    }
+    /// returns (shared, mutable)
+    fn get_borrow_live(&self) -> (HashMap<Local, Vec<Range>>, HashMap<Local, Vec<Range>>) {
+        let output = &self.output_datafrog;
+        let mut shared_borrows = HashMap::new();
+        let mut mutable_borrows = HashMap::new();
         for (location_idx, borrow_idc) in output.loan_live_at.iter() {
-            let location = self
-                .location_table
-                .to_location(location_idx.as_usize().into());
+            let location = self.location_table.to_rich_location(*location_idx);
             for borrow_idx in borrow_idc {
-                if let Some(local) = self.borrow_locals.get(borrow_idx) {
-                    local_loan_live_at
-                        .entry(*local)
+                let borrow_data = &self.borrow_set[*borrow_idx];
+                let local = borrow_data.borrowed_place().local;
+                if borrow_data.kind().mutability().is_mut() {
+                    mutable_borrows
+                        .entry(local)
+                        .or_insert_with(Vec::new)
+                        .push(location);
+                } else {
+                    shared_borrows
+                        .entry(local)
                         .or_insert_with(Vec::new)
                         .push(location);
                 }
             }
         }
-        HashMap::from_iter(
-            local_loan_live_at
-                .iter()
-                .map(|(local, rich)| (*local, self.rich_locations_to_ranges(rich))),
+        (
+            shared_borrows
+                .into_iter()
+                .map(|(local, locations)| {
+                    (
+                        local,
+                        utils::eliminated_ranges(self.rich_locations_to_ranges(&locations)),
+                    )
+                })
+                .collect(),
+            mutable_borrows
+                .into_iter()
+                .map(|(local, locations)| {
+                    (
+                        local,
+                        utils::eliminated_ranges(self.rich_locations_to_ranges(&locations)),
+                    )
+                })
+                .collect(),
         )
     }
 
@@ -458,9 +478,7 @@ where
     fn live_range_from_region(&self, output: &PoloniusOutput) -> HashMap<Local, Vec<Range>> {
         let mut region_locations = HashMap::new();
         for (location_idx, region_idc) in output.origin_live_on_entry.iter() {
-            let location = self
-                .location_table
-                .to_location(location_idx.as_usize().into());
+            let location = self.location_table.to_rich_location(*location_idx);
             for region_idx in region_idc {
                 region_locations
                     .entry(*region_idx)
@@ -508,6 +526,7 @@ where
     /// analyze MIR to get JSON-serializable, TypeScript friendly representation
     pub fn analyze(self) -> (String, Function) {
         let decls = self.collect_decls();
+
         let basic_blocks = self.basic_blocks;
 
         (

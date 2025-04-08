@@ -42,7 +42,7 @@ local default_config = {
   client = {
 
     ---@type string[]
-    cmd = { 'cargo', 'owlsp' },
+    cmd = { 'rustowl' },
 
     ---@type fun():string?
     root_dir = function()

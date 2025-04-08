@@ -18,10 +18,12 @@ function M.enable(line, col, bufnr)
     client:request('rustowl/cursor', params, function(_, result, _)
       if result ~= nil then
         for _, deco in ipairs(result['decorations']) do
-          local start = { deco['range']['start']['line'], deco['range']['start']['character'] }
-          local finish = { deco['range']['end']['line'], deco['range']['end']['character'] }
-          local opts = { regtype = 'v', inclusive = true }
-          vim.highlight.range(bufnr, hl_ns, deco['type'], start, finish, opts)
+          if not deco['overlapped'] then
+            local start = { deco['range']['start']['line'], deco['range']['start']['character'] }
+            local finish = { deco['range']['end']['line'], deco['range']['end']['character'] }
+            local opts = { regtype = 'v', inclusive = true }
+            vim.highlight.range(bufnr, hl_ns, deco['type'], start, finish, opts)
+          end
         end
       end
     end, bufnr)

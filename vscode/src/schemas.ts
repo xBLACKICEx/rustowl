@@ -108,15 +108,17 @@ export const zLspType = z.union([
   z.literal("mut_borrow"),
   z.literal("move"),
   z.literal("call"),
+  z.literal("shared_mut"),
   z.literal("outlive"),
 ]);
 export const zLspCursorResponse = z.object({
+  is_analyzed: z.boolean(),
   decorations: z
     .object({
       type: zLspType,
       range: zLspRange,
       hover_text: z.string().nullish(),
-      is_display: z.boolean(),
+      overlapped: z.boolean(),
     })
     .array(),
 });

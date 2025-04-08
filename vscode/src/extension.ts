@@ -7,6 +7,7 @@ import {
   Executable,
   TransportKind,
   LanguageClientOptions,
+  DocumentUri,
 } from "vscode-languageclient/node";
 
 let client: LanguageClient | undefined = undefined;
@@ -26,12 +27,22 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   client = new LanguageClient(
-    "rustowlsp",
-    "RustOwLSP",
+    "rustowl",
+    "RustOwl",
     serverOptions,
     clientOptions,
   );
   client.start();
+
+  let activeEditor: vscode.TextEditor | undefined =
+    vscode.window.activeTextEditor;
+
+  const statusBar = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    0,
+  );
+  statusBar.text = "RustOwl";
+  statusBar.show();
 
   let lifetimeDecorationType = vscode.window.createTextEditorDecorationType({});
   let moveDecorationType = vscode.window.createTextEditorDecorationType({});
@@ -86,7 +97,7 @@ export function activate(context: vscode.ExtensionContext) {
     const messages: vscode.DecorationOptions[] = [];
     for (const deco of data.decorations) {
       const range = rangeToRange(deco.range);
-      if (deco.is_display) {
+      if (!deco.overlapped) {
         if (deco.type === "lifetime") {
           lifetime.push({
             range,
@@ -97,13 +108,12 @@ export function activate(context: vscode.ExtensionContext) {
           mut.push({ range });
         } else if (deco.type === "call" || deco.type === "move") {
           moveCall.push({ range });
-        } else if (deco.type === "outlive") {
+        } else if (deco.type === "shared_mut" || deco.type === "outlive") {
           outlive.push({ range });
         }
       }
-      const hoverMessage = deco.hover_text;
-      if (hoverMessage) {
-        messages.push({ range, hoverMessage });
+      if ("hover_text" in deco && deco.hover_text) {
+        messages.push({ range, hoverMessage: deco.hover_text });
       }
     }
     editor.setDecorations(lifetimeDecorationType, lifetime);
@@ -122,9 +132,50 @@ export function activate(context: vscode.ExtensionContext) {
     emptyDecorationType.dispose();
   };
 
+  const rustowlHoverRequest = async (
+    textEditor: vscode.TextEditor,
+    select: vscode.Position,
+    uri: vscode.Uri,
+  ) => {
+    const req = client?.sendRequest("rustowl/cursor", {
+      position: {
+        line: select.line,
+        character: select.character,
+      },
+      document: { uri: uri.toString() },
+    });
+    const resp = await req;
+    const data = zLspCursorResponse.safeParse(resp);
+    if (data.success) {
+      console.log(data.data);
+      if (data.data.is_analyzed) {
+        statusBar.text = "$(check) RustOwl";
+        statusBar.tooltip = "analyze finished";
+      } else {
+        statusBar.text = "$(alert) RustOwl";
+        statusBar.tooltip = "analyze failed";
+        statusBar.command = {
+          command: "rustowlHover",
+          title: "Analyze",
+          tooltip: "Rerun analysis",
+        };
+      }
+      statusBar.show();
+      updateDecoration(textEditor, data.data);
+    }
+  };
+
+  vscode.commands.registerCommand("rustowlHover", async (_args) => {
+    if (activeEditor) {
+      await rustowlHoverRequest(
+        activeEditor,
+        activeEditor?.selection.active,
+        activeEditor?.document.uri,
+      );
+    }
+  });
+
   // events
-  let activeEditor: vscode.TextEditor | undefined =
-    vscode.window.activeTextEditor;
   vscode.window.onDidChangeActiveTextEditor(
     (editor) => {
       activeEditor = editor;
@@ -149,19 +200,8 @@ export function activate(context: vscode.ExtensionContext) {
         }
         decoTimer = setTimeout(async () => {
           const select = ev.textEditor.selection.active;
-          const uri = ev.textEditor.document.uri.toString();
-          const req = client?.sendRequest("rustowl/cursor", {
-            position: {
-              line: select.line,
-              character: select.character,
-            },
-            document: { uri },
-          });
-          const resp = await req;
-          const data = zLspCursorResponse.safeParse(resp);
-          if (data.success) {
-            updateDecoration(ev.textEditor, data.data);
-          }
+          const uri = ev.textEditor.document.uri;
+          rustowlHoverRequest(ev.textEditor, select, uri);
         }, displayDelay);
       }
     },

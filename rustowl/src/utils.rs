@@ -16,6 +16,19 @@ pub fn common_range(r1: Range, r2: Range) -> Option<Range> {
     Some(Range { from, until })
 }
 
+pub fn common_ranges(ranges: &[Range]) -> Vec<Range> {
+    let mut common_ranges = Vec::new();
+    for i in 0..ranges.len() {
+        for j in i + 1..ranges.len() {
+            if let Some(common) = common_range(ranges[i], ranges[j]) {
+                common_ranges.push(common);
+            }
+        }
+    }
+    eliminated_ranges(common_ranges)
+}
+
+/// merge two ranges, result is superset of two ranges
 pub fn merge_ranges(r1: Range, r2: Range) -> Option<Range> {
     if common_range(r1, r2).is_some() {
         let from = r1.from.min(r2.from);
@@ -26,6 +39,7 @@ pub fn merge_ranges(r1: Range, r2: Range) -> Option<Range> {
     }
 }
 
+/// eliminate common ranges and flatten ranges
 pub fn eliminated_ranges(mut ranges: Vec<Range>) -> Vec<Range> {
     let mut i = 0;
     'outer: while i < ranges.len() {
@@ -86,7 +100,7 @@ pub fn exclude_ranges(mut from: Vec<Range>, excludes: Vec<Range>) -> Vec<Range> 
 #[allow(unused)]
 pub trait MirVisitor {
     fn visit_func(&mut self, func: &Function) {}
-    fn visit_decl(&mut self, decl: &MirDecl) {}
+    fn visit_decl(&mut self, decl: &MirUserDecl) {}
     fn visit_stmt(&mut self, stmt: &MirStatement) {}
     fn visit_term(&mut self, term: &MirTerminator) {}
 }
