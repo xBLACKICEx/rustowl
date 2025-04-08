@@ -5,7 +5,7 @@
 ;; Author: cordx56
 ;; Keywords: tools
 
-;; Version: 1.0.0
+;; Version: 0.2.0
 ;; Package-Requires: ((emacs "24.1") (lsp-mode "9.0.0"))
 ;; URL: https://github.com/cordx56/rustowl
 
@@ -51,8 +51,9 @@
                  (end-pos
                   (rustowl-line-col-to-pos
                    (gethash "line" end)
-                   (gethash "character" end))))
-            (if (not (gethash "overlapped" deco))
+                   (gethash "character" end)))
+                 (overlapped (gethash "overlapped" deco)))
+            (if (not overlapped)
               (cond
                ((equal type "lifetime")
                 (rustowl-underline start-pos end-pos "#00cc00"))
@@ -128,7 +129,7 @@
 
 (defun rustowl-underline (start end color)
   (let ((overlay (make-overlay start end)))
-    (overlay-put overlay 'face `(:rustowl-underline (:color ,color :style wave)))
+    (overlay-put overlay 'face `(:underline (:color ,color :style wave)))
     (push overlay rustowl-overlays)
     overlay))
 
