@@ -61,7 +61,7 @@ impl Range {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirVariable {
     User {
@@ -205,32 +205,23 @@ pub struct MirBasicBlock {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
-pub enum MirDecl {
-    User {
-        local_index: u32,
-        fn_id: u32,
-        name: String,
-        span: Range,
-        ty: String,
-        lives: Vec<Range>,
-        drop: bool,
-        drop_range: Vec<Range>,
-        must_live_at: Vec<Range>,
-    },
-    Other {
-        local_index: u32,
-        fn_id: u32,
-        ty: String,
-        lives: Vec<Range>,
-        drop: bool,
-        drop_range: Vec<Range>,
-        must_live_at: Vec<Range>,
-    },
+pub struct MirUserDecl {
+    pub local_index: u32,
+    pub fn_id: u32,
+    pub name: String,
+    pub span: Range,
+    pub ty: String,
+    pub lives: Vec<Range>,
+    pub shared_borrow: Vec<Range>,
+    pub mutable_borrow: Vec<Range>,
+    pub drop: bool,
+    pub drop_range: Vec<Range>,
+    pub must_live_at: Vec<Range>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Function {
     pub fn_id: u32,
     pub basic_blocks: Vec<MirBasicBlock>,
-    pub decls: Vec<MirDecl>,
+    pub decls: Vec<MirUserDecl>,
 }

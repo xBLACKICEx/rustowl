@@ -52,6 +52,12 @@ enum Deco<R = Range> {
         hover_text: String,
         overlapped: bool,
     },
+    SharedMut {
+        local: Local,
+        range: R,
+        hover_text: String,
+        overlapped: bool,
+    },
     Outlive {
         local: Local,
         range: R,
@@ -177,6 +183,30 @@ impl Deco<Range> {
                     overlapped,
                 }
             }
+            Deco::SharedMut {
+                local,
+                range,
+                hover_text,
+                overlapped,
+            } => {
+                let start = utils::index_to_line_char(s, range.from.0);
+                let end = utils::index_to_line_char(s, range.until.0);
+                let start = lsp_types::Position {
+                    line: start.0,
+                    character: start.1,
+                };
+                let end = lsp_types::Position {
+                    line: end.0,
+                    character: end.1,
+                };
+                Deco::SharedMut {
+                    local,
+                    range: lsp_types::Range { start, end },
+                    hover_text,
+                    overlapped,
+                }
+            }
+
             Deco::Outlive {
                 local,
                 range,
@@ -237,17 +267,15 @@ impl SelectLocal {
     }
 }
 impl utils::MirVisitor for SelectLocal {
-    fn visit_decl(&mut self, decl: &MirDecl) {
-        if let MirDecl::User {
+    fn visit_decl(&mut self, decl: &MirUserDecl) {
+        let MirUserDecl {
             local_index,
             fn_id,
             span,
             ..
-        } = decl
-        {
-            self.current_fn_id = *fn_id;
-            self.select(*local_index, *span);
-        }
+        } = decl;
+        self.current_fn_id = *fn_id;
+        self.select(*local_index, *span);
     }
     fn visit_stmt(&mut self, stmt: &MirStatement) {
         if let MirStatement::Assign { rval, .. } = stmt {
@@ -301,7 +329,8 @@ impl CalcDecos {
             Deco::MutBorrow { .. } => 2,
             Deco::Move { .. } => 3,
             Deco::Call { .. } => 4,
-            Deco::Outlive { .. } => 5,
+            Deco::SharedMut { .. } => 5,
+            Deco::Outlive { .. } => 6,
         }
     }
 
@@ -319,6 +348,7 @@ impl CalcDecos {
                 | Deco::MutBorrow { range, .. }
                 | Deco::Move { range, .. }
                 | Deco::Call { range, .. }
+                | Deco::SharedMut { range, .. }
                 | Deco::Outlive { range, .. } => *range,
             };
 
@@ -339,6 +369,9 @@ impl CalcDecos {
                         range, overlapped, ..
                     }
                     | Deco::Call {
+                        range, overlapped, ..
+                    }
+                    | Deco::SharedMut {
                         range, overlapped, ..
                     }
                     | Deco::Outlive {
@@ -398,6 +431,14 @@ impl CalcDecos {
                                     hover_text: hover_text.clone(),
                                     overlapped: false,
                                 },
+                                Deco::SharedMut {
+                                    local, hover_text, ..
+                                } => Deco::SharedMut {
+                                    local: *local,
+                                    range,
+                                    hover_text: hover_text.clone(),
+                                    overlapped: false,
+                                },
                                 Deco::Outlive {
                                     local, hover_text, ..
                                 } => Deco::Outlive {
@@ -426,6 +467,9 @@ impl CalcDecos {
                             | Deco::Call {
                                 range, overlapped, ..
                             }
+                            | Deco::SharedMut {
+                                range, overlapped, ..
+                            }
                             | Deco::Outlive {
                                 range, overlapped, ..
                             } => {
@@ -447,41 +491,56 @@ impl CalcDecos {
     }
 }
 impl utils::MirVisitor for CalcDecos {
-    fn visit_decl(&mut self, decl: &MirDecl) {
-        if let MirDecl::User {
+    fn visit_decl(&mut self, decl: &MirUserDecl) {
+        let MirUserDecl {
             local_index,
             fn_id,
             lives,
+            shared_borrow,
+            mutable_borrow,
             drop_range,
             must_live_at,
             name,
             ..
-        } = decl
-        {
-            self.current_fn_id = *fn_id;
-            let local = Local::new(*local_index, *fn_id);
-            if self.locals.contains(&local) {
-                // merge Drop object lives
-                let mut drop_copy_live = lives.clone();
-                drop_copy_live.extend_from_slice(drop_range);
-                drop_copy_live = utils::eliminated_ranges(drop_copy_live.clone());
-                for range in &drop_copy_live {
-                    self.decorations.push(Deco::Lifetime {
-                        local,
-                        range: *range,
-                        hover_text: format!("lifetime of variable `{}`", name),
-                        overlapped: false,
-                    });
-                }
-                let outlive = utils::exclude_ranges(must_live_at.clone(), drop_copy_live);
-                for range in outlive {
-                    self.decorations.push(Deco::Outlive {
-                        local,
-                        range,
-                        hover_text: format!("variable `{}` is required to live here", name),
-                        overlapped: false,
-                    });
-                }
+        } = decl;
+        self.current_fn_id = *fn_id;
+        let local = Local::new(*local_index, *fn_id);
+        if self.locals.contains(&local) {
+            // merge Drop object lives
+            let mut drop_copy_live = lives.clone();
+            /*
+            drop_copy_live.extend_from_slice(drop_range);
+            drop_copy_live = utils::eliminated_ranges(drop_copy_live.clone());
+            */
+            for range in &drop_copy_live {
+                self.decorations.push(Deco::Lifetime {
+                    local,
+                    range: *range,
+                    hover_text: format!("lifetime of variable `{}`", name),
+                    overlapped: false,
+                });
+            }
+            let mut borrow_ranges = shared_borrow.clone();
+            borrow_ranges.extend_from_slice(&mutable_borrow);
+            let shared_mut = utils::common_ranges(&borrow_ranges);
+            for range in shared_mut {
+                self.decorations.push(Deco::SharedMut {
+                    local,
+                    range,
+                    hover_text: format!(
+                        "shared and mutable borrows of variable `{name}` live here",
+                    ),
+                    overlapped: false,
+                });
+            }
+            let outlive = utils::exclude_ranges(must_live_at.clone(), drop_copy_live);
+            for range in outlive {
+                self.decorations.push(Deco::Outlive {
+                    local,
+                    range,
+                    hover_text: format!("variable `{name}` is required to live here"),
+                    overlapped: false,
+                });
             }
         }
     }

@@ -1,5 +1,4 @@
 mod analyze;
-mod from_rustc;
 
 use analyze::MirAnalyzer;
 use rustc_hir::def_id::LocalDefId;
