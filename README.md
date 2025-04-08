@@ -83,6 +83,7 @@ Minimal setup with [lazy.nvim](https://github.com/folke/lazy.nvim):
 ```lua
 {
   'cordx56/rustowl',
+  version = '*', -- Latest stable version
   build = 'cd rustowl && cargo install --path . --locked',
   lazy = false, -- This plugin is already lazy
   opts = {},
@@ -95,6 +96,7 @@ Minimal setup with [lazy.nvim](https://github.com/folke/lazy.nvim):
 ```lua
 {
   'cordx56/rustowl',
+  version = '*', -- Latest stable version
   build = 'cd rustowl && cargo install --path . --locked',
   lazy = false, -- This plugin is already lazy
   opts = {
