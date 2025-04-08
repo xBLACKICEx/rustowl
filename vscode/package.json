@@ -32,7 +32,7 @@
       "properties": {
         "rustowl.underlineThickness": {
           "type": "string",
-          "default": "3",
+          "default": "2",
           "enum": [
             "1",
             "2",
