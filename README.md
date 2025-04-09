@@ -29,6 +29,10 @@ For these editors, move the text cursor over the variable or function call you w
 We implemented LSP server with an extended protocol.
 So, RustOwl can be used easily from other editor.
 
+## Support
+
+If you're looking for support, please consider checking all issues, existing discussions, and [starting a discussion](https://github.com/cordx56/rustowl/discussions/new?category=q-a) first!
+
 ## Quick Start
 
 Here we describe how to start using RustOwl with VSCode.
