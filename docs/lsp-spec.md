@@ -1,7 +1,7 @@
-# owlsp specification
+# The RustOwl LSP specification
 
-owlsp, or cargo-owlsp, is an LSP server which provides RustOwl information.
-To display various types of decorations, owlsp supports some custom methods from the client.
+`rustowl`, is an LSP server which provides RustOwl information.
+To display various types of decorations, RustOwl supports some custom methods from the client.
 
 Here, we describe the specifications of those custom methods.
 
@@ -12,7 +12,7 @@ Here, we describe the types we will use in this document.
 ### `OprType`
 
 ```typescript
-"lifetime" | "imm_borrow" | "mut_borrow" | "move" | "call" | "outlive"
+"lifetime" | "imm_borrow" | "mut_borrow" | "move" | "call" | "outlive" | "shared_mut"
 ```
 
 ### `Decoration`
@@ -29,7 +29,7 @@ Here, we describe the types we will use in this document.
 
 ## Methods
 
-We describe the custom methods used in owlsp.
+We describe the custom methods used in RustOwl.
 
 ### `rustowl/cursor`
 
@@ -46,6 +46,7 @@ We describe the custom methods used in owlsp.
 #### Response payload
 
 <pre><code>{
+    "is_analyzed": bool,
     "decorations": [<a href="#decoration">Decoration</a>]
 }
 </code></pre>

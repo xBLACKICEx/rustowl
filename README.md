@@ -22,7 +22,9 @@ RustOwl visualizes those by using underlines:
 - 🟦 blue: immutable borrowing
 - 🟪 purple: mutable borrowing
 - 🟧 orange: value moved / function call
-- 🟥 red: lifetime error - diff of lifetime between actual and expected
+- 🟥 red: lifetime error
+    - diff of lifetime between actual and expected, or
+    - invalid overlapped lifetime of mutable and shared (immutable) references
 
 Currently, we offer VSCode extension, Neovim plugin and Emacs package.
 For these editors, move the text cursor over the variable or function call you want to inspect and wait for 2 seconds to visualize the information.
@@ -35,11 +37,12 @@ If you're looking for support, please consider checking all issues, existing dis
 
 ## Quick Start
 
-Here we describe how to start using RustOwl with VSCode.
+Here we describe how to start using RustOwl with VS Code.
 
 ### Prerequisite
 
 - `rustup` installed
+    - You can install `rustup` from [this link](https://rustup.rs/).
 - Visual Studio Code (VS Code) installed
 
 We tested this guide on macOS Sequoia 15.3.2 on arm64 architecture with VSCode 1.99.1 and `rustup` 1.28.1.
@@ -60,7 +63,7 @@ Install from crates.io:
 cargo install rustowl -F installer --locked
 ```
 
-Or, install from GitHub release:
+Or, install from GitHub release (using sh, Unix-like / WSL only):
 
 ```bash
 curl -L "https://github.com/cordx56/rustowl/releases/latest/download/install.sh" | sh
@@ -68,13 +71,13 @@ curl -L "https://github.com/cordx56/rustowl/releases/latest/download/install.sh"
 
 ### VSCode
 
-You can install VSCode extension from [this link](https://marketplace.visualstudio.com/items?itemName=cordx56.rustowl-vscode).
+You can install VS Code extension from [this link](https://marketplace.visualstudio.com/items?itemName=cordx56.rustowl-vscode).
 
 ## Other editor support
 
 We support Neovim and Emacs.
 You can also create your own LSP client.
-If you would like to implement a client, please refer to the [owlsp specification](docs/lsp-spec.md).
+If you would like to implement a client, please refer to the [The RustOwl LSP specification](docs/lsp-spec.md).
 
 ### Neovim
 
