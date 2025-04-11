@@ -26,6 +26,8 @@ RustOwl visualizes those by using underlines:
     - diff of lifetime between actual and expected, or
     - invalid overlapped lifetime of mutable and shared (immutable) references
 
+Detailed usage is described [here](docs/usage.md).
+
 Currently, we offer VSCode extension, Neovim plugin and Emacs package.
 For these editors, move the text cursor over the variable or function call you want to inspect and wait for 2 seconds to visualize the information.
 We implemented LSP server with an extended protocol.
@@ -45,7 +47,7 @@ Here we describe how to start using RustOwl with VS Code.
     - You can install `rustup` from [this link](https://rustup.rs/).
 - Visual Studio Code (VS Code) installed
 
-We tested this guide on macOS Sequoia 15.3.2 on arm64 architecture with VSCode 1.99.1 and `rustup` 1.28.1.
+We tested this guide on macOS Sequoia 15.3.2 on arm64 architecture with VS Code 1.99.1 and `rustup` 1.28.1.
 
 We also tested this guide on Ubuntu 25.04.
 On Ubuntu, you need to run `apt install build-essential` before installing.
@@ -69,7 +71,7 @@ Or, install from GitHub release (using sh, Unix-like / WSL only):
 curl -L "https://github.com/cordx56/rustowl/releases/latest/download/install.sh" | sh
 ```
 
-### VSCode
+### VS Code
 
 You can install VS Code extension from [this link](https://marketplace.visualstudio.com/items?itemName=cordx56.rustowl-vscode).
 
