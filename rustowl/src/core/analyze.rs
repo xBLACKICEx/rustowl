@@ -121,6 +121,7 @@ impl MirAnalyzer<'_> {
             .map(|(b, d)| (b, d.clone()))
             .collect();
         let basic_blocks = Self::basic_blocks(
+            fn_id,
             &source,
             offset,
             &facts.body.basic_blocks,
@@ -242,7 +243,7 @@ impl MirAnalyzer<'_> {
             .collect()
     }
     /// collect declared variables in MIR body
-    fn collect_decls(&self) -> Vec<MirUserDecl> {
+    fn collect_decls(&self) -> Vec<MirDecl> {
         let user_vars = self.collect_user_vars();
         let lives = self.get_accurate_live();
         let (shared, mutable) = self.get_borrow_live();
@@ -251,9 +252,7 @@ impl MirAnalyzer<'_> {
         self.body
             .local_decls
             .iter_enumerated()
-            .filter(|(_, decl)| decl.is_user_variable())
             .map(|(local, decl)| {
-                let local_index = local.as_u32();
                 let ty = decl.ty.to_string();
                 let must_live_at = utils::eliminated_ranges(
                     must_live_at.get(&local).cloned().unwrap_or(Vec::new()),
@@ -263,19 +262,31 @@ impl MirAnalyzer<'_> {
                 let mutable_borrow = mutable.get(&local).cloned().unwrap_or(Vec::new());
                 let drop = self.is_drop(local);
                 let drop_range = drop_range.get(&local).cloned().unwrap_or(Vec::new());
-                let (span, name) = user_vars.get(&local).cloned().unwrap();
-                MirUserDecl {
-                    local_index,
-                    fn_id: self.fn_id.local_def_index.as_u32(),
-                    name,
-                    span,
-                    ty,
-                    lives,
-                    shared_borrow,
-                    mutable_borrow,
-                    must_live_at,
-                    drop,
-                    drop_range,
+                let fn_local = FnLocal::new(local.as_u32(), self.fn_id.local_def_index.as_u32());
+                if let Some((span, name)) = user_vars.get(&local).cloned() {
+                    MirDecl::User {
+                        local: fn_local,
+                        name,
+                        span,
+                        ty,
+                        lives,
+                        shared_borrow,
+                        mutable_borrow,
+                        must_live_at,
+                        drop,
+                        drop_range,
+                    }
+                } else {
+                    MirDecl::Other {
+                        local: fn_local,
+                        ty,
+                        lives,
+                        shared_borrow,
+                        mutable_borrow,
+                        drop,
+                        drop_range,
+                        must_live_at,
+                    }
                 }
             })
             .collect()
@@ -283,6 +294,7 @@ impl MirAnalyzer<'_> {
 
     /// collect and translate basic blocks
     fn basic_blocks(
+        fn_id: LocalDefId,
         source: &str,
         offset: u32,
         basic_blocks: &BasicBlocks<'_>,
@@ -308,7 +320,10 @@ impl MirAnalyzer<'_> {
                                         let local = p.local;
                                         range_from_span(source, statement.source_info.span, offset)
                                             .map(|range| MirRval::Move {
-                                                target_local_index: local.as_u32(),
+                                                target_local: FnLocal::new(
+                                                    local.as_u32(),
+                                                    fn_id.local_def_index.as_u32(),
+                                                ),
                                                 range,
                                             })
                                     }
@@ -318,7 +333,10 @@ impl MirAnalyzer<'_> {
                                         let outlive = None;
                                         range_from_span(source, statement.source_info.span, offset)
                                             .map(|range| MirRval::Borrow {
-                                                target_local_index: local.as_u32(),
+                                                target_local: FnLocal::new(
+                                                    local.as_u32(),
+                                                    fn_id.local_def_index.as_u32(),
+                                                ),
                                                 range,
                                                 mutable,
                                                 outlive,
@@ -328,7 +346,10 @@ impl MirAnalyzer<'_> {
                                 };
                                 range_from_span(source, statement.source_info.span, offset).map(
                                     |range| MirStatement::Assign {
-                                        target_local_index,
+                                        target_local: FnLocal::new(
+                                            target_local_index,
+                                            fn_id.local_def_index.as_u32(),
+                                        ),
                                         range,
                                         rval: rv,
                                     },
@@ -345,7 +366,10 @@ impl MirAnalyzer<'_> {
                         TerminatorKind::Drop { place, .. } => {
                             range_from_span(source, terminator.source_info.span, offset).map(
                                 |range| MirTerminator::Drop {
-                                    local_index: place.local.as_u32(),
+                                    local: FnLocal::new(
+                                        place.local.as_u32(),
+                                        fn_id.local_def_index.as_u32(),
+                                    ),
                                     range,
                                 },
                             )
@@ -356,7 +380,10 @@ impl MirAnalyzer<'_> {
                             ..
                         } => range_from_span(source, *fn_span, offset).map(|fn_span| {
                             MirTerminator::Call {
-                                destination_local_index: destination.local.as_u32(),
+                                destination_local: FnLocal::new(
+                                    destination.local.as_u32(),
+                                    fn_id.local_def_index.as_u32(),
+                                ),
                                 fn_span,
                             }
                         }),

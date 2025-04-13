@@ -7,43 +7,43 @@ use tower_lsp::lsp_types;
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Deco<R = Range> {
     Lifetime {
-        local: Local,
+        local: FnLocal,
         range: R,
         hover_text: String,
         overlapped: bool,
     },
     ImmBorrow {
-        local: Local,
+        local: FnLocal,
         range: R,
         hover_text: String,
         overlapped: bool,
     },
     MutBorrow {
-        local: Local,
+        local: FnLocal,
         range: R,
         hover_text: String,
         overlapped: bool,
     },
     Move {
-        local: Local,
+        local: FnLocal,
         range: R,
         hover_text: String,
         overlapped: bool,
     },
     Call {
-        local: Local,
+        local: FnLocal,
         range: R,
         hover_text: String,
         overlapped: bool,
     },
     SharedMut {
-        local: Local,
+        local: FnLocal,
         range: R,
         hover_text: String,
         overlapped: bool,
     },
     Outlive {
-        local: Local,
+        local: FnLocal,
         range: R,
         hover_text: String,
         overlapped: bool,
@@ -240,56 +240,80 @@ impl CursorRequest {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
+enum SelectReason {
+    Var,
+    Move,
+    Borrow,
+    Call,
+}
+#[derive(Clone, Copy, Debug)]
 pub struct SelectLocal {
     pos: Loc,
-    selected: HashSet<Local>,
-    current_fn_id: u32,
+    selected: Option<(SelectReason, FnLocal, Range)>,
 }
 impl SelectLocal {
     pub fn new(pos: Loc) -> Self {
         Self {
             pos,
-            selected: HashSet::new(),
-            current_fn_id: 0,
+            selected: None,
         }
     }
-    pub fn select(&mut self, local_id: u32, range: Range) {
+
+    fn select(&mut self, reason: SelectReason, local: FnLocal, range: Range) {
         if range.from() <= self.pos && self.pos <= range.until() {
-            self.selected
-                .insert(Local::new(local_id, self.current_fn_id));
+            if let Some((old_reason, _, old_range)) = self.selected {
+                match (old_reason, reason) {
+                    (_, SelectReason::Var) => {
+                        if range.size() < old_range.size() {
+                            self.selected = Some((reason, local, range));
+                        }
+                    }
+                    (SelectReason::Var, _) => {}
+                    (_, SelectReason::Move) | (_, SelectReason::Borrow) => {
+                        if range.size() < old_range.size() {
+                            self.selected = Some((reason, local, range));
+                        }
+                    }
+                    (SelectReason::Call, SelectReason::Call) => {
+                        // TODO: select narrower when callee is method
+                        if old_range.size() < range.size() {
+                            self.selected = Some((reason, local, range));
+                        }
+                    }
+                    _ => {}
+                }
+            } else {
+                self.selected = Some((reason, local, range));
+            }
         }
     }
-    pub fn selected(&self) -> &HashSet<Local> {
-        &self.selected
+
+    pub fn selected(&self) -> Option<FnLocal> {
+        self.selected.map(|v| v.1)
     }
 }
 impl utils::MirVisitor for SelectLocal {
-    fn visit_decl(&mut self, decl: &MirUserDecl) {
-        let MirUserDecl {
-            local_index,
-            fn_id,
-            span,
-            ..
-        } = decl;
-        self.current_fn_id = *fn_id;
-        self.select(*local_index, *span);
+    fn visit_decl(&mut self, decl: &MirDecl) {
+        if let MirDecl::User { local, span, .. } = decl {
+            self.select(SelectReason::Var, *local, *span);
+        }
     }
     fn visit_stmt(&mut self, stmt: &MirStatement) {
         if let MirStatement::Assign { rval, .. } = stmt {
             match rval {
                 Some(MirRval::Move {
-                    target_local_index,
+                    target_local,
                     range,
                 }) => {
-                    self.select(*target_local_index, *range);
+                    self.select(SelectReason::Move, *target_local, *range);
                 }
                 Some(MirRval::Borrow {
-                    target_local_index,
+                    target_local,
                     range,
                     ..
                 }) => {
-                    self.select(*target_local_index, *range);
+                    self.select(SelectReason::Borrow, *target_local, *range);
                 }
                 _ => {}
             }
@@ -297,22 +321,22 @@ impl utils::MirVisitor for SelectLocal {
     }
     fn visit_term(&mut self, term: &MirTerminator) {
         if let MirTerminator::Call {
-            destination_local_index,
+            destination_local,
             fn_span,
         } = term
         {
-            self.select(*destination_local_index, *fn_span);
+            self.select(SelectReason::Call, *destination_local, *fn_span);
         }
     }
 }
 #[derive(Clone, Debug)]
 pub struct CalcDecos {
-    locals: HashSet<Local>,
+    locals: HashSet<FnLocal>,
     decorations: Vec<Deco>,
     current_fn_id: u32,
 }
 impl CalcDecos {
-    pub fn new(locals: impl IntoIterator<Item = Local>) -> Self {
+    pub fn new(locals: impl IntoIterator<Item = FnLocal>) -> Self {
         Self {
             locals: locals.into_iter().collect(),
             decorations: Vec::new(),
@@ -490,21 +514,50 @@ impl CalcDecos {
     }
 }
 impl utils::MirVisitor for CalcDecos {
-    fn visit_decl(&mut self, decl: &MirUserDecl) {
-        let MirUserDecl {
-            local_index,
-            fn_id,
-            lives,
-            shared_borrow,
-            mutable_borrow,
-            drop_range,
-            must_live_at,
-            name,
-            ..
-        } = decl;
-        self.current_fn_id = *fn_id;
-        let local = Local::new(*local_index, *fn_id);
+    fn visit_decl(&mut self, decl: &MirDecl) {
+        let (local, lives, shared_borrow, mutable_borrow, drop_range, must_live_at, name) =
+            match decl {
+                MirDecl::User {
+                    local,
+                    name,
+                    lives,
+                    shared_borrow,
+                    mutable_borrow,
+                    drop_range,
+                    must_live_at,
+                    ..
+                } => (
+                    *local,
+                    lives,
+                    shared_borrow,
+                    mutable_borrow,
+                    drop_range,
+                    must_live_at,
+                    Some(name),
+                ),
+                MirDecl::Other {
+                    local,
+                    lives,
+                    shared_borrow,
+                    mutable_borrow,
+                    drop_range,
+                    must_live_at,
+                    ..
+                } => (
+                    *local,
+                    lives,
+                    shared_borrow,
+                    mutable_borrow,
+                    drop_range,
+                    must_live_at,
+                    None,
+                ),
+            };
+        self.current_fn_id = local.fn_id;
         if self.locals.contains(&local) {
+            let var_str = name
+                .map(|v| format!("variable `{v}`"))
+                .unwrap_or("anonymous variable".to_owned());
             // merge Drop object lives
             let mut drop_copy_live = lives.clone();
             drop_copy_live.extend_from_slice(drop_range);
@@ -513,7 +566,7 @@ impl utils::MirVisitor for CalcDecos {
                 self.decorations.push(Deco::Lifetime {
                     local,
                     range: *range,
-                    hover_text: format!("lifetime of variable `{}`", name),
+                    hover_text: format!("lifetime of {var_str}"),
                     overlapped: false,
                 });
             }
@@ -524,9 +577,7 @@ impl utils::MirVisitor for CalcDecos {
                 self.decorations.push(Deco::SharedMut {
                     local,
                     range,
-                    hover_text: format!(
-                        "immutable and mutable borrows of variable `{name}` exist here",
-                    ),
+                    hover_text: format!("immutable and mutable borrows of {var_str} exist here"),
                     overlapped: false,
                 });
             }
@@ -535,7 +586,7 @@ impl utils::MirVisitor for CalcDecos {
                 self.decorations.push(Deco::Outlive {
                     local,
                     range,
-                    hover_text: format!("variable `{name}` is required to live here"),
+                    hover_text: format!("{var_str} is required to live here"),
                     overlapped: false,
                 });
             }
@@ -545,13 +596,12 @@ impl utils::MirVisitor for CalcDecos {
         if let MirStatement::Assign { rval, .. } = stmt {
             match rval {
                 Some(MirRval::Move {
-                    target_local_index,
+                    target_local,
                     range,
                 }) => {
-                    let local = Local::new(*target_local_index, self.current_fn_id);
-                    if self.locals.contains(&local) {
+                    if self.locals.contains(target_local) {
                         self.decorations.push(Deco::Move {
-                            local,
+                            local: *target_local,
                             range: *range,
                             hover_text: "variable moved".to_string(),
                             overlapped: false,
@@ -559,23 +609,22 @@ impl utils::MirVisitor for CalcDecos {
                     }
                 }
                 Some(MirRval::Borrow {
-                    target_local_index,
+                    target_local,
                     range,
                     mutable,
                     ..
                 }) => {
-                    let local = Local::new(*target_local_index, self.current_fn_id);
-                    if self.locals.contains(&local) {
+                    if self.locals.contains(target_local) {
                         if *mutable {
                             self.decorations.push(Deco::MutBorrow {
-                                local,
+                                local: *target_local,
                                 range: *range,
                                 hover_text: "mutable borrow".to_string(),
                                 overlapped: false,
                             });
                         } else {
                             self.decorations.push(Deco::ImmBorrow {
-                                local,
+                                local: *target_local,
                                 range: *range,
                                 hover_text: "immutable borrow".to_string(),
                                 overlapped: false,
@@ -589,12 +638,11 @@ impl utils::MirVisitor for CalcDecos {
     }
     fn visit_term(&mut self, term: &MirTerminator) {
         if let MirTerminator::Call {
-            destination_local_index,
+            destination_local,
             fn_span,
         } = term
         {
-            let local = Local::new(*destination_local_index, self.current_fn_id);
-            if self.locals.contains(&local) {
+            if self.locals.contains(destination_local) {
                 let mut i = 0;
                 for deco in &self.decorations {
                     if let Deco::Call { range, .. } = deco {
@@ -617,7 +665,7 @@ impl utils::MirVisitor for CalcDecos {
                     i += 1;
                 }
                 self.decorations.push(Deco::Call {
-                    local,
+                    local: *destination_local,
                     range: *fn_span,
                     hover_text: "function call".to_string(),
                     overlapped: false,

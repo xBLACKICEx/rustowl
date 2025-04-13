@@ -4,12 +4,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Local {
+pub struct FnLocal {
     pub id: u32,
     pub fn_id: u32,
 }
 
-impl Local {
+impl FnLocal {
     pub fn new(id: u32, fn_id: u32) -> Self {
         Self { id, fn_id }
     }
@@ -78,6 +78,9 @@ impl Range {
     }
     pub fn until(&self) -> Loc {
         self.until
+    }
+    pub fn size(&self) -> u32 {
+        self.until.0 - self.from.0
     }
 }
 
@@ -175,11 +178,11 @@ impl Crate {
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirRval {
     Move {
-        target_local_index: u32,
+        target_local: FnLocal,
         range: Range,
     },
     Borrow {
-        target_local_index: u32,
+        target_local: FnLocal,
         range: Range,
         mutable: bool,
         outlive: Option<Range>,
@@ -190,15 +193,15 @@ pub enum MirRval {
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirStatement {
     StorageLive {
-        target_local_index: u32,
+        target_local: FnLocal,
         range: Range,
     },
     StorageDead {
-        target_local_index: u32,
+        target_local: FnLocal,
         range: Range,
     },
     Assign {
-        target_local_index: u32,
+        target_local: FnLocal,
         range: Range,
         rval: Option<MirRval>,
     },
@@ -208,11 +211,11 @@ pub enum MirStatement {
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirTerminator {
     Drop {
-        local_index: u32,
+        local: FnLocal,
         range: Range,
     },
     Call {
-        destination_local_index: u32,
+        destination_local: FnLocal,
         fn_span: Range,
     },
     Other,
@@ -225,24 +228,35 @@ pub struct MirBasicBlock {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "snake_case")]
-pub struct MirUserDecl {
-    pub local_index: u32,
-    pub fn_id: u32,
-    pub name: String,
-    pub span: Range,
-    pub ty: String,
-    pub lives: Vec<Range>,
-    pub shared_borrow: Vec<Range>,
-    pub mutable_borrow: Vec<Range>,
-    pub drop: bool,
-    pub drop_range: Vec<Range>,
-    pub must_live_at: Vec<Range>,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum MirDecl {
+    User {
+        local: FnLocal,
+        name: String,
+        span: Range,
+        ty: String,
+        lives: Vec<Range>,
+        shared_borrow: Vec<Range>,
+        mutable_borrow: Vec<Range>,
+        drop: bool,
+        drop_range: Vec<Range>,
+        must_live_at: Vec<Range>,
+    },
+    Other {
+        local: FnLocal,
+        ty: String,
+        lives: Vec<Range>,
+        shared_borrow: Vec<Range>,
+        mutable_borrow: Vec<Range>,
+        drop: bool,
+        drop_range: Vec<Range>,
+        must_live_at: Vec<Range>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Function {
     pub fn_id: u32,
     pub basic_blocks: Vec<MirBasicBlock>,
-    pub decls: Vec<MirUserDecl>,
+    pub decls: Vec<MirDecl>,
 }
