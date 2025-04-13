@@ -32,6 +32,7 @@ type Subprocess = Option<u32>;
 struct Backend {
     #[allow(unused)]
     client: Client,
+    workspaces: Arc<RwLock<Vec<PathBuf>>>,
     roots: Arc<RwLock<HashMap<PathBuf, PathBuf>>>,
     status: Arc<RwLock<progress::AnalysisStatus>>,
     analyzed: Arc<RwLock<Option<Workspace>>>,
@@ -44,6 +45,7 @@ impl Backend {
     fn new(client: Client) -> Self {
         Self {
             client,
+            workspaces: Arc::new(RwLock::new(Vec::new())),
             roots: Arc::new(RwLock::new(HashMap::new())),
             analyzed: Arc::new(RwLock::new(None)),
             status: Arc::new(RwLock::new(progress::AnalysisStatus::Finished)),
@@ -59,26 +61,34 @@ impl Backend {
         } else {
             path.parent().unwrap().to_path_buf()
         };
-        let mut write = self.roots.write().await;
-        if let Ok(metadata) = cargo_metadata::MetadataCommand::new()
-            .current_dir(&dir)
-            .exec()
-        {
-            let path = metadata.workspace_root;
-            let target = metadata
-                .target_directory
-                .as_std_path()
-                .to_path_buf()
-                .join("owl");
-            tokio::fs::create_dir_all(&target).await.unwrap();
+        for w in &*self.workspaces.read().await {
+            if dir.starts_with(w) {
+                let mut write = self.roots.write().await;
+                if let Ok(metadata) = cargo_metadata::MetadataCommand::new()
+                    .current_dir(&dir)
+                    .exec()
+                {
+                    let path = metadata.workspace_root;
+                    if !write.contains_key(path.as_std_path()) {
+                        log::info!("add {} to watch list", path);
 
-            if !write.contains_key(path.as_std_path()) {
-                log::info!("add {} to watch list", path);
-                write.insert(path.as_std_path().to_path_buf(), target);
-                return true;
+                        let target = metadata
+                            .target_directory
+                            .as_std_path()
+                            .to_path_buf()
+                            .join("owl");
+                        tokio::fs::create_dir_all(&target).await.unwrap();
+
+                        write.insert(path.as_std_path().to_path_buf(), target);
+                        return true;
+                    }
+                }
             }
         }
         false
+    }
+    async fn set_workspace(&self, ws: PathBuf) {
+        self.workspaces.write().await.push(ws);
     }
 
     async fn abort_subprocess(&self) {
@@ -355,6 +365,13 @@ impl LanguageServer for Backend {
         &self,
         params: lsp_types::InitializeParams,
     ) -> jsonrpc::Result<lsp_types::InitializeResult> {
+        if let Some(wss) = params.workspace_folders {
+            for ws in wss {
+                if let Ok(path) = ws.uri.to_file_path() {
+                    self.set_workspace(path).await;
+                }
+            }
+        }
         let sync_options = lsp_types::TextDocumentSyncOptions {
             open_close: Some(true),
             save: Some(lsp_types::TextDocumentSyncSaveOptions::Supported(true)),
@@ -398,6 +415,18 @@ impl LanguageServer for Backend {
         tokio::spawn(health_checker);
         Ok(init_res)
     }
+
+    async fn did_change_workspace_folders(
+        &self,
+        params: lsp_types::DidChangeWorkspaceFoldersParams,
+    ) -> () {
+        for added in params.event.added {
+            if let Ok(path) = added.uri.to_file_path() {
+                self.set_workspace(path).await;
+            }
+        }
+        self.analyze().await;
+    }
     async fn did_open(&self, params: lsp_types::DidOpenTextDocumentParams) {
         if params.text_document.language_id == "rust"
             && self
@@ -407,6 +436,7 @@ impl LanguageServer for Backend {
             self.analyze().await;
         }
     }
+
     async fn did_save(&self, _params: lsp_types::DidSaveTextDocumentParams) {
         self.analyze().await;
     }
@@ -483,7 +513,7 @@ async fn main() {
             let log_level = matches
                 .get_one::<String>("log_level")
                 .cloned()
-                .unwrap_or("info".to_owned());
+                .unwrap_or(env::var("RUST_LOG").unwrap_or("info".to_owned()));
             log::set_max_level(log_level.parse().unwrap());
             if check(env::current_dir().unwrap()).await {
                 std::process::exit(0);
@@ -505,6 +535,7 @@ async fn main() {
 async fn check(path: PathBuf) -> bool {
     let (service, _) = LspService::build(Backend::new).finish();
     let backend = service.inner();
+    backend.set_workspace(path.clone()).await;
     backend.set_roots(path).await;
     backend.analyze().await;
     while backend.processes.write().await.join_next().await.is_some() {}
