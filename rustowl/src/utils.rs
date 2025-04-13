@@ -1,19 +1,20 @@
 use crate::models::*;
 
 pub fn is_super_range(r1: Range, r2: Range) -> bool {
-    (r1.from < r2.from && r2.until <= r1.until) || (r1.from <= r2.from && r2.until < r1.until)
+    (r1.from() < r2.from() && r2.until() <= r1.until())
+        || (r1.from() <= r2.from() && r2.until() < r1.until())
 }
 
 pub fn common_range(r1: Range, r2: Range) -> Option<Range> {
-    if r2.from < r1.from {
+    if r2.from() < r1.from() {
         return common_range(r2, r1);
     }
-    if r1.until < r2.from {
+    if r1.until() < r2.from() {
         return None;
     }
-    let from = r2.from;
-    let until = r1.until.min(r2.until);
-    Some(Range { from, until })
+    let from = r2.from();
+    let until = r1.until().min(r2.until());
+    Range::new(from, until)
 }
 
 pub fn common_ranges(ranges: &[Range]) -> Vec<Range> {
@@ -30,10 +31,10 @@ pub fn common_ranges(ranges: &[Range]) -> Vec<Range> {
 
 /// merge two ranges, result is superset of two ranges
 pub fn merge_ranges(r1: Range, r2: Range) -> Option<Range> {
-    if common_range(r1, r2).is_some() {
-        let from = r1.from.min(r2.from);
-        let until = r1.until.max(r2.until);
-        Some(Range { from, until })
+    if common_range(r1, r2).is_some() || r1.until() == r2.from() || r2.until() == r1.from() {
+        let from = r1.from().min(r2.from());
+        let until = r1.until().max(r2.until());
+        Range::new(from, until)
     } else {
         None
     }
@@ -43,19 +44,16 @@ pub fn merge_ranges(r1: Range, r2: Range) -> Option<Range> {
 pub fn eliminated_ranges(mut ranges: Vec<Range>) -> Vec<Range> {
     let mut i = 0;
     'outer: while i < ranges.len() {
-        if ranges[i].until <= ranges[i].from {
-            ranges.remove(i);
-            continue;
-        }
-        let mut j = i + 1;
+        let mut j = 0;
         while j < ranges.len() {
-            if let Some(eliminated) = merge_ranges(ranges[i], ranges[j]) {
-                ranges[i] = eliminated;
-                ranges.remove(j);
-                continue 'outer;
-            } else {
-                j += 1;
+            if i != j {
+                if let Some(merged) = merge_ranges(ranges[i], ranges[j]) {
+                    ranges[i] = merged;
+                    ranges.remove(j);
+                    continue 'outer;
+                }
             }
+            j += 1;
         }
         i += 1;
     }
@@ -68,26 +66,13 @@ pub fn exclude_ranges(mut from: Vec<Range>, excludes: Vec<Range>) -> Vec<Range> 
         let mut j = 0;
         while j < excludes.len() {
             if let Some(common) = common_range(from[i], excludes[j]) {
-                if common.from == common.until {
-                    j += 1;
-                    continue;
+                if let Some(r) = Range::new(from[i].from(), common.from() - 1) {
+                    from.push(r);
                 }
-                let r1 = Range {
-                    from: from[i].from,
-                    until: common.from - 1,
-                };
-                let r2 = Range {
-                    from: common.from + 1,
-                    until: from[i].until,
-                };
+                if let Some(r) = Range::new(common.until() + 1, from[i].until()) {
+                    from.push(r);
+                }
                 from.remove(i);
-                if r1.from < r1.until {
-                    from.push(r1);
-                }
-                if r2.from < r2.until {
-                    from.push(r2);
-                }
-                i = 0;
                 continue 'outer;
             }
             j += 1;
@@ -119,11 +104,11 @@ pub fn mir_visit(func: &Function, visitor: &mut impl MirVisitor) {
     }
 }
 
-pub fn index_to_line_char(s: &str, idx: u32) -> (u32, u32) {
+pub fn index_to_line_char(s: &str, idx: Loc) -> (u32, u32) {
     let mut line = 0;
     let mut col = 0;
     for (i, c) in s.chars().enumerate() {
-        if idx == i as u32 {
+        if idx == Loc::from(i as u32) {
             return (line, col);
         }
         if c == '\n' {

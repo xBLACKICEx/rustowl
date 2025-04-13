@@ -49,19 +49,39 @@ impl std::ops::Sub<i32> for Loc {
         }
     }
 }
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
-pub struct Range {
-    pub from: Loc,
-    pub until: Loc,
+impl From<u32> for Loc {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
 }
-impl Range {
-    pub fn new(from: Loc, until: Loc) -> Self {
-        Self { from, until }
+impl From<Loc> for u32 {
+    fn from(value: Loc) -> Self {
+        value.0
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Range {
+    from: Loc,
+    until: Loc,
+}
+impl Range {
+    pub fn new(from: Loc, until: Loc) -> Option<Self> {
+        if until.0 <= from.0 {
+            None
+        } else {
+            Some(Self { from, until })
+        }
+    }
+    pub fn from(&self) -> Loc {
+        self.from
+    }
+    pub fn until(&self) -> Loc {
+        self.until
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum MirVariable {
     User {
@@ -76,7 +96,7 @@ pub enum MirVariable {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(transparent)]
 pub struct MirVariables(HashMap<u32, MirVariable>);
 impl Default for MirVariables {
@@ -123,12 +143,12 @@ pub struct File {
 pub struct Workspace(pub HashMap<String, Crate>);
 impl Workspace {
     pub fn merge(&mut self, other: Self) {
-        let Workspace(files) = other;
-        for (file, krate) in files {
-            if let Some(insert) = self.0.get_mut(&file) {
+        let Workspace(crates) = other;
+        for (name, krate) in crates {
+            if let Some(insert) = self.0.get_mut(&name) {
                 insert.merge(krate);
             } else {
-                self.0.insert(file, krate);
+                self.0.insert(name, krate);
             }
         }
     }
@@ -143,6 +163,7 @@ impl Crate {
         for (file, mir) in files {
             if let Some(insert) = self.0.get_mut(&file) {
                 insert.items.extend_from_slice(&mir.items);
+                insert.items.dedup_by(|a, b| a.fn_id == b.fn_id);
             } else {
                 self.0.insert(file, mir);
             }

@@ -4,7 +4,7 @@
 
 use rustowl::models::*;
 use rustowl::utils;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -74,8 +74,8 @@ impl Deco<Range> {
                 hover_text,
                 overlapped,
             } => {
-                let start = utils::index_to_line_char(s, range.from.0);
-                let end = utils::index_to_line_char(s, range.until.0);
+                let start = utils::index_to_line_char(s, range.from());
+                let end = utils::index_to_line_char(s, range.until());
                 let start = lsp_types::Position {
                     line: start.0,
                     character: start.1,
@@ -97,8 +97,8 @@ impl Deco<Range> {
                 hover_text,
                 overlapped,
             } => {
-                let start = utils::index_to_line_char(s, range.from.0);
-                let end = utils::index_to_line_char(s, range.until.0);
+                let start = utils::index_to_line_char(s, range.from());
+                let end = utils::index_to_line_char(s, range.until());
                 let start = lsp_types::Position {
                     line: start.0,
                     character: start.1,
@@ -120,8 +120,8 @@ impl Deco<Range> {
                 hover_text,
                 overlapped,
             } => {
-                let start = utils::index_to_line_char(s, range.from.0);
-                let end = utils::index_to_line_char(s, range.until.0);
+                let start = utils::index_to_line_char(s, range.from());
+                let end = utils::index_to_line_char(s, range.until());
                 let start = lsp_types::Position {
                     line: start.0,
                     character: start.1,
@@ -143,8 +143,8 @@ impl Deco<Range> {
                 hover_text,
                 overlapped,
             } => {
-                let start = utils::index_to_line_char(s, range.from.0);
-                let end = utils::index_to_line_char(s, range.until.0);
+                let start = utils::index_to_line_char(s, range.from());
+                let end = utils::index_to_line_char(s, range.until());
                 let start = lsp_types::Position {
                     line: start.0,
                     character: start.1,
@@ -166,8 +166,8 @@ impl Deco<Range> {
                 hover_text,
                 overlapped,
             } => {
-                let start = utils::index_to_line_char(s, range.from.0);
-                let end = utils::index_to_line_char(s, range.until.0);
+                let start = utils::index_to_line_char(s, range.from());
+                let end = utils::index_to_line_char(s, range.until());
                 let start = lsp_types::Position {
                     line: start.0,
                     character: start.1,
@@ -189,8 +189,8 @@ impl Deco<Range> {
                 hover_text,
                 overlapped,
             } => {
-                let start = utils::index_to_line_char(s, range.from.0);
-                let end = utils::index_to_line_char(s, range.until.0);
+                let start = utils::index_to_line_char(s, range.from());
+                let end = utils::index_to_line_char(s, range.until());
                 let start = lsp_types::Position {
                     line: start.0,
                     character: start.1,
@@ -213,8 +213,8 @@ impl Deco<Range> {
                 hover_text,
                 overlapped,
             } => {
-                let start = utils::index_to_line_char(s, range.from.0);
-                let end = utils::index_to_line_char(s, range.until.0);
+                let start = utils::index_to_line_char(s, range.from());
+                let end = utils::index_to_line_char(s, range.until());
                 let start = lsp_types::Position {
                     line: start.0,
                     character: start.1,
@@ -249,20 +249,21 @@ struct CursorRequest {
 #[derive(Clone, Debug)]
 struct SelectLocal {
     pos: Loc,
-    selected: Vec<Local>,
+    selected: HashSet<Local>,
     current_fn_id: u32,
 }
 impl SelectLocal {
     fn new(pos: Loc) -> Self {
         Self {
             pos,
-            selected: Vec::new(),
+            selected: HashSet::new(),
             current_fn_id: 0,
         }
     }
     fn select(&mut self, local_id: u32, range: Range) {
-        if range.from <= self.pos && self.pos <= range.until {
-            self.selected.push(Local::new(local_id, self.current_fn_id));
+        if range.from() <= self.pos && self.pos <= range.until() {
+            self.selected
+                .insert(Local::new(local_id, self.current_fn_id));
         }
     }
 }
@@ -309,12 +310,12 @@ impl utils::MirVisitor for SelectLocal {
 }
 #[derive(Clone, Debug)]
 struct CalcDecos {
-    locals: Vec<Local>,
+    locals: HashSet<Local>,
     decorations: Vec<Deco>,
     current_fn_id: u32,
 }
 impl CalcDecos {
-    pub fn new(locals: Vec<Local>) -> Self {
+    pub fn new(locals: HashSet<Local>) -> Self {
         Self {
             locals,
             decorations: Vec::new(),
@@ -385,103 +386,100 @@ impl CalcDecos {
                 }
 
                 if let Some(common) = utils::common_range(current_range, prev_range) {
-                    if common.from < common.until {
-                        let mut new_decos = Vec::new();
-                        let non_overlapping = utils::exclude_ranges(vec![prev_range], vec![common]);
+                    let mut new_decos = Vec::new();
+                    let non_overlapping = utils::exclude_ranges(vec![prev_range], vec![common]);
 
-                        for range in non_overlapping {
-                            let new_deco = match prev {
-                                Deco::Lifetime {
-                                    local, hover_text, ..
-                                } => Deco::Lifetime {
-                                    local: *local,
-                                    range,
-                                    hover_text: hover_text.clone(),
-                                    overlapped: false,
-                                },
-                                Deco::ImmBorrow {
-                                    local, hover_text, ..
-                                } => Deco::ImmBorrow {
-                                    local: *local,
-                                    range,
-                                    hover_text: hover_text.clone(),
-                                    overlapped: false,
-                                },
-                                Deco::MutBorrow {
-                                    local, hover_text, ..
-                                } => Deco::MutBorrow {
-                                    local: *local,
-                                    range,
-                                    hover_text: hover_text.clone(),
-                                    overlapped: false,
-                                },
-                                Deco::Move {
-                                    local, hover_text, ..
-                                } => Deco::Move {
-                                    local: *local,
-                                    range,
-                                    hover_text: hover_text.clone(),
-                                    overlapped: false,
-                                },
-                                Deco::Call {
-                                    local, hover_text, ..
-                                } => Deco::Call {
-                                    local: *local,
-                                    range,
-                                    hover_text: hover_text.clone(),
-                                    overlapped: false,
-                                },
-                                Deco::SharedMut {
-                                    local, hover_text, ..
-                                } => Deco::SharedMut {
-                                    local: *local,
-                                    range,
-                                    hover_text: hover_text.clone(),
-                                    overlapped: false,
-                                },
-                                Deco::Outlive {
-                                    local, hover_text, ..
-                                } => Deco::Outlive {
-                                    local: *local,
-                                    range,
-                                    hover_text: hover_text.clone(),
-                                    overlapped: false,
-                                },
-                            };
-                            new_decos.push(new_deco);
-                        }
-
-                        match &mut self.decorations[j] {
+                    for range in non_overlapping {
+                        let new_deco = match prev {
                             Deco::Lifetime {
-                                range, overlapped, ..
-                            }
-                            | Deco::ImmBorrow {
-                                range, overlapped, ..
-                            }
-                            | Deco::MutBorrow {
-                                range, overlapped, ..
-                            }
-                            | Deco::Move {
-                                range, overlapped, ..
-                            }
-                            | Deco::Call {
-                                range, overlapped, ..
-                            }
-                            | Deco::SharedMut {
-                                range, overlapped, ..
-                            }
-                            | Deco::Outlive {
-                                range, overlapped, ..
-                            } => {
-                                *range = common;
-                                *overlapped = true;
-                            }
-                        }
+                                local, hover_text, ..
+                            } => Deco::Lifetime {
+                                local: *local,
+                                range,
+                                hover_text: hover_text.clone(),
+                                overlapped: false,
+                            },
+                            Deco::ImmBorrow {
+                                local, hover_text, ..
+                            } => Deco::ImmBorrow {
+                                local: *local,
+                                range,
+                                hover_text: hover_text.clone(),
+                                overlapped: false,
+                            },
+                            Deco::MutBorrow {
+                                local, hover_text, ..
+                            } => Deco::MutBorrow {
+                                local: *local,
+                                range,
+                                hover_text: hover_text.clone(),
+                                overlapped: false,
+                            },
+                            Deco::Move {
+                                local, hover_text, ..
+                            } => Deco::Move {
+                                local: *local,
+                                range,
+                                hover_text: hover_text.clone(),
+                                overlapped: false,
+                            },
+                            Deco::Call {
+                                local, hover_text, ..
+                            } => Deco::Call {
+                                local: *local,
+                                range,
+                                hover_text: hover_text.clone(),
+                                overlapped: false,
+                            },
+                            Deco::SharedMut {
+                                local, hover_text, ..
+                            } => Deco::SharedMut {
+                                local: *local,
+                                range,
+                                hover_text: hover_text.clone(),
+                                overlapped: false,
+                            },
+                            Deco::Outlive {
+                                local, hover_text, ..
+                            } => Deco::Outlive {
+                                local: *local,
+                                range,
+                                hover_text: hover_text.clone(),
+                                overlapped: false,
+                            },
+                        };
+                        new_decos.push(new_deco);
+                    }
 
-                        for (jj, deco) in new_decos.into_iter().enumerate() {
-                            self.decorations.insert(j + jj + 1, deco);
+                    match &mut self.decorations[j] {
+                        Deco::Lifetime {
+                            range, overlapped, ..
                         }
-                        self.sort_by_definition();
+                        | Deco::ImmBorrow {
+                            range, overlapped, ..
+                        }
+                        | Deco::MutBorrow {
+                            range, overlapped, ..
+                        }
+                        | Deco::Move {
+                            range, overlapped, ..
+                        }
+                        | Deco::Call {
+                            range, overlapped, ..
+                        }
+                        | Deco::SharedMut {
+                            range, overlapped, ..
+                        }
+                        | Deco::Outlive {
+                            range, overlapped, ..
+                        } => {
+                            *range = common;
+                            *overlapped = true;
+                        }
+                    }
+
+                    for (jj, deco) in new_decos.into_iter().enumerate() {
+                        self.decorations.insert(j + jj + 1, deco);
                     }
                 }
                 j += 1;
