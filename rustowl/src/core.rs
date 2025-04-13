@@ -110,7 +110,7 @@ pub fn run_compiler() -> i32 {
     let args = rustc_driver::args::raw_args(&ctxt);
     let args = &args[1..];
     for arg in args {
-        if arg == "-vV" || arg.starts_with("--print") {
+        if arg == "-vV" || arg == "--version" || arg.starts_with("--print") {
             let mut callback = RustcCallback;
             return rustc_driver::catch_with_exit_code(|| {
                 rustc_driver::run_compiler(args, &mut callback)

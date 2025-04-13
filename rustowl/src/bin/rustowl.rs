@@ -2,9 +2,8 @@
 //!
 //! An LSP server for visualizing ownership and lifetimes in Rust, designed for debugging and optimization.
 
-use rustowl::models::*;
-use rustowl::utils;
-use std::collections::{HashMap, HashSet};
+use rustowl::{lsp::*, models::*, utils};
+use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -18,616 +17,6 @@ use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
-#[allow(unused)]
-#[derive(serde::Serialize, Clone, Debug)]
-#[serde(tag = "type", rename_all = "snake_case")]
-enum Deco<R = Range> {
-    Lifetime {
-        local: Local,
-        range: R,
-        hover_text: String,
-        overlapped: bool,
-    },
-    ImmBorrow {
-        local: Local,
-        range: R,
-        hover_text: String,
-        overlapped: bool,
-    },
-    MutBorrow {
-        local: Local,
-        range: R,
-        hover_text: String,
-        overlapped: bool,
-    },
-    Move {
-        local: Local,
-        range: R,
-        hover_text: String,
-        overlapped: bool,
-    },
-    Call {
-        local: Local,
-        range: R,
-        hover_text: String,
-        overlapped: bool,
-    },
-    SharedMut {
-        local: Local,
-        range: R,
-        hover_text: String,
-        overlapped: bool,
-    },
-    Outlive {
-        local: Local,
-        range: R,
-        hover_text: String,
-        overlapped: bool,
-    },
-}
-impl Deco<Range> {
-    fn to_lsp_range(&self, s: &str) -> Deco<lsp_types::Range> {
-        match self.clone() {
-            Deco::Lifetime {
-                local,
-                range,
-                hover_text,
-                overlapped,
-            } => {
-                let start = utils::index_to_line_char(s, range.from());
-                let end = utils::index_to_line_char(s, range.until());
-                let start = lsp_types::Position {
-                    line: start.0,
-                    character: start.1,
-                };
-                let end = lsp_types::Position {
-                    line: end.0,
-                    character: end.1,
-                };
-                Deco::Lifetime {
-                    local,
-                    range: lsp_types::Range { start, end },
-                    hover_text,
-                    overlapped,
-                }
-            }
-            Deco::ImmBorrow {
-                local,
-                range,
-                hover_text,
-                overlapped,
-            } => {
-                let start = utils::index_to_line_char(s, range.from());
-                let end = utils::index_to_line_char(s, range.until());
-                let start = lsp_types::Position {
-                    line: start.0,
-                    character: start.1,
-                };
-                let end = lsp_types::Position {
-                    line: end.0,
-                    character: end.1,
-                };
-                Deco::ImmBorrow {
-                    local,
-                    range: lsp_types::Range { start, end },
-                    hover_text,
-                    overlapped,
-                }
-            }
-            Deco::MutBorrow {
-                local,
-                range,
-                hover_text,
-                overlapped,
-            } => {
-                let start = utils::index_to_line_char(s, range.from());
-                let end = utils::index_to_line_char(s, range.until());
-                let start = lsp_types::Position {
-                    line: start.0,
-                    character: start.1,
-                };
-                let end = lsp_types::Position {
-                    line: end.0,
-                    character: end.1,
-                };
-                Deco::MutBorrow {
-                    local,
-                    range: lsp_types::Range { start, end },
-                    hover_text,
-                    overlapped,
-                }
-            }
-            Deco::Move {
-                local,
-                range,
-                hover_text,
-                overlapped,
-            } => {
-                let start = utils::index_to_line_char(s, range.from());
-                let end = utils::index_to_line_char(s, range.until());
-                let start = lsp_types::Position {
-                    line: start.0,
-                    character: start.1,
-                };
-                let end = lsp_types::Position {
-                    line: end.0,
-                    character: end.1,
-                };
-                Deco::Move {
-                    local,
-                    range: lsp_types::Range { start, end },
-                    hover_text,
-                    overlapped,
-                }
-            }
-            Deco::Call {
-                local,
-                range,
-                hover_text,
-                overlapped,
-            } => {
-                let start = utils::index_to_line_char(s, range.from());
-                let end = utils::index_to_line_char(s, range.until());
-                let start = lsp_types::Position {
-                    line: start.0,
-                    character: start.1,
-                };
-                let end = lsp_types::Position {
-                    line: end.0,
-                    character: end.1,
-                };
-                Deco::Call {
-                    local,
-                    range: lsp_types::Range { start, end },
-                    hover_text,
-                    overlapped,
-                }
-            }
-            Deco::SharedMut {
-                local,
-                range,
-                hover_text,
-                overlapped,
-            } => {
-                let start = utils::index_to_line_char(s, range.from());
-                let end = utils::index_to_line_char(s, range.until());
-                let start = lsp_types::Position {
-                    line: start.0,
-                    character: start.1,
-                };
-                let end = lsp_types::Position {
-                    line: end.0,
-                    character: end.1,
-                };
-                Deco::SharedMut {
-                    local,
-                    range: lsp_types::Range { start, end },
-                    hover_text,
-                    overlapped,
-                }
-            }
-
-            Deco::Outlive {
-                local,
-                range,
-                hover_text,
-                overlapped,
-            } => {
-                let start = utils::index_to_line_char(s, range.from());
-                let end = utils::index_to_line_char(s, range.until());
-                let start = lsp_types::Position {
-                    line: start.0,
-                    character: start.1,
-                };
-                let end = lsp_types::Position {
-                    line: end.0,
-                    character: end.1,
-                };
-                Deco::Outlive {
-                    local,
-                    range: lsp_types::Range { start, end },
-                    hover_text,
-                    overlapped,
-                }
-            }
-        }
-    }
-}
-#[derive(serde::Serialize, Clone, Debug)]
-struct Decorations {
-    is_analyzed: bool,
-    path: Option<PathBuf>,
-    decorations: Vec<Deco<lsp_types::Range>>,
-}
-#[derive(serde::Deserialize, Clone, Debug)]
-#[serde(rename_all = "snake_case")]
-struct CursorRequest {
-    position: lsp_types::Position,
-    document: lsp_types::TextDocumentIdentifier,
-}
-
-#[derive(Clone, Debug)]
-struct SelectLocal {
-    pos: Loc,
-    selected: HashSet<Local>,
-    current_fn_id: u32,
-}
-impl SelectLocal {
-    fn new(pos: Loc) -> Self {
-        Self {
-            pos,
-            selected: HashSet::new(),
-            current_fn_id: 0,
-        }
-    }
-    fn select(&mut self, local_id: u32, range: Range) {
-        if range.from() <= self.pos && self.pos <= range.until() {
-            self.selected
-                .insert(Local::new(local_id, self.current_fn_id));
-        }
-    }
-}
-impl utils::MirVisitor for SelectLocal {
-    fn visit_decl(&mut self, decl: &MirUserDecl) {
-        let MirUserDecl {
-            local_index,
-            fn_id,
-            span,
-            ..
-        } = decl;
-        self.current_fn_id = *fn_id;
-        self.select(*local_index, *span);
-    }
-    fn visit_stmt(&mut self, stmt: &MirStatement) {
-        if let MirStatement::Assign { rval, .. } = stmt {
-            match rval {
-                Some(MirRval::Move {
-                    target_local_index,
-                    range,
-                }) => {
-                    self.select(*target_local_index, *range);
-                }
-                Some(MirRval::Borrow {
-                    target_local_index,
-                    range,
-                    ..
-                }) => {
-                    self.select(*target_local_index, *range);
-                }
-                _ => {}
-            }
-        }
-    }
-    fn visit_term(&mut self, term: &MirTerminator) {
-        if let MirTerminator::Call {
-            destination_local_index,
-            fn_span,
-        } = term
-        {
-            self.select(*destination_local_index, *fn_span);
-        }
-    }
-}
-#[derive(Clone, Debug)]
-struct CalcDecos {
-    locals: HashSet<Local>,
-    decorations: Vec<Deco>,
-    current_fn_id: u32,
-}
-impl CalcDecos {
-    pub fn new(locals: HashSet<Local>) -> Self {
-        Self {
-            locals,
-            decorations: Vec::new(),
-            current_fn_id: 0,
-        }
-    }
-
-    fn get_deco_order(deco: &Deco) -> u8 {
-        match deco {
-            Deco::Lifetime { .. } => 0,
-            Deco::ImmBorrow { .. } => 1,
-            Deco::MutBorrow { .. } => 2,
-            Deco::Move { .. } => 3,
-            Deco::Call { .. } => 4,
-            Deco::SharedMut { .. } => 5,
-            Deco::Outlive { .. } => 6,
-        }
-    }
-
-    fn sort_by_definition(&mut self) {
-        self.decorations.sort_by_key(Self::get_deco_order);
-    }
-
-    fn handle_overlapping(&mut self) {
-        self.sort_by_definition();
-        let mut i = 1;
-        while i < self.decorations.len() {
-            let current_range = match &self.decorations[i] {
-                Deco::Lifetime { range, .. }
-                | Deco::ImmBorrow { range, .. }
-                | Deco::MutBorrow { range, .. }
-                | Deco::Move { range, .. }
-                | Deco::Call { range, .. }
-                | Deco::SharedMut { range, .. }
-                | Deco::Outlive { range, .. } => *range,
-            };
-
-            let mut j = 0;
-            while j < i {
-                let prev = &self.decorations[j];
-                let (prev_range, prev_overlapped) = match prev {
-                    Deco::Lifetime {
-                        range, overlapped, ..
-                    }
-                    | Deco::ImmBorrow {
-                        range, overlapped, ..
-                    }
-                    | Deco::MutBorrow {
-                        range, overlapped, ..
-                    }
-                    | Deco::Move {
-                        range, overlapped, ..
-                    }
-                    | Deco::Call {
-                        range, overlapped, ..
-                    }
-                    | Deco::SharedMut {
-                        range, overlapped, ..
-                    }
-                    | Deco::Outlive {
-                        range, overlapped, ..
-                    } => (*range, *overlapped),
-                };
-
-                if prev_overlapped {
-                    j += 1;
-                    continue;
-                }
-
-                if let Some(common) = utils::common_range(current_range, prev_range) {
-                    let mut new_decos = Vec::new();
-                    let non_overlapping = utils::exclude_ranges(vec![prev_range], vec![common]);
-
-                    for range in non_overlapping {
-                        let new_deco = match prev {
-                            Deco::Lifetime {
-                                local, hover_text, ..
-                            } => Deco::Lifetime {
-                                local: *local,
-                                range,
-                                hover_text: hover_text.clone(),
-                                overlapped: false,
-                            },
-                            Deco::ImmBorrow {
-                                local, hover_text, ..
-                            } => Deco::ImmBorrow {
-                                local: *local,
-                                range,
-                                hover_text: hover_text.clone(),
-                                overlapped: false,
-                            },
-                            Deco::MutBorrow {
-                                local, hover_text, ..
-                            } => Deco::MutBorrow {
-                                local: *local,
-                                range,
-                                hover_text: hover_text.clone(),
-                                overlapped: false,
-                            },
-                            Deco::Move {
-                                local, hover_text, ..
-                            } => Deco::Move {
-                                local: *local,
-                                range,
-                                hover_text: hover_text.clone(),
-                                overlapped: false,
-                            },
-                            Deco::Call {
-                                local, hover_text, ..
-                            } => Deco::Call {
-                                local: *local,
-                                range,
-                                hover_text: hover_text.clone(),
-                                overlapped: false,
-                            },
-                            Deco::SharedMut {
-                                local, hover_text, ..
-                            } => Deco::SharedMut {
-                                local: *local,
-                                range,
-                                hover_text: hover_text.clone(),
-                                overlapped: false,
-                            },
-                            Deco::Outlive {
-                                local, hover_text, ..
-                            } => Deco::Outlive {
-                                local: *local,
-                                range,
-                                hover_text: hover_text.clone(),
-                                overlapped: false,
-                            },
-                        };
-                        new_decos.push(new_deco);
-                    }
-
-                    match &mut self.decorations[j] {
-                        Deco::Lifetime {
-                            range, overlapped, ..
-                        }
-                        | Deco::ImmBorrow {
-                            range, overlapped, ..
-                        }
-                        | Deco::MutBorrow {
-                            range, overlapped, ..
-                        }
-                        | Deco::Move {
-                            range, overlapped, ..
-                        }
-                        | Deco::Call {
-                            range, overlapped, ..
-                        }
-                        | Deco::SharedMut {
-                            range, overlapped, ..
-                        }
-                        | Deco::Outlive {
-                            range, overlapped, ..
-                        } => {
-                            *range = common;
-                            *overlapped = true;
-                        }
-                    }
-
-                    for (jj, deco) in new_decos.into_iter().enumerate() {
-                        self.decorations.insert(j + jj + 1, deco);
-                    }
-                }
-                j += 1;
-            }
-            i += 1;
-        }
-    }
-}
-impl utils::MirVisitor for CalcDecos {
-    fn visit_decl(&mut self, decl: &MirUserDecl) {
-        let MirUserDecl {
-            local_index,
-            fn_id,
-            lives,
-            shared_borrow,
-            mutable_borrow,
-            drop_range,
-            must_live_at,
-            name,
-            ..
-        } = decl;
-        self.current_fn_id = *fn_id;
-        let local = Local::new(*local_index, *fn_id);
-        if self.locals.contains(&local) {
-            // merge Drop object lives
-            let mut drop_copy_live = lives.clone();
-            drop_copy_live.extend_from_slice(drop_range);
-            drop_copy_live = utils::eliminated_ranges(drop_copy_live.clone());
-            for range in &drop_copy_live {
-                self.decorations.push(Deco::Lifetime {
-                    local,
-                    range: *range,
-                    hover_text: format!("lifetime of variable `{}`", name),
-                    overlapped: false,
-                });
-            }
-            let mut borrow_ranges = shared_borrow.clone();
-            borrow_ranges.extend_from_slice(mutable_borrow);
-            let shared_mut = utils::common_ranges(&borrow_ranges);
-            for range in shared_mut {
-                self.decorations.push(Deco::SharedMut {
-                    local,
-                    range,
-                    hover_text: format!(
-                        "immutable and mutable borrows of variable `{name}` exist here",
-                    ),
-                    overlapped: false,
-                });
-            }
-            let outlive = utils::exclude_ranges(must_live_at.clone(), drop_copy_live);
-            for range in outlive {
-                self.decorations.push(Deco::Outlive {
-                    local,
-                    range,
-                    hover_text: format!("variable `{name}` is required to live here"),
-                    overlapped: false,
-                });
-            }
-        }
-    }
-    fn visit_stmt(&mut self, stmt: &MirStatement) {
-        if let MirStatement::Assign { rval, .. } = stmt {
-            match rval {
-                Some(MirRval::Move {
-                    target_local_index,
-                    range,
-                }) => {
-                    let local = Local::new(*target_local_index, self.current_fn_id);
-                    if self.locals.contains(&local) {
-                        self.decorations.push(Deco::Move {
-                            local,
-                            range: *range,
-                            hover_text: "variable moved".to_string(),
-                            overlapped: false,
-                        });
-                    }
-                }
-                Some(MirRval::Borrow {
-                    target_local_index,
-                    range,
-                    mutable,
-                    ..
-                }) => {
-                    let local = Local::new(*target_local_index, self.current_fn_id);
-                    if self.locals.contains(&local) {
-                        if *mutable {
-                            self.decorations.push(Deco::MutBorrow {
-                                local,
-                                range: *range,
-                                hover_text: "mutable borrow".to_string(),
-                                overlapped: false,
-                            });
-                        } else {
-                            self.decorations.push(Deco::ImmBorrow {
-                                local,
-                                range: *range,
-                                hover_text: "immutable borrow".to_string(),
-                                overlapped: false,
-                            });
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-    fn visit_term(&mut self, term: &MirTerminator) {
-        if let MirTerminator::Call {
-            destination_local_index,
-            fn_span,
-        } = term
-        {
-            let local = Local::new(*destination_local_index, self.current_fn_id);
-            if self.locals.contains(&local) {
-                let mut i = 0;
-                for deco in &self.decorations {
-                    if let Deco::Call { range, .. } = deco {
-                        if utils::is_super_range(*fn_span, *range) {
-                            return;
-                        }
-                    }
-                }
-                while i < self.decorations.len() {
-                    let range = match &self.decorations[i] {
-                        Deco::Call { range, .. } => Some(range),
-                        _ => None,
-                    };
-                    if let Some(range) = range {
-                        if utils::is_super_range(*range, *fn_span) {
-                            self.decorations.remove(i);
-                            continue;
-                        }
-                    }
-                    i += 1;
-                }
-                self.decorations.push(Deco::Call {
-                    local,
-                    range: *fn_span,
-                    hover_text: "function call".to_string(),
-                    overlapped: false,
-                });
-            }
-        }
-    }
-}
-
-type Subprocess = Option<u32>;
-
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(tag = "reason", rename_all = "kebab-case")]
 enum CargoCheckMessage {
@@ -637,11 +26,14 @@ enum CargoCheckMessage {
     BuildFinished {},
 }
 
+type Subprocess = Option<u32>;
+
 #[derive(Debug)]
 struct Backend {
     #[allow(unused)]
     client: Client,
     roots: Arc<RwLock<HashMap<PathBuf, PathBuf>>>,
+    status: Arc<RwLock<progress::AnalysisStatus>>,
     analyzed: Arc<RwLock<Option<Workspace>>>,
     processes: Arc<RwLock<JoinSet<()>>>,
     subprocesses: Arc<RwLock<Vec<Subprocess>>>,
@@ -654,6 +46,7 @@ impl Backend {
             client,
             roots: Arc::new(RwLock::new(HashMap::new())),
             analyzed: Arc::new(RwLock::new(None)),
+            status: Arc::new(RwLock::new(progress::AnalysisStatus::Finished)),
             processes: Arc::new(RwLock::new(JoinSet::new())),
             subprocesses: Arc::new(RwLock::new(vec![])),
             work_done_progress: Arc::new(RwLock::new(false)),
@@ -700,16 +93,19 @@ impl Backend {
     }
 
     async fn analyze(&self) {
-        log::info!("stop running analysis processes");
-        self.processes.write().await.shutdown().await;
         log::info!("wait 100ms for rust-analyzer");
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        log::info!("start analysis");
-        let roots = { self.roots.read().await.clone() };
+        log::info!("stop running analysis processes");
         let mut join = self.processes.write().await;
         join.shutdown().await;
         self.abort_subprocess().await;
+
+        log::info!("start analysis");
+        {
+            *self.status.write().await = progress::AnalysisStatus::Analyzing;
+        }
+        let roots = { self.roots.read().await.clone() };
 
         for (root, target) in roots {
             // progress report
@@ -721,53 +117,31 @@ impl Backend {
                 .as_ref()
                 .and_then(|v| v.resolve.as_ref().map(|w| w.nodes.len()))
                 .unwrap_or(0);
-            let progress_token = if *self.work_done_progress.read().await {
-                let token = format!("{}", uuid::Uuid::new_v4());
-                Some(lsp_types::NumberOrString::String(token))
-            } else {
-                None
-            };
-            let client = self.client.clone();
-            if let Some(token) = &progress_token {
-                client
-                    .send_request::<lsp_types::request::WorkDoneProgressCreate>(
-                        lsp_types::WorkDoneProgressCreateParams {
-                            token: token.clone(),
-                        },
-                    )
-                    .await
-                    .ok();
 
-                let value = lsp_types::ProgressParamsValue::WorkDone(
-                    lsp_types::WorkDoneProgress::Begin(lsp_types::WorkDoneProgressBegin {
-                        title: "RustOwl checking".to_owned(),
-                        cancellable: Some(false),
-                        message: Some(format!("0 / {dep_count}")),
-                        percentage: Some(0),
-                    }),
-                );
-                client
-                    .send_notification::<lsp_types::notification::Progress>(
-                        lsp_types::ProgressParams {
-                            token: token.clone(),
-                            value,
-                        },
-                    )
-                    .await;
-            }
-
-            if let Some(package_name) = meta.and_then(|v| v.root_package().cloned()).map(|v| v.name)
-            {
+            let mut progress_token = None;
+            let package_name = meta.and_then(|v| v.root_package().map(|w| w.name.clone()));
+            if let Some(package_name) = &package_name {
                 log::info!("clear cargo cache");
                 let mut command = process::Command::new("cargo");
                 command
-                    .args(["clean", "--package", &package_name])
+                    .args(["clean", "--package", package_name])
                     .env("CARGO_TARGET_DIR", &target)
                     .current_dir(&root)
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null());
                 command.spawn().unwrap().wait().await.ok();
             }
+
+            let client = self.client.clone();
+            if *self.work_done_progress.read().await {
+                progress_token = Some(
+                    progress::ProgressToken::begin(
+                        client,
+                        package_name.as_ref().map(|v| format!("analyzing {v}")),
+                    )
+                    .await,
+                )
+            };
 
             log::info!("start checking {}", root.display());
             let mut command = process::Command::new("rustup");
@@ -799,7 +173,6 @@ impl Backend {
             let mut child = command.spawn().unwrap();
             let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines();
             let analyzed = self.analyzed.clone();
-            let token = progress_token.clone();
             join.spawn(async move {
                 let mut build_count = 0;
                 while let Ok(Some(line)) = stdout.next_line().await {
@@ -808,20 +181,12 @@ impl Backend {
                     {
                         build_count += 1;
                         log::info!("{build_count} crates checked");
-                        if let Some(token) = token.clone() {
+                        if let Some(token) = &progress_token {
                             let percentage = (build_count * 100 / dep_count).min(100);
-                            let value = lsp_types::ProgressParamsValue::WorkDone(
-                                lsp_types::WorkDoneProgress::Report(
-                                    lsp_types::WorkDoneProgressReport {
-                                        cancellable: Some(false),
-                                        message: Some(format!("{build_count} / {dep_count}")),
-                                        percentage: Some(percentage as u32),
-                                    },
-                                ),
-                            );
-                            client
-                                .send_notification::<lsp_types::notification::Progress>(
-                                    lsp_types::ProgressParams { token, value },
+                            token
+                                .report(
+                                    package_name.as_ref().map(|v| format!("analyzing {v}")),
+                                    Some(percentage as u32),
                                 )
                                 .await;
                         }
@@ -835,6 +200,9 @@ impl Backend {
                         }
                     }
                 }
+                if let Some(progress_token) = progress_token {
+                    progress_token.finish().await;
+                }
             });
 
             let mut stderr = BufReader::new(child.stderr.take().unwrap()).lines();
@@ -845,16 +213,27 @@ impl Backend {
             });
 
             let pid = child.id();
-            let client = self.client.clone();
             let subprocesses = self.subprocesses.clone();
-            let token = progress_token.clone();
             let cache_target = target.join("cache.json");
             let analyzed = self.analyzed.clone();
+            let status = self.status.clone();
             join.spawn(async move {
                 let _ = child.wait().await;
                 log::info!("check finished");
+                let analyzed = &*analyzed.read().await;
                 let mut write = subprocesses.write().await;
                 *write = write.iter().filter(|v| **v != pid).copied().collect();
+                if write.is_empty() {
+                    let mut status = status.write().await;
+                    if *status != progress::AnalysisStatus::Error {
+                        if analyzed.as_ref().map(|v| v.0.len()).unwrap_or(0) == 0 {
+                            *status = progress::AnalysisStatus::Error;
+                        } else {
+                            *status = progress::AnalysisStatus::Finished;
+                        }
+                    }
+                }
+
                 if let Ok(mut cache_file) = tokio::fs::OpenOptions::new()
                     .write(true)
                     .create(true)
@@ -863,35 +242,29 @@ impl Backend {
                     .await
                 {
                     cache_file
-                        .write_all(&serde_json::to_vec(&*analyzed.read().await).unwrap())
+                        .write_all(&serde_json::to_vec(analyzed).unwrap())
                         .await
                         .ok();
-                }
-                if write.is_empty() {
-                    if let Some(token) = token {
-                        let value = lsp_types::ProgressParamsValue::WorkDone(
-                            lsp_types::WorkDoneProgress::End(lsp_types::WorkDoneProgressEnd {
-                                message: None,
-                            }),
-                        );
-                        client
-                            .send_notification::<lsp_types::notification::Progress>(
-                                lsp_types::ProgressParams { token, value },
-                            )
-                            .await;
-                    }
                 }
             });
             self.subprocesses.write().await.push(pid);
         }
     }
 
-    async fn decos(&self, filepath: &Path, position: Loc) -> Vec<Deco> {
-        let mut selected = SelectLocal::new(position);
+    async fn decos(
+        &self,
+        filepath: &Path,
+        position: Loc,
+    ) -> Result<Vec<decoration::Deco>, progress::AnalysisStatus> {
+        let mut selected = decoration::SelectLocal::new(position);
+        let mut error = progress::AnalysisStatus::Error;
         if let Some(analyzed) = &*self.analyzed.read().await {
             for (_crate_name, krate) in analyzed.0.iter() {
                 for (filename, file) in krate.0.iter() {
                     if filepath == PathBuf::from(filename) {
+                        if !file.items.is_empty() {
+                            error = progress::AnalysisStatus::Finished;
+                        }
                         for item in &file.items {
                             utils::mir_visit(item, &mut selected);
                         }
@@ -899,7 +272,7 @@ impl Backend {
                 }
             }
 
-            let mut calc = CalcDecos::new(selected.selected);
+            let mut calc = decoration::CalcDecos::new(selected.selected().iter().copied());
             for (_crate_name, krate) in analyzed.0.iter() {
                 for (filename, file) in krate.0.iter() {
                     if filepath == PathBuf::from(filename) {
@@ -910,32 +283,54 @@ impl Backend {
                 }
             }
             calc.handle_overlapping();
-            calc.decorations
+            let decos = calc.decorations();
+            if !decos.is_empty() {
+                Ok(decos)
+            } else {
+                Err(error)
+            }
         } else {
-            Vec::new()
+            Err(error)
         }
     }
 
-    async fn cursor(&self, params: CursorRequest) -> jsonrpc::Result<Decorations> {
+    async fn cursor(
+        &self,
+        params: decoration::CursorRequest,
+    ) -> jsonrpc::Result<decoration::Decorations> {
         let is_analyzed = self.analyzed.read().await.is_some();
-        if let Ok(path) = params.document.uri.to_file_path() {
+        let status = *self.status.read().await;
+        if let Some(path) = params.path() {
             if let Ok(text) = std::fs::read_to_string(&path) {
+                let position = params.position();
                 let pos = Loc(utils::line_char_to_index(
                     &text,
-                    params.position.line,
-                    params.position.character,
+                    position.line,
+                    position.character,
                 ));
-                let decos = self.decos(&path, pos).await;
+                let (decos, status) = match self.decos(&path, pos).await {
+                    Ok(v) => (v, status),
+                    Err(e) => (
+                        Vec::new(),
+                        if status == progress::AnalysisStatus::Finished {
+                            e
+                        } else {
+                            status
+                        },
+                    ),
+                };
                 let decorations = decos.into_iter().map(|v| v.to_lsp_range(&text)).collect();
-                return Ok(Decorations {
+                return Ok(decoration::Decorations {
                     is_analyzed,
+                    status,
                     path: Some(path),
                     decorations,
                 });
             }
         }
-        Ok(Decorations {
+        Ok(decoration::Decorations {
             is_analyzed,
+            status,
             path: None,
             decorations: Vec::new(),
         })

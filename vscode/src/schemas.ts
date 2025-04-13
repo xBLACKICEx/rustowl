@@ -113,6 +113,11 @@ export const zLspType = z.union([
 ]);
 export const zLspCursorResponse = z.object({
   is_analyzed: z.boolean(),
+  status: z.union([
+    z.literal("analyzing"),
+    z.literal("finished"),
+    z.literal("error"),
+  ]),
   decorations: z
     .object({
       type: zLspType,

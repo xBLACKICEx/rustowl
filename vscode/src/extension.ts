@@ -148,11 +148,14 @@ export function activate(context: vscode.ExtensionContext) {
     const data = zLspCursorResponse.safeParse(resp);
     if (data.success) {
       console.log(data.data);
-      if (data.data.is_analyzed) {
+      if (data.data.status === "finished") {
         statusBar.text = "$(check) RustOwl";
         statusBar.tooltip = "analyze finished";
+      } else if (data.data.status === "analyzing") {
+        statusBar.text = "$(loading~spin) RustOwl";
+        statusBar.tooltip = "analyzing";
       } else {
-        statusBar.text = "$(alert) RustOwl";
+        statusBar.text = "$(error) RustOwl";
         statusBar.tooltip = "analyze failed";
         statusBar.command = {
           command: "rustowlHover",
