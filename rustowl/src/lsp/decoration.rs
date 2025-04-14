@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use tower_lsp::lsp_types;
 
-#[derive(serde::Serialize, Clone, Debug)]
+#[derive(serde::Serialize, PartialEq, Eq, Clone, Debug)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Deco<R = Range> {
     Lifetime {
@@ -363,7 +363,7 @@ impl CalcDecos {
     pub fn handle_overlapping(&mut self) {
         self.sort_by_definition();
         let mut i = 1;
-        while i < self.decorations.len() {
+        'outer: while i < self.decorations.len() {
             let current_range = match &self.decorations[i] {
                 Deco::Lifetime { range, .. }
                 | Deco::ImmBorrow { range, .. }
@@ -377,6 +377,10 @@ impl CalcDecos {
             let mut j = 0;
             while j < i {
                 let prev = &self.decorations[j];
+                if prev == &self.decorations[i] {
+                    self.decorations.remove(i);
+                    continue 'outer;
+                }
                 let (prev_range, prev_overlapped) = match prev {
                     Deco::Lifetime {
                         range, overlapped, ..
