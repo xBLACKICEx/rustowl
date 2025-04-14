@@ -5,9 +5,15 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'rustowl/**'
+      - 'vscode/**'
   pull_request:
     branches:
       - main
+    paths:
+      - 'rustowl/**'
+      - 'vscode/**'
 
 jobs:
   cargo:
