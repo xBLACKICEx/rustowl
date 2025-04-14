@@ -23,6 +23,10 @@ pub mod core;
 use std::process::exit;
 
 fn main() {
-    simple_logger::init_with_env().unwrap();
+    simple_logger::SimpleLogger::new()
+        .env()
+        .with_colors(true)
+        .init()
+        .unwrap();
     exit(core::run_compiler())
 }

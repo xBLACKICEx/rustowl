@@ -18,7 +18,8 @@ use std::future::Future;
 use std::hash::Hash;
 use std::pin::Pin;
 
-pub type MirAnalyzeFuture<'tcx> = Pin<Box<dyn Future<Output = MirAnalyzer<'tcx>> + Send + Sync>>;
+pub type MirAnalyzeFuture<'tcx> =
+    Pin<Box<dyn Future<Output = MirAnalyzer<'tcx>> + Send + Sync + 'tcx>>;
 
 type Borrow = <RustcFacts as FactTypes>::Loan;
 type Region = <RustcFacts as FactTypes>::Origin;
@@ -80,10 +81,7 @@ pub struct MirAnalyzer<'tcx> {
 }
 impl MirAnalyzer<'_> {
     /// initialize analyzer
-    pub fn new<'tcx>(tcx: TyCtxt<'tcx>, fn_id: LocalDefId) -> MirAnalyzeFuture<'tcx>
-    where
-        'tcx: 'static,
-    {
+    pub fn new<'tcx>(tcx: TyCtxt<'tcx>, fn_id: LocalDefId) -> MirAnalyzeFuture<'tcx> {
         let mut facts =
             get_body_with_borrowck_facts(tcx, fn_id, ConsumerOptions::PoloniusOutputFacts);
         let input = *facts.input_facts.take().unwrap();

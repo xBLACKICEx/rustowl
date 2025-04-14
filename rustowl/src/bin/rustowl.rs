@@ -171,7 +171,6 @@ impl Backend {
                 .env_remove("RUSTC_WRAPPER")
                 .current_dir(&root)
                 .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
                 .kill_on_drop(true);
             #[cfg(unix)]
             unsafe {
@@ -179,6 +178,9 @@ impl Backend {
                     libc::setsid();
                     Ok(())
                 });
+            }
+            if log::max_level().to_level().is_none() {
+                command.stderr(std::process::Stdio::null());
             }
             let mut child = command.spawn().unwrap();
             let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines();
@@ -212,13 +214,6 @@ impl Backend {
                 }
                 if let Some(progress_token) = progress_token {
                     progress_token.finish().await;
-                }
-            });
-
-            let mut stderr = BufReader::new(child.stderr.take().unwrap()).lines();
-            join.spawn(async move {
-                while let Ok(Some(line)) = stderr.next_line().await {
-                    log::debug!("rustowlc: {line}");
                 }
             });
 
@@ -522,6 +517,9 @@ async fn main() {
             }
         }
     } else {
+        eprintln!("RustOwl v{}", clap::crate_version!());
+        eprintln!("This is an LSP server. You can use --help flag to show help.");
+
         let stdin = tokio::io::stdin();
         let stdout = tokio::io::stdout();
 
