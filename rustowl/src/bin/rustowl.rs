@@ -501,20 +501,30 @@ async fn main() {
                     .action(clap::ArgAction::Set),
             ),
         )
+        .subcommand(clap::Command::new("clean"))
         .get_matches();
 
     if let Some(arg) = matches.subcommand() {
-        if let ("check", matches) = arg {
-            let log_level = matches
-                .get_one::<String>("log_level")
-                .cloned()
-                .unwrap_or(env::var("RUST_LOG").unwrap_or("info".to_owned()));
-            log::set_max_level(log_level.parse().unwrap());
-            if check(env::current_dir().unwrap()).await {
-                std::process::exit(0);
-            } else {
-                std::process::exit(1);
+        match arg {
+            ("check", matches) => {
+                let log_level = matches
+                    .get_one::<String>("log_level")
+                    .cloned()
+                    .unwrap_or(env::var("RUST_LOG").unwrap_or("info".to_owned()));
+                log::set_max_level(log_level.parse().unwrap());
+                if check(env::current_dir().unwrap()).await {
+                    std::process::exit(0);
+                } else {
+                    std::process::exit(1);
+                }
             }
+            ("clean", _) => {
+                if let Ok(meta) = cargo_metadata::MetadataCommand::new().exec() {
+                    let target = meta.target_directory.join("owl");
+                    tokio::fs::remove_dir_all(&target).await.ok();
+                }
+            }
+            _ => {}
         }
     } else {
         eprintln!("RustOwl v{}", clap::crate_version!());
