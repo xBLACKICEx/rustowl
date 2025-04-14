@@ -1,15 +1,15 @@
 <div align="center">
     <h1>
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/rustowl-logo-dark.svg">
-        <img alt="RustOwl" src="docs/rustowl-logo.svg" width="400">
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/rustowl-logo-dark.svg">
+        <img alt="RustOwl" src="docs/assets/rustowl-logo.svg" width="400">
       </picture>
     </h1>
     <p>
         Visualize ownership and lifetimes in Rust for debugging and optimization
     </p>
     <p>
-        <img src="docs/readme-screenshot-2.png" />
+        <img src="docs/assets/readme-screenshot-3.png" />
     </p>
 </div>
 

@@ -15,16 +15,16 @@ RustOwl's analysis may take a long time for a large workspace.
 VS Code extension will automatically start analyzing the workspace.
 For other editors, you may need to enable RustOwl manually, but you can enable automatic loading in your configuration file.
 The progress of analysis will be shown in your editor.
-![Progress](vs-code-progress.png)
+![Progress](assets/vs-code-progress.png)
 
 After the analysis started, RustOwl waits for your request.
 Please place the text cursor on a variable or function call you would like to inspect.
-![Cursor on unwrap](vs-code-cursor-on-unwrap.png)
+![Cursor on unwrap](assets/vs-code-cursor-on-unwrap.png)
 RustOwl works for the analyzed portion, even if the entire analysis has not finished.
 If your program has some fatal errors (e.g., syntax errors or unrecoverable type errors), RustOwl cannot work for the part where the analysis failed.
 
 Wait for a few seconds, and then the ownership-related operations and lifetimes of the variable to which the `unwrap()` method call assigns a value will appear.
-![unwrap visualized](vs-code-cursor-on-unwrap-visualized.png)
+![unwrap visualized](assets/vs-code-cursor-on-unwrap-visualized.png)
 
 ## Basic usage
 
@@ -42,7 +42,7 @@ You can see which color is assigned to them on the top page of this repository.
 RustOwl can be used to see where a variable lives, where it dies, and where it is borrowed or moved.
 
 For VS Code, you can see the message that explains the meaning of the underline by hovering your mouse cursor over it.
-![Hover message on VS Code](readme-screenshot-2.png)
+![Hover message on VS Code](assets/readme-screenshot-3.png)
 
 This is the basic usage of RustOwl!
 Now you have a master's degree in RustOwl.
