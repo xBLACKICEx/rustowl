@@ -7,14 +7,24 @@ fn main() {
         install_compiler();
     }
 
-    if let Some(toolchain) = get_toolchain(".") {
+    if let Ok(toolchain) = env::var("RUSTOWL_TOOLCHAIN") {
         println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={toolchain}");
+    } else if let Some(toolchain) = get_toolchain(".") {
+        println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={toolchain}");
+    }
+
+    if let Ok(toolchain_dir) = env::var("RUSTOWL_TOOLCHAIN_DIR") {
+        println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN_DIR={toolchain_dir}");
     }
 }
 
 use std::path::{Path, PathBuf};
 // get toolchain
 fn get_toolchain(current: impl AsRef<Path>) -> Option<String> {
+    if let Ok(toolchain) = env::var("RUSTOWL_TOOLCHAIN") {
+        return Some(toolchain);
+    }
+
     let child = match Command::new("rustup")
         .args(["show", "active-toolchain"])
         .env_remove("RUSTUP_TOOLCHAIN")

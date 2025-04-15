@@ -117,6 +117,9 @@ impl Backend {
         }
         let roots = { self.roots.read().await.clone() };
 
+        let cargo_path = rustowl::toolchain_version::TOOLCHAIN_DIR
+            .map(|dir| PathBuf::from(dir).join("bin/cargo"));
+
         for (root, target) in roots {
             // progress report
             let meta = cargo_metadata::MetadataCommand::new()
@@ -154,12 +157,24 @@ impl Backend {
             };
 
             log::info!("start checking {}", root.display());
-            let mut command = process::Command::new("rustup");
-            command
-                .args([
+            let mut command = if let Some(cargo_path) = &cargo_path {
+                log::info!("using direct cargo path: {}", cargo_path.display());
+                process::Command::new(cargo_path)
+            } else {
+                log::info!(
+                    "using rustup with toolchain: {}",
+                    rustowl::toolchain_version::TOOLCHAIN_VERSION
+                );
+                let mut cmd = process::Command::new("rustup");
+                cmd.args([
                     "run",
                     rustowl::toolchain_version::TOOLCHAIN_VERSION,
                     "cargo",
+                ]);
+                cmd
+            };
+            command
+                .args([
                     "check",
                     "--all-targets",
                     "--all-features",
