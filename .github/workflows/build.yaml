@@ -35,7 +35,8 @@ jobs:
         run: |
           mkdir -p bin
           for f in $(find rustowl/target/release -maxdepth 1 -perm -111 -type f); do
-            export NAME="${$(basename "$f")%%.*}";
+            BASENAME="$(basename "$f")"
+            NAME="${BASENAME%%.*}";
             mv "$f" "bin/$NAME-${{ env.host_tuple }}";
           done
 
