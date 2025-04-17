@@ -72,6 +72,7 @@ fn compress_toolchain(sysroot: &str) {
     for file in recursive_read_dir(sysroot) {
         if let Some(ext) = file.extension().and_then(|e| e.to_str()) {
             if matches!(ext, "rlib" | "so" | "dylib" | "dll") {
+                println!("cargo::warning={}", file.display());
                 let rel_path = file.strip_prefix(sysroot).unwrap();
                 let file_name = rel_path.file_name().unwrap().to_str().unwrap();
                 if file_name.starts_with("librustc_driver") {
