@@ -83,13 +83,20 @@ fn compress_toolchain(sysroot: &str) {
 
     let path = canonicalize(".").unwrap().join("toolchain.tar.gz");
     let tar_gz = File::create(&path).unwrap();
-    let enc = GzEncoder::new(tar_gz, Compression::default());
+    let enc = GzEncoder::new(tar_gz, Compression::best());
     let mut tar_builder = Builder::new(enc);
 
     for file in recursive_read_dir(sysroot) {
         if let Some(ext) = file.extension().and_then(|e| e.to_str()) {
             if matches!(ext, "rlib" | "so" | "dylib" | "dll") {
                 let rel_path = file.strip_prefix(sysroot).unwrap();
+                let file_name = rel_path.file_name().unwrap().to_str().unwrap();
+                if file_name.starts_with("librustc_driver") {
+                    println!(
+                        "cargo::rustc-env=RUSTC_DRIVER_DIR={}",
+                        rel_path.parent().unwrap().display()
+                    );
+                }
                 tar_builder.append_path_with_name(&file, rel_path).unwrap();
             }
         }

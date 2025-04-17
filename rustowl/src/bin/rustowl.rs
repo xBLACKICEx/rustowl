@@ -17,8 +17,7 @@ use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
-const RUSTC_DRIVER_DYLIB_PATH: &str = env!("RUSTC_DRIVER_DYLIB_PATH");
-const RUSTC_DRIVER_DYLIB_DATA: &[u8] = include_bytes!(env!("RUSTC_DRIVER_DYLIB_PATH"));
+const RUSTC_DRIVER_DIR: &str = env!("RUSTC_DRIVER_DIR");
 const TOOLCHAIN_TARBALL_DATA: &[u8] = include_bytes!(env!("TOOLCHAIN_TARBALL_PATH"));
 
 #[derive(serde::Deserialize, Clone, Debug)]
@@ -177,19 +176,20 @@ impl Backend {
             let self_path = env::current_exe().unwrap();
             let self_dir = self_path.parent().unwrap().to_path_buf();
             let rustowlc_path = self_dir.join("rustowlc");
+            let toolchain_path = get_toolchain_path();
             command
                 .env("RUSTC", &rustowlc_path)
                 .env("RUSTC_WORKSPACE_WRAPPER", &rustowlc_path)
                 .env(
                     "RUSTFLAGS",
-                    format!("--sysroot={}", get_toolchain_path().display()),
+                    format!("--sysroot={}", toolchain_path.display()),
                 );
             #[cfg(target_os = "linux")]
             {
                 let mut paths =
                     env::split_paths(&env::var("LD_LIBRARY_PATH").unwrap_or("".to_owned()))
                         .collect::<std::collections::VecDeque<_>>();
-                paths.push_front(self_dir);
+                paths.push_front(toolchain_path.join(RUSTC_DRIVER_DIR));
                 let paths = env::join_paths(paths).unwrap();
                 command.env("LD_LIBRARY_PATH", paths);
             }
@@ -199,7 +199,7 @@ impl Backend {
                     &env::var("DYLD_FALLBACK_LIBRARY_PATH").unwrap_or("".to_owned()),
                 )
                 .collect::<std::collections::VecDeque<_>>();
-                paths.push_front(self_dir);
+                paths.push_front(toolchain_path.join(RUSTC_DRIVER_DIR));
                 let paths = env::join_paths(paths).unwrap();
                 command.env("DYLD_FALLBACK_LIBRARY_PATH", paths);
             }
@@ -207,7 +207,7 @@ impl Backend {
             {
                 let mut paths = env::split_paths(&env::var_os("Path").unwrap())
                     .collect::<std::collections::VecDeque<_>>();
-                paths.push_front(self_dir);
+                paths.push_front(toolchain_path.join(RUSTC_DRIVER_DIR));
                 let paths = env::join_paths(paths).unwrap();
                 command.env("Path", paths);
             }
@@ -500,7 +500,6 @@ async fn main() {
             .unwrap(),
     );
 
-    setup_lib(RUSTC_DRIVER_DYLIB_PATH, RUSTC_DRIVER_DYLIB_DATA).await;
     setup_toolchain().await;
 
     let matches = clap::Command::new("RustOwl Language Server")
@@ -582,21 +581,7 @@ async fn check(path: PathBuf) -> bool {
         .unwrap_or(false)
 }
 
-use tokio::fs::{create_dir_all, remove_dir_all, write};
-/// copy rustc_driver to executing driver path
-async fn setup_lib(path: &str, data: &[u8]) {
-    let rustc_lib_name = PathBuf::from(path)
-        .file_name()
-        .unwrap()
-        .to_string_lossy()
-        .to_string();
-    let mut output_path = env::current_exe().unwrap();
-    output_path.set_file_name(&rustc_lib_name);
-    if !output_path.exists() {
-        write(&output_path, data).await.unwrap();
-        log::info!("{rustc_lib_name} is copied to {}", output_path.display());
-    }
-}
+use tokio::fs::{create_dir_all, remove_dir_all};
 fn get_toolchain_path() -> PathBuf {
     env::current_exe()
         .unwrap()
