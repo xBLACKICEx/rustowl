@@ -29,11 +29,12 @@ jobs:
 
       - name: Set host tuple to env
         run: echo "host_tuple=$(rustc --print=host-tuple)" >> $GITHUB_ENV
+        working-directory: rustowl
       - name: Rename artifacts
         shell: bash
         run: |
           mkdir -p bin
-          for f in $(find target/release -maxdepth 1 -perm -111 -type f); do
+          for f in $(find rustowl/target/release -maxdepth 1 -perm -111 -type f); do
             export NAME="${$(basename "$f")%%.*}";
             mv "$f" "bin/$NAME-${{ env.host_tuple }}";
           done
