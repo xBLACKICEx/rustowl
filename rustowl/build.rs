@@ -22,7 +22,10 @@ fn main() {
             .unwrap();
         println!(
             "cargo::rustc-env=TOOLCHAIN_TARBALL_PATH={}",
-            canonicalize(TOOLCHAIN_TARBALL_NAME).unwrap().display(),
+            canonicalize(".")
+                .unwrap()
+                .join(TOOLCHAIN_TARBALL_NAME)
+                .display(),
         );
     } else {
         let sysroot = get_sysroot().unwrap();
@@ -86,7 +89,7 @@ fn compress_toolchain(sysroot: &str) {
     use std::fs::File;
     use tar::Builder;
 
-    let path = canonicalize(TOOLCHAIN_TARBALL_NAME).unwrap();
+    let path = canonicalize(".").unwrap().join(TOOLCHAIN_TARBALL_NAME);
     let tar_gz = File::create(&path).unwrap();
     let enc = GzEncoder::new(tar_gz, Compression::best());
     let mut tar_builder = Builder::new(enc);
