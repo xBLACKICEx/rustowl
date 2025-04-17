@@ -22,6 +22,12 @@ process_alive = "0.1.1"
 cargo_metadata = "0.19.2"
 uuid = { version = "1", features = ["v4"] }
 clap = { version = "4.5.35", features = ["cargo"] }
+tar = "0.4.44"
+flate2 = "1.1.1"
+
+[build-dependencies]
+tar = "0.4.44"
+flate2 = "1.1.1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.169"
@@ -35,14 +41,11 @@ features = ['unprefixed_malloc_on_supported_platforms']
 
 [features]
 default = ["jemalloc"]
-installer = []
-compiler = []
 jemalloc = ['dep:tikv-jemalloc-sys']
 
 [[bin]]
 name = "rustowlc"
 path = "src/main.rs"
-required-features = ["compiler"]
 
 [profile.release]
 opt-level = 3

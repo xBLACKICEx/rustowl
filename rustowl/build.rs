@@ -1,18 +1,18 @@
 use std::env;
 use std::io::Read;
-use std::process::{Command, Stdio, exit};
+use std::process::{Command, Stdio};
 
 fn main() {
-    if env::var("CARGO_FEATURE_INSTALLER").is_ok() && env::var("CARGO_FEATURE_COMPILER").is_err() {
-        install_compiler();
-    }
-
     if let Some(toolchain) = get_toolchain(".") {
         println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={toolchain}");
     }
+
+    output_lib_path("rustc_driver", "dylib");
+    let sysroot = get_sysroot().unwrap();
+    compress_toolchain(&sysroot);
 }
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 // get toolchain
 fn get_toolchain(current: impl AsRef<Path>) -> Option<String> {
     let child = match Command::new("rustup")
@@ -32,84 +32,71 @@ fn get_toolchain(current: impl AsRef<Path>) -> Option<String> {
     Some(toolchain)
 }
 
-// compiler installer
-use std::fs;
-fn install_compiler() {
-    let ws_root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let tmp_dir = ws_root.join(".tmp");
-    // copy current dir to avoid cargo's dir locking
-    dir_copy(&ws_root, &tmp_dir);
-    let tmp_dir = fs::canonicalize(&tmp_dir).unwrap();
-
-    let mut rustup = Command::new("rustup")
-        .args(["install"])
-        .current_dir(&tmp_dir)
-        .env_remove("RUSTUP_TOOLCHAIN")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
-    let code = rustup.wait().unwrap().code().unwrap();
-    if code != 0 {
-        println!("cargo::error=Toolchain for RustOwl installation failed");
-        fs::remove_dir_all(&tmp_dir).unwrap();
-        exit(code);
-    }
-    println!("cargo::warning=Toolchain for RustOwl installed");
-
-    let toolchain = get_toolchain(&tmp_dir).unwrap();
-    let mut cmd = Command::new("rustup");
-    cmd.args([
-        "run",
-        &toolchain,
-        "cargo",
-        "install",
-        "--path",
-        ".",
-        "--bin",
-        "rustowlc",
-        "--features",
-        "compiler",
-    ])
-    .current_dir(&tmp_dir)
-    .stdout(Stdio::null())
-    .stderr(Stdio::null());
-    for (key, _) in env::vars() {
-        if key.starts_with("RUSTC") || key.starts_with("CARGO") || key.starts_with("RUSTUP") {
-            cmd.env_remove(key);
-        }
-    }
-    let installer = cmd.spawn();
-    let code = installer.unwrap().wait().unwrap().code().unwrap();
-
-    // check exit code to prevent instruction reordering
-    if code == 0 {
-        println!("cargo::warning=RustOwl compiler installed");
-        fs::remove_dir_all(&tmp_dir).ok();
-    }
-    if code != 0 {
-        println!("cargo::error=RustOwl compiler installation failed");
-        fs::remove_dir_all(&tmp_dir).ok();
-        exit(code);
+// output rustc_driver path
+fn get_sysroot() -> Option<String> {
+    match Command::new(env::var("RUSTC").unwrap())
+        .arg("--print=sysroot")
+        .output()
+    {
+        Ok(v) => Some(String::from_utf8(v.stdout).unwrap().trim().to_string()),
+        Err(_) => None,
     }
 }
-
-fn dir_copy(from: impl AsRef<Path>, to: impl AsRef<Path>) {
-    let from = fs::canonicalize(&from).unwrap();
-    let entries: Vec<_> = fs::read_dir(&from).unwrap().collect();
-    fs::create_dir_all(&to).unwrap();
-    let to = fs::canonicalize(&to).unwrap();
-    for entry in entries {
+use std::fs::{canonicalize, read_dir};
+use std::path::PathBuf;
+fn recursive_read_dir(path: impl AsRef<Path>) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    for entry in read_dir(path).unwrap() {
         let entry = entry.unwrap();
-        let to = to.join(entry.file_name());
-        let filename = to.file_name().unwrap().to_string_lossy();
-        if filename == "target" || filename.starts_with(".") {
-            continue;
-        }
-        if entry.metadata().unwrap().is_file() {
-            fs::copy(entry.path(), &to).unwrap();
+        let path = entry.path();
+        if path.is_dir() {
+            paths.extend_from_slice(&recursive_read_dir(&path));
         } else {
-            dir_copy(entry.path(), &to);
+            paths.push(canonicalize(&path).unwrap());
         }
     }
+    paths
+}
+fn output_lib_path(lib: &str, ext: &str) {
+    let sysroot = get_sysroot().unwrap();
+    let files = recursive_read_dir(&sysroot);
+    let rustc_lib = files
+        .into_iter()
+        .find(|p| {
+            let file_name = p.file_name().unwrap().to_str().unwrap();
+            file_name.starts_with(&format!("lib{lib}-")) && file_name.ends_with(&format!(".{ext}"))
+        })
+        .unwrap();
+    println!(
+        "cargo::rustc-env={}_{}_PATH={}",
+        lib.to_uppercase(),
+        ext.to_uppercase(),
+        rustc_lib.display()
+    );
+}
+
+fn compress_toolchain(sysroot: &str) {
+    use flate2::Compression;
+    use flate2::write::GzEncoder;
+    use std::fs::File;
+    use tar::Builder;
+
+    let path = canonicalize(".").unwrap().join("toolchain.tar.gz");
+    let tar_gz = File::create(&path).unwrap();
+    let enc = GzEncoder::new(tar_gz, Compression::default());
+    let mut tar_builder = Builder::new(enc);
+
+    for file in recursive_read_dir(sysroot) {
+        if let Some(ext) = file.extension().and_then(|e| e.to_str()) {
+            if matches!(ext, "rlib" | "so" | "dylib" | "dll") {
+                let rel_path = file.strip_prefix(sysroot).unwrap();
+                tar_builder.append_path_with_name(&file, rel_path).unwrap();
+            }
+        }
+    }
+
+    let enc = tar_builder.into_inner().unwrap();
+    enc.finish().unwrap();
+
+    println!("cargo::rustc-env=TOOLCHAIN_TARBALL_PATH={}", path.display());
 }

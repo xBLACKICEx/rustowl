@@ -17,6 +17,10 @@ use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
+const RUSTC_DRIVER_DYLIB_PATH: &str = env!("RUSTC_DRIVER_DYLIB_PATH");
+const RUSTC_DRIVER_DYLIB_DATA: &[u8] = include_bytes!(env!("RUSTC_DRIVER_DYLIB_PATH"));
+const TOOLCHAIN_TARBALL_DATA: &[u8] = include_bytes!(env!("TOOLCHAIN_TARBALL_PATH"));
+
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(tag = "reason", rename_all = "kebab-case")]
 enum CargoCheckMessage {
@@ -154,12 +158,9 @@ impl Backend {
             };
 
             log::info!("start checking {}", root.display());
-            let mut command = process::Command::new("rustup");
+            let mut command = process::Command::new("cargo");
             command
                 .args([
-                    "run",
-                    rustowl::toolchain_version::TOOLCHAIN_VERSION,
-                    "cargo",
                     "check",
                     "--all-targets",
                     "--all-features",
@@ -167,11 +168,50 @@ impl Backend {
                     "--message-format=json",
                 ])
                 .env("CARGO_TARGET_DIR", &target)
-                .env("RUSTC_WORKSPACE_WRAPPER", "rustowlc")
                 .env_remove("RUSTC_WRAPPER")
                 .current_dir(&root)
                 .stdout(std::process::Stdio::piped())
                 .kill_on_drop(true);
+
+            // set rustowlc & library path
+            let self_path = env::current_exe().unwrap();
+            let self_dir = self_path.parent().unwrap().to_path_buf();
+            let rustowlc_path = self_dir.join("rustowlc");
+            command
+                .env("RUSTC", &rustowlc_path)
+                .env("RUSTC_WORKSPACE_WRAPPER", &rustowlc_path)
+                .env(
+                    "RUSTFLAGS",
+                    format!("--sysroot={}", get_toolchain_path().display()),
+                );
+            #[cfg(target_os = "linux")]
+            {
+                let mut paths =
+                    env::split_paths(&env::var("LD_LIBRARY_PATH").unwrap_or("".to_owned()))
+                        .collect::<std::collections::VecDeque<_>>();
+                paths.push_front(self_dir);
+                let paths = env::join_paths(paths).unwrap();
+                command.env("LD_LIBRARY_PATH", paths);
+            }
+            #[cfg(target_os = "macos")]
+            {
+                let mut paths = env::split_paths(
+                    &env::var("DYLD_FALLBACK_LIBRARY_PATH").unwrap_or("".to_owned()),
+                )
+                .collect::<std::collections::VecDeque<_>>();
+                paths.push_front(self_dir);
+                let paths = env::join_paths(paths).unwrap();
+                command.env("DYLD_FALLBACK_LIBRARY_PATH", paths);
+            }
+            #[cfg(target_os = "windows")]
+            {
+                let mut paths = env::split_paths(&env::var_os("Path").unwrap())
+                    .collect::<std::collections::VecDeque<_>>();
+                paths.push_front(self_dir);
+                let paths = env::join_paths(paths).unwrap();
+                command.env("Path", paths);
+            }
+
             #[cfg(unix)]
             unsafe {
                 command.pre_exec(|| {
@@ -453,35 +493,15 @@ async fn main() {
         .with_colors(true)
         .init()
         .unwrap();
-    log::set_max_level(log::LevelFilter::Off);
+    log::set_max_level(
+        env::var("RUST_LOG")
+            .unwrap_or("off".to_owned())
+            .parse()
+            .unwrap(),
+    );
 
-    #[cfg(windows)]
-    {
-        let home = PathBuf::from(
-            String::from_utf8_lossy(
-                &process::Command::new("rustup")
-                    .args(["show", "home"])
-                    .stdout(std::process::Stdio::piped())
-                    .spawn()
-                    .unwrap()
-                    .wait_with_output()
-                    .await
-                    .unwrap()
-                    .stdout,
-            )
-            .trim(),
-        );
-        let mut paths = env::split_paths(&env::var_os("Path").unwrap())
-            .collect::<std::collections::VecDeque<_>>();
-        paths.push_front(
-            home.join("toolchains")
-                .join(rustowl::toolchain_version::TOOLCHAIN_VERSION)
-                .join("bin"),
-        );
-        unsafe {
-            env::set_var("Path", env::join_paths(paths).unwrap());
-        }
-    }
+    setup_lib(RUSTC_DRIVER_DYLIB_PATH, RUSTC_DRIVER_DYLIB_DATA).await;
+    setup_toolchain().await;
 
     let matches = clap::Command::new("RustOwl Language Server")
         .version(clap::crate_version!())
@@ -502,6 +522,7 @@ async fn main() {
             ),
         )
         .subcommand(clap::Command::new("clean"))
+        .subcommand(clap::Command::new("toolchain").subcommand(clap::Command::new("uninstall")))
         .get_matches();
 
     if let Some(arg) = matches.subcommand() {
@@ -522,6 +543,11 @@ async fn main() {
                 if let Ok(meta) = cargo_metadata::MetadataCommand::new().exec() {
                     let target = meta.target_directory.join("owl");
                     tokio::fs::remove_dir_all(&target).await.ok();
+                }
+            }
+            ("toolchain", matches) => {
+                if let Some(("uninstall", _)) = matches.subcommand() {
+                    uninstall_toolchain().await;
                 }
             }
             _ => {}
@@ -554,4 +580,48 @@ async fn check(path: PathBuf) -> bool {
         .as_ref()
         .map(|v| !v.0.is_empty())
         .unwrap_or(false)
+}
+
+use tokio::fs::{create_dir_all, remove_dir_all, write};
+/// copy rustc_driver to executing driver path
+async fn setup_lib(path: &str, data: &[u8]) {
+    let rustc_lib_name = PathBuf::from(path)
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
+    let mut output_path = env::current_exe().unwrap();
+    output_path.set_file_name(&rustc_lib_name);
+    if !output_path.exists() {
+        write(&output_path, data).await.unwrap();
+        log::info!("{rustc_lib_name} is copied to {}", output_path.display());
+    }
+}
+fn get_toolchain_path() -> PathBuf {
+    env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf()
+        .join("owl")
+}
+async fn setup_toolchain() {
+    use flate2::read::GzDecoder;
+    use tar::Archive;
+
+    let output_path = get_toolchain_path();
+    if !output_path.exists() {
+        create_dir_all(&output_path)
+            .await
+            .expect("failed to create toolchain directory");
+        let decoder = GzDecoder::new(TOOLCHAIN_TARBALL_DATA);
+        let mut archive = Archive::new(decoder);
+        archive
+            .unpack(&output_path)
+            .expect("Failed to unpack toolchain");
+        log::info!("toolchain setup done: {}", output_path.display());
+    }
+}
+async fn uninstall_toolchain() {
+    remove_dir_all(get_toolchain_path()).await.unwrap();
 }

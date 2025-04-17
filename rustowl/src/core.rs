@@ -1,3 +1,5 @@
+#![allow(clippy::await_holding_lock)]
+
 mod analyze;
 
 use analyze::MirAnalyzer;
@@ -7,9 +9,10 @@ use rustc_middle::{
     mir::BorrowCheckResult, query::queries::mir_borrowck::ProvidedValue, ty::TyCtxt,
     util::Providers,
 };
-use rustc_session::{EarlyDiagCtxt, config};
+use rustc_session::config;
 use rustowl::models::*;
 use std::collections::HashMap;
+use std::env;
 use std::sync::{LazyLock, Mutex, atomic::AtomicBool};
 use tokio::{
     runtime::{Builder, Handle, Runtime},
@@ -106,19 +109,24 @@ impl rustc_driver::Callbacks for AnalyzerCallback {
 }
 
 pub fn run_compiler() -> i32 {
-    let ctxt = EarlyDiagCtxt::new(config::ErrorOutputType::default());
-    let args = rustc_driver::args::raw_args(&ctxt);
-    let args = &args[1..];
-    for arg in args {
+    let mut args: Vec<String> = env::args().collect();
+    if args.first() == args.get(1) {
+        args = args.into_iter().skip(1).collect();
+    } else {
+        return rustc_driver::catch_with_exit_code(|| {
+            rustc_driver::run_compiler(&args, &mut RustcCallback)
+        });
+    }
+
+    for arg in &args {
         if arg == "-vV" || arg == "--version" || arg.starts_with("--print") {
-            let mut callback = RustcCallback;
             return rustc_driver::catch_with_exit_code(|| {
-                rustc_driver::run_compiler(args, &mut callback)
+                rustc_driver::run_compiler(&args, &mut RustcCallback)
             });
         }
     }
-    let mut callback = AnalyzerCallback;
+
     rustc_driver::catch_with_exit_code(|| {
-        rustc_driver::run_compiler(args, &mut callback);
+        rustc_driver::run_compiler(&args, &mut AnalyzerCallback);
     })
 }
