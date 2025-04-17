@@ -7,9 +7,7 @@ fn main() {
         install_compiler();
     }
 
-    if let Ok(toolchain) = env::var("RUSTOWL_TOOLCHAIN") {
-        println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={toolchain}");
-    } else if let Some(toolchain) = get_toolchain(".") {
+    if let Some(toolchain) = get_toolchain(".") {
         println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={toolchain}");
     }
 

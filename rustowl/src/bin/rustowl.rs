@@ -118,7 +118,7 @@ impl Backend {
         let roots = { self.roots.read().await.clone() };
 
         let cargo_path = rustowl::toolchain_version::TOOLCHAIN_DIR
-            .map(|dir| PathBuf::from(dir).join("bin/cargo"));
+            .map(|dir| PathBuf::from(dir).join("bin").join("cargo"));
 
         for (root, target) in roots {
             // progress report
