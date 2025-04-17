@@ -7,7 +7,6 @@ fn main() {
         println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={toolchain}");
     }
 
-    output_lib_path("rustc_driver", "dylib");
     let sysroot = get_sysroot().unwrap();
     compress_toolchain(&sysroot);
 }
@@ -56,23 +55,6 @@ fn recursive_read_dir(path: impl AsRef<Path>) -> Vec<PathBuf> {
         }
     }
     paths
-}
-fn output_lib_path(lib: &str, ext: &str) {
-    let sysroot = get_sysroot().unwrap();
-    let files = recursive_read_dir(&sysroot);
-    let rustc_lib = files
-        .into_iter()
-        .find(|p| {
-            let file_name = p.file_name().unwrap().to_str().unwrap();
-            file_name.starts_with(&format!("lib{lib}-")) && file_name.ends_with(&format!(".{ext}"))
-        })
-        .unwrap();
-    println!(
-        "cargo::rustc-env={}_{}_PATH={}",
-        lib.to_uppercase(),
-        ext.to_uppercase(),
-        rustc_lib.display()
-    );
 }
 
 fn compress_toolchain(sysroot: &str) {
