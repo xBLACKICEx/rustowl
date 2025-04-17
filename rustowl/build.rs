@@ -1,19 +1,42 @@
+use dunce::canonicalize;
 use std::env;
+use std::fs::OpenOptions;
 use std::io::Read;
 use std::process::{Command, Stdio};
+
+const TOOLCHAIN_TARBALL_NAME: &str = "toolchain.tar.gz";
 
 fn main() {
     if let Some(toolchain) = get_toolchain(".") {
         println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={toolchain}");
     }
 
-    let sysroot = get_sysroot().unwrap();
-    compress_toolchain(&sysroot);
+    if let Ok(toolchain_dir) = env::var("RUSTOWL_TOOLCHAIN_DIR") {
+        println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN_DIR={toolchain_dir}");
+
+        let _f = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(TOOLCHAIN_TARBALL_NAME)
+            .unwrap();
+        println!(
+            "cargo::rustc-env=TOOLCHAIN_TARBALL_PATH={}",
+            canonicalize(TOOLCHAIN_TARBALL_NAME).unwrap().display(),
+        );
+    } else {
+        let sysroot = get_sysroot().unwrap();
+        compress_toolchain(&sysroot);
+    }
 }
 
 use std::path::Path;
 // get toolchain
 fn get_toolchain(current: impl AsRef<Path>) -> Option<String> {
+    if let Ok(toolchain) = env::var("RUSTOWL_TOOLCHAIN") {
+        return Some(toolchain);
+    }
+
     let child = match Command::new("rustup")
         .args(["show", "active-toolchain"])
         .env_remove("RUSTUP_TOOLCHAIN")
@@ -41,7 +64,6 @@ fn get_sysroot() -> Option<String> {
         Err(_) => None,
     }
 }
-use dunce::canonicalize;
 use std::fs::read_dir;
 use std::path::PathBuf;
 fn recursive_read_dir(path: impl AsRef<Path>) -> Vec<PathBuf> {
@@ -64,7 +86,7 @@ fn compress_toolchain(sysroot: &str) {
     use std::fs::File;
     use tar::Builder;
 
-    let path = canonicalize(".").unwrap().join("toolchain.tar.gz");
+    let path = canonicalize(TOOLCHAIN_TARBALL_NAME).unwrap();
     let tar_gz = File::create(&path).unwrap();
     let enc = GzEncoder::new(tar_gz, Compression::best());
     let mut tar_builder = Builder::new(enc);
