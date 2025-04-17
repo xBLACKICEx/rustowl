@@ -28,6 +28,7 @@ flate2 = "1.1.1"
 [build-dependencies]
 tar = "0.4.44"
 flate2 = "1.1.1"
+dunce = "1.0.5"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.169"

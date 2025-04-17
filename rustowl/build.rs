@@ -41,7 +41,8 @@ fn get_sysroot() -> Option<String> {
         Err(_) => None,
     }
 }
-use std::fs::{canonicalize, read_dir};
+use dunce::canonicalize;
+use std::fs::read_dir;
 use std::path::PathBuf;
 fn recursive_read_dir(path: impl AsRef<Path>) -> Vec<PathBuf> {
     let mut paths = Vec::new();
