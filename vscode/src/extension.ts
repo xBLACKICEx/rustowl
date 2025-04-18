@@ -1,13 +1,13 @@
 import * as vscode from "vscode";
 
 import { zInfer, zLspCursorResponse, zLspRange } from "./schemas";
+import { bootstrapRustowl } from "./bootstrap";
 import {
   LanguageClient,
   ServerOptions,
   Executable,
   TransportKind,
   LanguageClientOptions,
-  DocumentUri,
 } from "vscode-languageclient/node";
 
 let client: LanguageClient | undefined = undefined;
@@ -26,13 +26,18 @@ export function activate(context: vscode.ExtensionContext) {
     documentSelector: [{ scheme: "file", language: "rust" }],
   };
 
-  client = new LanguageClient(
-    "rustowl",
-    "RustOwl",
-    serverOptions,
-    clientOptions,
-  );
-  client.start();
+  (async () => {
+    const exec = await bootstrapRustowl(context.globalStorageUri.fsPath);
+    serverOptions.command = exec;
+
+    client = new LanguageClient(
+      "rustowl",
+      "RustOwl",
+      serverOptions,
+      clientOptions,
+    );
+    client.start();
+  })();
 
   let activeEditor: vscode.TextEditor | undefined =
     vscode.window.activeTextEditor;

@@ -25,7 +25,7 @@ use std::process::exit;
 fn main() {
     // This is cited from [rustc](https://github.com/rust-lang/rust/blob/1.86.0/compiler/rustc/src/main.rs).
     // MIT License
-    #[cfg(feature = "jemalloc")]
+    #[cfg(all(unix, feature = "jemalloc"))]
     {
         use std::os::raw::{c_int, c_void};
 

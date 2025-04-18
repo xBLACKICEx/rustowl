@@ -6,13 +6,52 @@ on:
       - v*
 
 jobs:
-  check:
-    uses: ./.github/workflows/check.yaml
+  rustowl:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
 
-  extension:
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: rustup install
+        working-directory: rustowl
+      - name: Build
+        run: cargo build --release
+        working-directory: rustowl
+
+      - name: Set host tuple to env
+        shell: bash
+        run: echo "host_tuple=$(rustc --print=host-tuple)" >> $GITHUB_ENV
+        working-directory: rustowl
+      - name: Rename artifacts
+        shell: bash
+        run: |
+          mkdir -p bin
+          for f in $(find rustowl/target/release -maxdepth 1 -perm -111 -type f); do
+            BASENAME="$(basename "$f")"
+            NAME="${BASENAME%%.*}";
+            mv "$f" "bin/$NAME-${{ env.host_tuple }}";
+          done
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustowl-bin-${{ env.host_tuple }}
+          path: bin/*
+
+
+  vscode:
     runs-on: ubuntu-latest
-    needs:
-      - check
     permissions:
       contents: write
 
@@ -29,11 +68,32 @@ jobs:
       - name: Create VSIX
         run: yarn build
         working-directory: ./vscode
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustowl-vscode
+          path: vscode/**/*.vsix
+
+
+  release:
+    runs-on: ubuntu-latest
+    needs:
+      - rustowl
+      - vscode
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: rustowl-*
+          merge-multiple: true
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           body: auto RustOwl update
-          files: |
-            ./vscode/**/*.vsix
-            ./rustowl/install.sh
+          files: artifacts/**/*
           draft: true

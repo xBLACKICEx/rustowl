@@ -171,8 +171,7 @@ impl MirAnalyzer<'_> {
                     bb.terminator().source_info.span
                 }
             })
-            .map(|span| range_from_span(&self.source, span, self.offset))
-            .flatten()
+            .and_then(|span| range_from_span(&self.source, span, self.offset))
     }
     fn rich_locations_to_ranges(&self, locations: &[RichLocation]) -> Vec<Range> {
         let mut starts = Vec::new();
@@ -357,37 +356,37 @@ impl MirAnalyzer<'_> {
                         }
                     })
                     .collect();
-                let terminator = bb_data
-                    .terminator
-                    .as_ref()
-                    .map(|terminator| match &terminator.kind {
-                        TerminatorKind::Drop { place, .. } => {
-                            range_from_span(source, terminator.source_info.span, offset).map(
-                                |range| MirTerminator::Drop {
-                                    local: FnLocal::new(
-                                        place.local.as_u32(),
+                let terminator =
+                    bb_data
+                        .terminator
+                        .as_ref()
+                        .and_then(|terminator| match &terminator.kind {
+                            TerminatorKind::Drop { place, .. } => {
+                                range_from_span(source, terminator.source_info.span, offset).map(
+                                    |range| MirTerminator::Drop {
+                                        local: FnLocal::new(
+                                            place.local.as_u32(),
+                                            fn_id.local_def_index.as_u32(),
+                                        ),
+                                        range,
+                                    },
+                                )
+                            }
+                            TerminatorKind::Call {
+                                destination,
+                                fn_span,
+                                ..
+                            } => range_from_span(source, *fn_span, offset).map(|fn_span| {
+                                MirTerminator::Call {
+                                    destination_local: FnLocal::new(
+                                        destination.local.as_u32(),
                                         fn_id.local_def_index.as_u32(),
                                     ),
-                                    range,
-                                },
-                            )
-                        }
-                        TerminatorKind::Call {
-                            destination,
-                            fn_span,
-                            ..
-                        } => range_from_span(source, *fn_span, offset).map(|fn_span| {
-                            MirTerminator::Call {
-                                destination_local: FnLocal::new(
-                                    destination.local.as_u32(),
-                                    fn_id.local_def_index.as_u32(),
-                                ),
-                                fn_span,
-                            }
-                        }),
-                        _ => Some(MirTerminator::Other),
-                    })
-                    .flatten();
+                                    fn_span,
+                                }
+                            }),
+                            _ => Some(MirTerminator::Other),
+                        });
                 MirBasicBlock {
                     statements,
                     terminator,
