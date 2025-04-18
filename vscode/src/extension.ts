@@ -27,7 +27,8 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   (async () => {
-    await bootstrapRustowl(context.globalStorageUri.fsPath);
+    const exec = await bootstrapRustowl(context.globalStorageUri.fsPath);
+    serverOptions.command = exec;
 
     client = new LanguageClient(
       "rustowl",

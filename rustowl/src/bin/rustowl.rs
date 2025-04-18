@@ -609,7 +609,7 @@ async fn setup_toolchain() {
     use tar::Archive;
 
     #[allow(clippy::const_is_empty)]
-    if TOOLCHAIN_TARBALL_DATA.is_empty() {
+    if !TOOLCHAIN_TARBALL_DATA.is_empty() {
         let output_path = get_toolchain_path();
         if !output_path.exists() {
             create_dir_all(&output_path)
