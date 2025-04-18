@@ -1,13 +1,15 @@
 use dunce::canonicalize;
 use std::env;
 use std::fs::OpenOptions;
-use std::io::{Read, Write};
-use std::process::{Command, Stdio};
+use std::io::Write;
+use std::process::Command;
 
 const TOOLCHAIN_TARBALL_NAME: &str = "toolchain.tar.gz";
 
 fn main() {
-    if let Some(toolchain) = get_toolchain(".") {
+    println!("cargo::rerun-if-changed={}", TOOLCHAIN_TARBALL_NAME);
+
+    if let Some(toolchain) = get_toolchain() {
         println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={toolchain}");
     }
 
@@ -35,26 +37,12 @@ fn main() {
 
 use std::path::Path;
 // get toolchain
-fn get_toolchain(current: impl AsRef<Path>) -> Option<String> {
+fn get_toolchain() -> Option<String> {
     if let Ok(toolchain) = env::var("RUSTOWL_TOOLCHAIN") {
         return Some(toolchain);
     }
 
-    let child = match Command::new("rustup")
-        .args(["show", "active-toolchain"])
-        .env_remove("RUSTUP_TOOLCHAIN")
-        .current_dir(current)
-        .stdout(Stdio::piped())
-        .spawn()
-    {
-        Ok(v) => v,
-        Err(_) => return None,
-    };
-    let mut stdout = child.stdout.unwrap();
-    let mut output = String::new();
-    stdout.read_to_string(&mut output).unwrap();
-    let toolchain = output.split_whitespace().next().unwrap().trim().to_owned();
-    Some(toolchain)
+    env::var("RUSTUP_TOOLCHAIN").ok()
 }
 
 // output rustc_driver path

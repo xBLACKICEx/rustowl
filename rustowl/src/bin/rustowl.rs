@@ -603,6 +603,7 @@ fn get_toolchain_path() -> PathBuf {
         .unwrap()
         .to_path_buf()
         .join("owl")
+        .join(rustowl::toolchain_version::TOOLCHAIN_VERSION)
 }
 async fn setup_toolchain() {
     use flate2::read::GzDecoder;
