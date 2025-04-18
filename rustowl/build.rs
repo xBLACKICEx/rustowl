@@ -7,8 +7,6 @@ use std::process::Command;
 const TOOLCHAIN_TARBALL_NAME: &str = "toolchain.tar.gz";
 
 fn main() {
-    println!("cargo::rerun-if-changed={}", TOOLCHAIN_TARBALL_NAME);
-
     if let Some(toolchain) = get_toolchain() {
         println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={toolchain}");
     }
@@ -16,19 +14,16 @@ fn main() {
     if let Ok(toolchain_dir) = env::var("RUSTOWL_TOOLCHAIN_DIR") {
         println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN_DIR={toolchain_dir}");
 
+        let path = canonicalize(env::var("OUT_DIR").unwrap())
+            .unwrap()
+            .join(TOOLCHAIN_TARBALL_NAME);
         let _f = OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
-            .open(TOOLCHAIN_TARBALL_NAME)
+            .open(&path)
             .unwrap();
-        println!(
-            "cargo::rustc-env=TOOLCHAIN_TARBALL_PATH={}",
-            canonicalize(".")
-                .unwrap()
-                .join(TOOLCHAIN_TARBALL_NAME)
-                .display(),
-        );
+        println!("cargo::rustc-env=TOOLCHAIN_TARBALL_PATH={}", path.display(),);
     } else {
         let sysroot = get_sysroot().unwrap();
         compress_toolchain(&sysroot);
@@ -77,7 +72,9 @@ fn compress_toolchain(sysroot: &str) {
     use std::fs::File;
     use tar::Builder;
 
-    let path = canonicalize(".").unwrap().join(TOOLCHAIN_TARBALL_NAME);
+    let path = canonicalize(env::var("OUT_DIR").unwrap())
+        .unwrap()
+        .join(TOOLCHAIN_TARBALL_NAME);
     let tar_gz = File::create(&path).unwrap();
     let enc = GzEncoder::new(tar_gz, Compression::best());
     let mut tar_builder = Builder::new(enc);
