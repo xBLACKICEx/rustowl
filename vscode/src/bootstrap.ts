@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 import { spawnSync } from "node:child_process";
 import * as vscode from "vscode";
 const version = require("../package.json").version as string;
@@ -26,7 +27,7 @@ export const hostTuple = (): string | null => {
 
 const exeExt = hostTuple()?.includes("windows") ? ".exe" : "";
 
-export const downloadRustowl = async (basePath: string, version: string) => {
+export const downloadRustowl = async (basePath: string) => {
   const baseUrl = `https://github.com/cordx56/rustowl/releases/download/v${version}`;
   const host = hostTuple();
   if (host) {
@@ -62,7 +63,8 @@ const exists = (path: string) => {
     .then(() => true)
     .catch(() => false);
 };
-export const bootstrapRustowl = async (basePath: string): Promise<string> => {
+export const bootstrapRustowl = async (dirPath: string): Promise<string> => {
+  const basePath = path.join(dirPath, `v${version}`);
   if (spawnSync("rustowl", ["--version"]).status !== null) {
     return "rustowl";
   }
@@ -77,12 +79,12 @@ export const bootstrapRustowl = async (basePath: string): Promise<string> => {
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: "RustOwl installation",
+      title: "RustOwl installing...",
       cancellable: false,
     },
     async () => {
       try {
-        await downloadRustowl(basePath, version);
+        await downloadRustowl(basePath);
       } catch (e) {
         vscode.window.showErrorMessage(`${e}`);
       }
