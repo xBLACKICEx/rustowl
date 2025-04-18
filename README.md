@@ -48,7 +48,6 @@ Here we describe how to start using RustOwl with VS Code.
 - Visual Studio Code (VS Code) installed
 
 We tested this guide on macOS Sequoia 15.3.2 on arm64 architecture with VS Code 1.99.3 and `cargo` 1.86.0.
-We tested on Windows 11 Education 23H2 on amd64 architecture.
 
 ### VS Code
 
@@ -164,7 +163,7 @@ We have not tested the installation of dependencies from other package repositor
 You may need to uninstall any Rust-related packages installed through those repositories first.
 Other dependencies are locked in the configuration files and will be installed automatically.
 
-We have also tested this on Ubuntu 24.04.2 on amd64 architecture.
+We have also tested this on Ubuntu 24.04.2 on amd64 architecture and on Windows 11 Education 23H2 on amd64 architecture.
 Additional dependencies may be required.
 We have confirmed that running `apt install build-essential` is necessary on a freshly installed Ubuntu for linking.
 
