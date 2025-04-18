@@ -35,8 +35,6 @@
 
           buildInputs = [ ];
 
-          cargoBuildFlags = [ "--bin" "rustowlc" "--bin" "rustowl" "--features" "compiler" ];
-
           meta = with pkgs.lib; {
             description = "Visualize ownership and lifetimes in Rust for debugging and optimization";
             longDescription = ''
