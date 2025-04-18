@@ -1,7 +1,7 @@
 use dunce::canonicalize;
 use std::env;
 use std::fs::OpenOptions;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 
 const TOOLCHAIN_TARBALL_NAME: &str = "toolchain.tar.gz";
@@ -111,7 +111,7 @@ fn compress_toolchain(sysroot: &str) {
     }
 
     let enc = tar_builder.into_inner().unwrap();
-    enc.finish().unwrap();
+    enc.finish().unwrap().flush().unwrap();
 
     println!("cargo::rustc-env=TOOLCHAIN_TARBALL_PATH={}", path.display());
 }

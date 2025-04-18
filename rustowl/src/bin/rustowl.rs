@@ -193,8 +193,8 @@ impl Backend {
                 .env("RUSTC", &rustowlc_path)
                 .env("RUSTC_WORKSPACE_WRAPPER", &rustowlc_path)
                 .env(
-                    "RUSTFLAGS",
-                    format!("--sysroot=\"{}\"", toolchain_path.display()),
+                    "CARGO_ENCODED_RUSTFLAGS",
+                    format!("--sysroot={}", toolchain_path.display()),
                 );
             if let Some(driver_dir) = RUSTC_DRIVER_DIR {
                 #[cfg(target_os = "linux")]
