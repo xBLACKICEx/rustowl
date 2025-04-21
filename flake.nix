@@ -52,6 +52,7 @@
       {
         packages = {
           default = rustowl;
+          inherit rustowl;
         };
 
         devShells.default = pkgs.mkShell ({
@@ -59,7 +60,7 @@
             (rustToolchain.override {
               extensions = [ "rust-src" "rustfmt" ];
             })
-            # rustowl
+            rustowl
           ];
 
           shellHook = ''
