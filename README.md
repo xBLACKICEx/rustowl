@@ -146,6 +146,12 @@ You have to install RustOwl LSP server manually.
 There is a [third-party repository](https://github.com/siketyan/intellij-rustowl) that supports IntelliJ IDEs.
 You have to install RustOwl LSP server manually.
 
+## Architecture / OS / package repositories
+
+### Nix flake
+
+There is a [third-party Nix flake repository](https://github.com/nix-community/rustowl-flake) in the Nix community.
+
 ## Build manually
 
 Here, we describe manual install instructions from source code.
