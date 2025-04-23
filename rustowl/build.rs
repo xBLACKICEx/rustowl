@@ -104,7 +104,7 @@ fn compress_runtime(sysroot: &str, path: impl AsRef<Path>) {
 
     copy(
         path.as_ref(),
-        format!("../{}", path.as_ref().file_name().unwrap().display()),
+        format!("{}", path.as_ref().file_name().unwrap().display()),
     )
     .unwrap();
 }

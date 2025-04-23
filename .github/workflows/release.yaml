@@ -21,6 +21,7 @@ jobs:
       contents: write
     defaults:
       run:
+        shell: bash
         working-directory: rustowl
 
     steps:
@@ -30,7 +31,6 @@ jobs:
       # We don't have rustup on the Windows 11 Arm64 runner yet, so manually installing it.
       - if: ${{ matrix.os == 'windows-11-arm' }}
         name: Install rustup
-        shell: bash
         run: |
           URL='https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe'
           HASH="$(curl -sSL "${URL}.sha256")"
@@ -48,24 +48,30 @@ jobs:
       - name: Build
         run: cargo build --release
 
-      - name: Set host tuple to env
-        shell: bash
+      - name: Set host tuple env
         run: echo "host_tuple=$(rustc --print=host-tuple)" >> $GITHUB_ENV
-      - name: Rename artifacts
-        shell: bash
+      - name: Set runtime tarball name
+        run: echo "tarball_name=runtime-${{ env.host_tuple }}.tar.gz" >> $GITHUB_ENV
+
+      - name: Setup tarball artifacts
         run: |
-          mkdir -p bin
           for f in $(find target/release -maxdepth 1 -perm -111 -type f); do
-            BASENAME="$(basename "$f")"
-            NAME="${BASENAME%%.*}";
-            mv "$f" "bin/$NAME-${{ env.host_tuple }}";
+            mv "$f" "./";
           done
+
+          cp ../README.md ./
+          cp ../LICENSE ./
+
+          tar -xzvf ${{ env.tarball_name }}
+          rm ${{ env.tarball_name }}
+
+          tar -czvf ${{ env.tarball_name }} runtime README.md LICENSE rustowl rustowlc
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: rustowl-bin-${{ env.host_tuple }}
-          path: rustowl/bin/*
+          name: rustowl-runtime-${{ env.host_tuple }}
+          path: ${{ env.tarball_name }}
 
 
   vscode:
