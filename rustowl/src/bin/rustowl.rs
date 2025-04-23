@@ -6,7 +6,7 @@ use rustowl::{lsp::*, models::*, utils};
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process,
@@ -18,7 +18,18 @@ use tower_lsp::lsp_types;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
 const RUSTC_DRIVER_DIR: Option<&str> = option_env!("RUSTC_DRIVER_DIR");
-const TOOLCHAIN_TARBALL_DATA: &[u8] = include_bytes!(env!("TOOLCHAIN_TARBALL_PATH"));
+const CONFING_SYSROOT: Option<&str> = option_env!("RUSTOWL_SYSROOT");
+static SYSROOT: LazyLock<PathBuf> = LazyLock::new(|| {
+    CONFING_SYSROOT.map(PathBuf::from).unwrap_or(
+        env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("rustowl-runtime")
+            .join(rustowl::toolchain_version::TOOLCHAIN_VERSION),
+    )
+});
+const TARBALL_NAME: &str = env!("RUSTOWL_TARBALL_NAME");
 
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(tag = "reason", rename_all = "kebab-case")]
@@ -120,9 +131,6 @@ impl Backend {
         }
         let roots = { self.roots.read().await.clone() };
 
-        let cargo_path = rustowl::toolchain_version::TOOLCHAIN_DIR
-            .map(|dir| PathBuf::from(dir).join("bin").join("cargo"));
-
         for (root, target) in roots {
             // progress report
             let meta = cargo_metadata::MetadataCommand::new()
@@ -160,8 +168,8 @@ impl Backend {
             };
 
             log::info!("start checking {}", root.display());
-            let mut command = if let Some(cargo_path) = &cargo_path {
-                log::info!("using toolchain cargo: {}", cargo_path.display());
+            let mut command = if let Ok(cargo_path) = &env::var("CARGO") {
+                log::info!("using toolchain cargo: {}", cargo_path);
                 process::Command::new(cargo_path)
             } else {
                 log::info!("using default cargo",);
@@ -185,16 +193,12 @@ impl Backend {
             let self_path = env::current_exe().unwrap();
             let self_dir = self_path.parent().unwrap().to_path_buf();
             let rustowlc_path = self_dir.join("rustowlc");
-            let toolchain_path = PathBuf::from(
-                rustowl::toolchain_version::TOOLCHAIN_DIR
-                    .unwrap_or(get_toolchain_path().to_str().unwrap()),
-            );
             command
                 .env("RUSTC", &rustowlc_path)
                 .env("RUSTC_WORKSPACE_WRAPPER", &rustowlc_path)
                 .env(
                     "CARGO_ENCODED_RUSTFLAGS",
-                    format!("--sysroot={}", toolchain_path.display()),
+                    format!("--sysroot={}", SYSROOT.display()),
                 );
             if let Some(driver_dir) = RUSTC_DRIVER_DIR {
                 #[cfg(target_os = "linux")]
@@ -202,7 +206,7 @@ impl Backend {
                     let mut paths =
                         env::split_paths(&env::var("LD_LIBRARY_PATH").unwrap_or("".to_owned()))
                             .collect::<std::collections::VecDeque<_>>();
-                    paths.push_front(toolchain_path.join(driver_dir));
+                    paths.push_front(SYSROOT.join(driver_dir));
                     let paths = env::join_paths(paths).unwrap();
                     command.env("LD_LIBRARY_PATH", paths);
                 }
@@ -212,7 +216,7 @@ impl Backend {
                         &env::var("DYLD_FALLBACK_LIBRARY_PATH").unwrap_or("".to_owned()),
                     )
                     .collect::<std::collections::VecDeque<_>>();
-                    paths.push_front(toolchain_path.join(driver_dir));
+                    paths.push_front(SYSROOT.join(driver_dir));
                     let paths = env::join_paths(paths).unwrap();
                     command.env("DYLD_FALLBACK_LIBRARY_PATH", paths);
                 }
@@ -220,7 +224,7 @@ impl Backend {
                 {
                     let mut paths = env::split_paths(&env::var_os("Path").unwrap())
                         .collect::<std::collections::VecDeque<_>>();
-                    paths.push_front(toolchain_path.join(driver_dir));
+                    paths.push_front(SYSROOT.join(driver_dir));
                     let paths = env::join_paths(paths).unwrap();
                     command.env("Path", paths);
                 }
@@ -509,7 +513,7 @@ async fn main() {
         .unwrap();
     log::set_max_level(
         env::var("RUST_LOG")
-            .unwrap_or("off".to_owned())
+            .unwrap_or("warn".to_owned())
             .parse()
             .unwrap(),
     );
@@ -596,35 +600,57 @@ async fn check(path: PathBuf) -> bool {
 }
 
 use tokio::fs::{create_dir_all, remove_dir_all};
-fn get_toolchain_path() -> PathBuf {
-    env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .to_path_buf()
-        .join("owl")
-        .join(rustowl::toolchain_version::TOOLCHAIN_VERSION)
-}
 async fn setup_toolchain() {
     use flate2::read::GzDecoder;
     use tar::Archive;
 
-    #[allow(clippy::const_is_empty)]
-    if !TOOLCHAIN_TARBALL_DATA.is_empty() {
-        let output_path = get_toolchain_path();
-        if !output_path.exists() {
-            create_dir_all(&output_path)
-                .await
-                .expect("failed to create toolchain directory");
-            let decoder = GzDecoder::new(TOOLCHAIN_TARBALL_DATA);
-            let mut archive = Archive::new(decoder);
-            archive
-                .unpack(&output_path)
-                .expect("Failed to unpack toolchain");
-            log::info!("toolchain setup done: {}", output_path.display());
+    if !SYSROOT.exists() {
+        if create_dir_all(&*SYSROOT).await.is_err() {
+            log::error!("failed to create toolchain directory");
+            std::process::exit(1);
         }
+        let tarball_url = format!(
+            "https://github.com/cordx56/rustowl/releases/download/v{}/{TARBALL_NAME}",
+            clap::crate_version!(),
+        );
+        let resp = if let Ok(resp) = reqwest::get(&tarball_url)
+            .await
+            .and_then(|v| v.error_for_status())
+        {
+            resp
+        } else {
+            log::error!("failed to download runtime tarball");
+            std::process::exit(1);
+        };
+        let bytes = if let Ok(bytes) = resp.bytes().await {
+            bytes
+        } else {
+            log::error!("failed to download runtime tarball");
+            std::process::exit(1);
+        };
+        let decoder = GzDecoder::new(&*bytes);
+        let mut archive = Archive::new(decoder);
+        if let Ok(entries) = archive.entries() {
+            for mut entry in entries.flatten() {
+                if let Some(path) = entry
+                    .path()
+                    .ok()
+                    .and_then(|v| v.strip_prefix("runtime").map(|v| v.to_path_buf()).ok())
+                {
+                    let out_path = SYSROOT.join(path);
+                    if entry.unpack_in(out_path).unwrap_or(false) {
+                        log::error!("failed to unpack runtime tarball");
+                        std::process::exit(1);
+                    }
+                }
+            }
+        } else {
+            log::error!("failed to unpack runtime tarball");
+            std::process::exit(1);
+        }
+        log::info!("toolchain setup done: {}", SYSROOT.display());
     }
 }
 async fn uninstall_toolchain() {
-    remove_dir_all(get_toolchain_path()).await.unwrap();
+    remove_dir_all(&*SYSROOT).await.unwrap();
 }

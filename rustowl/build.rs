@@ -1,32 +1,30 @@
 use dunce::canonicalize;
 use std::env;
-use std::fs::OpenOptions;
 use std::io::Write;
 use std::process::Command;
-
-const TOOLCHAIN_TARBALL_NAME: &str = "toolchain.tar.gz";
 
 fn main() {
     if let Some(toolchain) = get_toolchain() {
         println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={toolchain}");
     }
 
-    if let Ok(toolchain_dir) = env::var("RUSTOWL_TOOLCHAIN_DIR") {
-        println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN_DIR={toolchain_dir}");
-
-        let path = canonicalize(env::var("OUT_DIR").unwrap())
-            .unwrap()
-            .join(TOOLCHAIN_TARBALL_NAME);
-        let _f = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&path)
-            .unwrap();
-        println!("cargo::rustc-env=TOOLCHAIN_TARBALL_PATH={}", path.display(),);
+    let config_sysroot = if let Ok(runtime_dir) = env::var("RUSTOWL_RUNTIME_DIR") {
+        Some(runtime_dir)
     } else {
+        env::var("RUSTOWL_SYSROOT").ok()
+    };
+    if let Some(sysroot) = config_sysroot {
+        println!("cargo::rustc-env=RUSTOWL_SYSROOT={}", sysroot);
+    }
+
+    let tarball_name = format!("runtime-{}.tar.gz", get_host_tuple().unwrap());
+    println!("cargo::rustc-env=RUSTOWL_TARBALL_NAME={tarball_name}");
+    let path = canonicalize(env::var("OUT_DIR").unwrap())
+        .unwrap()
+        .join(&tarball_name);
+    if !path.is_file() {
         let sysroot = get_sysroot().unwrap();
-        compress_toolchain(&sysroot);
+        compress_runtime(&sysroot, &path);
     }
 }
 
@@ -39,7 +37,15 @@ fn get_toolchain() -> Option<String> {
 
     env::var("RUSTUP_TOOLCHAIN").ok()
 }
-
+fn get_host_tuple() -> Option<String> {
+    match Command::new(env::var("RUSTC").unwrap())
+        .arg("--print=host-tuple")
+        .output()
+    {
+        Ok(v) => Some(String::from_utf8(v.stdout).unwrap().trim().to_string()),
+        Err(_) => None,
+    }
+}
 // output rustc_driver path
 fn get_sysroot() -> Option<String> {
     match Command::new(env::var("RUSTC").unwrap())
@@ -66,23 +72,21 @@ fn recursive_read_dir(path: impl AsRef<Path>) -> Vec<PathBuf> {
     paths
 }
 
-fn compress_toolchain(sysroot: &str) {
+fn compress_runtime(sysroot: &str, path: impl AsRef<Path>) {
     use flate2::Compression;
     use flate2::write::GzEncoder;
-    use std::fs::File;
+    use std::fs::{File, copy};
     use tar::Builder;
 
-    let path = canonicalize(env::var("OUT_DIR").unwrap())
-        .unwrap()
-        .join(TOOLCHAIN_TARBALL_NAME);
-    let tar_gz = File::create(&path).unwrap();
+    let tar_gz = File::create(path.as_ref()).unwrap();
     let enc = GzEncoder::new(tar_gz, Compression::best());
     let mut tar_builder = Builder::new(enc);
 
+    // add runtime
     for file in recursive_read_dir(sysroot) {
         if let Some(ext) = file.extension().and_then(|e| e.to_str()) {
             if matches!(ext, "rlib" | "so" | "dylib" | "dll") {
-                let rel_path = file.strip_prefix(sysroot).unwrap();
+                let rel_path = PathBuf::from("runtime").join(file.strip_prefix(sysroot).unwrap());
                 let file_name = rel_path.file_name().unwrap().to_str().unwrap();
                 if file_name.contains("rustc_driver") {
                     println!(
@@ -98,5 +102,9 @@ fn compress_toolchain(sysroot: &str) {
     let enc = tar_builder.into_inner().unwrap();
     enc.finish().unwrap().flush().unwrap();
 
-    println!("cargo::rustc-env=TOOLCHAIN_TARBALL_PATH={}", path.display());
+    copy(
+        path.as_ref(),
+        format!("../{}", path.as_ref().file_name().unwrap().display()),
+    )
+    .unwrap();
 }
