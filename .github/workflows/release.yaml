@@ -74,8 +74,8 @@ jobs:
         with:
           name: rustowl-runtime-${{ env.host_tuple }}
           path: |
-            rustowl-${{ env.host_tuple }}*
-            ${{ env.tarball_name }}
+            rustowl/rustowl-*
+            rustowl/${{ env.tarball_name }}
 
 
   vscode:
