@@ -551,7 +551,6 @@ async fn main() {
                 Some(("uninstall", _)) => {
                     uninstall_toolchain().await;
                 }
-<<<<<<< HEAD
             }
             ("completions", matches) => {
                 let shell = matches
