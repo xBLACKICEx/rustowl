@@ -41,16 +41,24 @@ set edit:completion:arg-completer[rustowl] = {|@words|
         &'rustowl;toolchain'= {
             cand -h 'Print help'
             cand --help 'Print help'
+            cand install 'install'
             cand uninstall 'uninstall'
             cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'rustowl;toolchain;install'= {
+            cand -h 'Print help'
+            cand --help 'Print help'
         }
         &'rustowl;toolchain;uninstall'= {
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'rustowl;toolchain;help'= {
+            cand install 'install'
             cand uninstall 'uninstall'
             cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'rustowl;toolchain;help;install'= {
         }
         &'rustowl;toolchain;help;uninstall'= {
         }
@@ -72,7 +80,10 @@ set edit:completion:arg-completer[rustowl] = {|@words|
         &'rustowl;help;clean'= {
         }
         &'rustowl;help;toolchain'= {
+            cand install 'install'
             cand uninstall 'uninstall'
+        }
+        &'rustowl;help;toolchain;install'= {
         }
         &'rustowl;help;toolchain;uninstall'= {
         }

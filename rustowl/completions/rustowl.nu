@@ -19,12 +19,19 @@ module completions {
     --help(-h)                # Print help
   ]
 
+  export extern "rustowl toolchain install" [
+    --help(-h)                # Print help
+  ]
+
   export extern "rustowl toolchain uninstall" [
     --help(-h)                # Print help
   ]
 
   # Print this message or the help of the given subcommand(s)
   export extern "rustowl toolchain help" [
+  ]
+
+  export extern "rustowl toolchain help install" [
   ]
 
   export extern "rustowl toolchain help uninstall" [
@@ -55,6 +62,9 @@ module completions {
   ]
 
   export extern "rustowl help toolchain" [
+  ]
+
+  export extern "rustowl help toolchain install" [
   ]
 
   export extern "rustowl help toolchain uninstall" [

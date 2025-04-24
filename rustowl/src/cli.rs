@@ -22,6 +22,7 @@ clap::Command::new("RustOwl Language Server")
             clap::Command::new("toolchain")
                 .subcommand(clap::Command::new("install"))
                 .subcommand(clap::Command::new("uninstall")),
+        )
         .subcommand(
             clap::Command::new("completions")
             .about("Generate shell completions")
@@ -30,5 +31,6 @@ clap::Command::new("RustOwl Language Server")
                 .help("The shell to generate completions for")
                 .required(true)
                 .value_parser(clap::value_parser!(crate::shells::Shell))
+            )
         )
 }

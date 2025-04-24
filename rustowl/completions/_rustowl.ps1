@@ -47,8 +47,14 @@ Register-ArgumentCompleter -Native -CommandName 'rustowl' -ScriptBlock {
         'rustowl;toolchain' {
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('install', 'install', [CompletionResultType]::ParameterValue, 'install')
             [CompletionResult]::new('uninstall', 'uninstall', [CompletionResultType]::ParameterValue, 'uninstall')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'rustowl;toolchain;install' {
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'rustowl;toolchain;uninstall' {
@@ -57,8 +63,12 @@ Register-ArgumentCompleter -Native -CommandName 'rustowl' -ScriptBlock {
             break
         }
         'rustowl;toolchain;help' {
+            [CompletionResult]::new('install', 'install', [CompletionResultType]::ParameterValue, 'install')
             [CompletionResult]::new('uninstall', 'uninstall', [CompletionResultType]::ParameterValue, 'uninstall')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'rustowl;toolchain;help;install' {
             break
         }
         'rustowl;toolchain;help;uninstall' {
@@ -87,7 +97,11 @@ Register-ArgumentCompleter -Native -CommandName 'rustowl' -ScriptBlock {
             break
         }
         'rustowl;help;toolchain' {
+            [CompletionResult]::new('install', 'install', [CompletionResultType]::ParameterValue, 'install')
             [CompletionResult]::new('uninstall', 'uninstall', [CompletionResultType]::ParameterValue, 'uninstall')
+            break
+        }
+        'rustowl;help;toolchain;install' {
             break
         }
         'rustowl;help;toolchain;uninstall' {

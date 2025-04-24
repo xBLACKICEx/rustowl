@@ -42,17 +42,26 @@ _rustowl() {
             rustowl__help,toolchain)
                 cmd="rustowl__help__toolchain"
                 ;;
+            rustowl__help__toolchain,install)
+                cmd="rustowl__help__toolchain__install"
+                ;;
             rustowl__help__toolchain,uninstall)
                 cmd="rustowl__help__toolchain__uninstall"
                 ;;
             rustowl__toolchain,help)
                 cmd="rustowl__toolchain__help"
                 ;;
+            rustowl__toolchain,install)
+                cmd="rustowl__toolchain__install"
+                ;;
             rustowl__toolchain,uninstall)
                 cmd="rustowl__toolchain__uninstall"
                 ;;
             rustowl__toolchain__help,help)
                 cmd="rustowl__toolchain__help__help"
+                ;;
+            rustowl__toolchain__help,install)
+                cmd="rustowl__toolchain__help__install"
                 ;;
             rustowl__toolchain__help,uninstall)
                 cmd="rustowl__toolchain__help__uninstall"
@@ -194,8 +203,22 @@ _rustowl() {
             return 0
             ;;
         rustowl__help__toolchain)
-            opts="uninstall"
+            opts="install uninstall"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        rustowl__help__toolchain__install)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
@@ -222,7 +245,7 @@ _rustowl() {
             return 0
             ;;
         rustowl__toolchain)
-            opts="-h --help uninstall help"
+            opts="-h --help install uninstall help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -236,7 +259,7 @@ _rustowl() {
             return 0
             ;;
         rustowl__toolchain__help)
-            opts="uninstall help"
+            opts="install uninstall help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -263,9 +286,37 @@ _rustowl() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        rustowl__toolchain__help__install)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         rustowl__toolchain__help__uninstall)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        rustowl__toolchain__install)
+            opts="-h --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi

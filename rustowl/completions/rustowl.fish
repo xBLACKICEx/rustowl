@@ -35,10 +35,13 @@ complete -c rustowl -n "__fish_rustowl_needs_command" -f -a "help" -d 'Print thi
 complete -c rustowl -n "__fish_rustowl_using_subcommand check" -l log -r
 complete -c rustowl -n "__fish_rustowl_using_subcommand check" -s h -l help -d 'Print help'
 complete -c rustowl -n "__fish_rustowl_using_subcommand clean" -s h -l help -d 'Print help'
-complete -c rustowl -n "__fish_rustowl_using_subcommand toolchain; and not __fish_seen_subcommand_from uninstall help" -s h -l help -d 'Print help'
-complete -c rustowl -n "__fish_rustowl_using_subcommand toolchain; and not __fish_seen_subcommand_from uninstall help" -f -a "uninstall"
-complete -c rustowl -n "__fish_rustowl_using_subcommand toolchain; and not __fish_seen_subcommand_from uninstall help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c rustowl -n "__fish_rustowl_using_subcommand toolchain; and not __fish_seen_subcommand_from install uninstall help" -s h -l help -d 'Print help'
+complete -c rustowl -n "__fish_rustowl_using_subcommand toolchain; and not __fish_seen_subcommand_from install uninstall help" -f -a "install"
+complete -c rustowl -n "__fish_rustowl_using_subcommand toolchain; and not __fish_seen_subcommand_from install uninstall help" -f -a "uninstall"
+complete -c rustowl -n "__fish_rustowl_using_subcommand toolchain; and not __fish_seen_subcommand_from install uninstall help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c rustowl -n "__fish_rustowl_using_subcommand toolchain; and __fish_seen_subcommand_from install" -s h -l help -d 'Print help'
 complete -c rustowl -n "__fish_rustowl_using_subcommand toolchain; and __fish_seen_subcommand_from uninstall" -s h -l help -d 'Print help'
+complete -c rustowl -n "__fish_rustowl_using_subcommand toolchain; and __fish_seen_subcommand_from help" -f -a "install"
 complete -c rustowl -n "__fish_rustowl_using_subcommand toolchain; and __fish_seen_subcommand_from help" -f -a "uninstall"
 complete -c rustowl -n "__fish_rustowl_using_subcommand toolchain; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c rustowl -n "__fish_rustowl_using_subcommand completions" -s h -l help -d 'Print help'
@@ -47,4 +50,5 @@ complete -c rustowl -n "__fish_rustowl_using_subcommand help; and not __fish_see
 complete -c rustowl -n "__fish_rustowl_using_subcommand help; and not __fish_seen_subcommand_from check clean toolchain completions help" -f -a "toolchain"
 complete -c rustowl -n "__fish_rustowl_using_subcommand help; and not __fish_seen_subcommand_from check clean toolchain completions help" -f -a "completions" -d 'Generate shell completions'
 complete -c rustowl -n "__fish_rustowl_using_subcommand help; and not __fish_seen_subcommand_from check clean toolchain completions help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c rustowl -n "__fish_rustowl_using_subcommand help; and __fish_seen_subcommand_from toolchain" -f -a "install"
 complete -c rustowl -n "__fish_rustowl_using_subcommand help; and __fish_seen_subcommand_from toolchain" -f -a "uninstall"

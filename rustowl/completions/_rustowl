@@ -56,7 +56,13 @@ _arguments "${_arguments_options[@]}" : \
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:rustowl-toolchain-command-$line[1]:"
         case $line[1] in
-            (uninstall)
+            (install)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(uninstall)
 _arguments "${_arguments_options[@]}" : \
 '-h[Print help]' \
 '--help[Print help]' \
@@ -74,7 +80,11 @@ _arguments "${_arguments_options[@]}" : \
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:rustowl-toolchain-help-command-$line[1]:"
         case $line[1] in
-            (uninstall)
+            (install)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(uninstall)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -129,7 +139,11 @@ _arguments "${_arguments_options[@]}" : \
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:rustowl-help-toolchain-command-$line[1]:"
         case $line[1] in
-            (uninstall)
+            (install)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(uninstall)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -214,9 +228,15 @@ _rustowl__help__help_commands() {
 (( $+functions[_rustowl__help__toolchain_commands] )) ||
 _rustowl__help__toolchain_commands() {
     local commands; commands=(
+'install:' \
 'uninstall:' \
     )
     _describe -t commands 'rustowl help toolchain commands' commands "$@"
+}
+(( $+functions[_rustowl__help__toolchain__install_commands] )) ||
+_rustowl__help__toolchain__install_commands() {
+    local commands; commands=()
+    _describe -t commands 'rustowl help toolchain install commands' commands "$@"
 }
 (( $+functions[_rustowl__help__toolchain__uninstall_commands] )) ||
 _rustowl__help__toolchain__uninstall_commands() {
@@ -226,6 +246,7 @@ _rustowl__help__toolchain__uninstall_commands() {
 (( $+functions[_rustowl__toolchain_commands] )) ||
 _rustowl__toolchain_commands() {
     local commands; commands=(
+'install:' \
 'uninstall:' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
@@ -234,6 +255,7 @@ _rustowl__toolchain_commands() {
 (( $+functions[_rustowl__toolchain__help_commands] )) ||
 _rustowl__toolchain__help_commands() {
     local commands; commands=(
+'install:' \
 'uninstall:' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
@@ -244,10 +266,20 @@ _rustowl__toolchain__help__help_commands() {
     local commands; commands=()
     _describe -t commands 'rustowl toolchain help help commands' commands "$@"
 }
+(( $+functions[_rustowl__toolchain__help__install_commands] )) ||
+_rustowl__toolchain__help__install_commands() {
+    local commands; commands=()
+    _describe -t commands 'rustowl toolchain help install commands' commands "$@"
+}
 (( $+functions[_rustowl__toolchain__help__uninstall_commands] )) ||
 _rustowl__toolchain__help__uninstall_commands() {
     local commands; commands=()
     _describe -t commands 'rustowl toolchain help uninstall commands' commands "$@"
+}
+(( $+functions[_rustowl__toolchain__install_commands] )) ||
+_rustowl__toolchain__install_commands() {
+    local commands; commands=()
+    _describe -t commands 'rustowl toolchain install commands' commands "$@"
 }
 (( $+functions[_rustowl__toolchain__uninstall_commands] )) ||
 _rustowl__toolchain__uninstall_commands() {
