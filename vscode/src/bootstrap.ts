@@ -41,17 +41,6 @@ export const downloadRustowl = async (basePath: string) => {
       { flag: "w" },
     );
     fs.chmod(`${basePath}/rustowl${exeExt}`, "755");
-
-    const owlc = await fetch(`${baseUrl}/rustowlc-${host}`);
-    if (owlc.status !== 200) {
-      throw Error("RustOwl download error");
-    }
-    await fs.writeFile(
-      `${basePath}/rustowlc${exeExt}`,
-      Buffer.from(await owlc.arrayBuffer()),
-      { flag: "w" },
-    );
-    fs.chmod(`${basePath}/rustowlc${exeExt}`, "755");
   } else {
     throw Error("unsupported host");
   }
@@ -68,10 +57,7 @@ export const bootstrapRustowl = async (dirPath: string): Promise<string> => {
   if (spawnSync("rustowl", ["--version"]).status !== null) {
     return "rustowl";
   }
-  if (
-    (await exists(`${basePath}/rustowl${exeExt}`)) &&
-    (await exists(`${basePath}/rustowlc${exeExt}`))
-  ) {
+  if (await exists(`${basePath}/rustowl${exeExt}`)) {
     return `${basePath}/rustowl${exeExt}`;
   }
   await fs.mkdir(basePath, { recursive: true });
