@@ -559,10 +559,6 @@ async fn main() {
                     .expect("shell is required by clap");
                 generate(*shell, &mut cli(), "rustowl", &mut io::stdout());
             }
-=======
-                _ => {}
-            },
->>>>>>> abc
             _ => {}
         }
     } else {
