@@ -55,23 +55,27 @@ jobs:
 
       - name: Setup tarball artifacts
         run: |
-          for f in $(find target/release -maxdepth 1 -perm -111 -type f); do
-            mv "$f" "./";
-          done
+          rm -rf runtime
+          cp -r "$(rustc --print=sysroot)" runtime
+
+          cp target/release/rustowl ./ || cp target/release/rustowl.exe ./
+          cp target/release/rustowlc ./ || cp target/release/rustowlc.exe ./
 
           cp ../README.md ./
           cp ../LICENSE ./
 
-          tar -xzvf ${{ env.tarball_name }}
           rm ${{ env.tarball_name }}
+          find runtime -type f | grep -E '\.(so|dylib|dll)$' | xargs tar -czvf ${{ env.tarball_name }} README.md LICENSE rustowl*
 
-          tar -czvf ${{ env.tarball_name }} runtime README.md LICENSE rustowl rustowlc
+          cp ./rustowl ./rustowl-${{ env.host_tuple }} || cp ./rustowl.exe ./rustowl-${{ env.host_tuple }}.exe
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: rustowl-runtime-${{ env.host_tuple }}
-          path: ${{ env.tarball_name }}
+          path: |
+            rustowl-${{ env.host_tuple }}*
+            ${{ env.tarball_name }}
 
 
   vscode:

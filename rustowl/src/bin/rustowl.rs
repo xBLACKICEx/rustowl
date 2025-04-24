@@ -190,9 +190,7 @@ impl Backend {
                 .kill_on_drop(true);
 
             // set rustowlc & library path
-            let self_path = env::current_exe().unwrap();
-            let self_dir = self_path.parent().unwrap().to_path_buf();
-            let rustowlc_path = self_dir.join("rustowlc");
+            let rustowlc_path = SYSROOT.join("rustowlc");
             command
                 .env("RUSTC", &rustowlc_path)
                 .env("RUSTC_WORKSPACE_WRAPPER", &rustowlc_path)
@@ -632,15 +630,13 @@ async fn setup_toolchain() {
         let mut archive = Archive::new(decoder);
         if let Ok(entries) = archive.entries() {
             for mut entry in entries.flatten() {
-                if let Some(path) = entry
-                    .path()
-                    .ok()
-                    .and_then(|v| v.strip_prefix("runtime").map(|v| v.to_path_buf()).ok())
-                {
-                    let out_path = SYSROOT.join(path);
-                    if entry.unpack_in(out_path).unwrap_or(false) {
-                        log::error!("failed to unpack runtime tarball");
-                        std::process::exit(1);
+                if let Some(path) = entry.path().ok() {
+                    if path.as_os_str() != "rustowl" {
+                        let out_path = SYSROOT.join(path);
+                        if entry.unpack_in(out_path).unwrap_or(false) {
+                            log::error!("failed to unpack runtime tarball");
+                            std::process::exit(1);
+                        }
                     }
                 }
             }

@@ -19,13 +19,9 @@ fn main() {
 
     let tarball_name = format!("runtime-{}.tar.gz", get_host_tuple().unwrap());
     println!("cargo::rustc-env=RUSTOWL_TARBALL_NAME={tarball_name}");
-    let path = canonicalize(env::var("OUT_DIR").unwrap())
-        .unwrap()
-        .join(&tarball_name);
-    if !path.is_file() {
-        let sysroot = get_sysroot().unwrap();
-        compress_runtime(&sysroot, &path);
-    }
+
+    let sysroot = get_sysroot().unwrap();
+    set_rustc_driver_path(&sysroot);
 }
 
 use std::path::Path;
@@ -34,7 +30,6 @@ fn get_toolchain() -> Option<String> {
     if let Ok(toolchain) = env::var("RUSTOWL_TOOLCHAIN") {
         return Some(toolchain);
     }
-
     env::var("RUSTUP_TOOLCHAIN").ok()
 }
 fn get_host_tuple() -> Option<String> {
@@ -71,22 +66,11 @@ fn recursive_read_dir(path: impl AsRef<Path>) -> Vec<PathBuf> {
     }
     paths
 }
-
-fn compress_runtime(sysroot: &str, path: impl AsRef<Path>) {
-    use flate2::Compression;
-    use flate2::write::GzEncoder;
-    use std::fs::{File, copy};
-    use tar::Builder;
-
-    let tar_gz = File::create(path.as_ref()).unwrap();
-    let enc = GzEncoder::new(tar_gz, Compression::best());
-    let mut tar_builder = Builder::new(enc);
-
-    // add runtime
+fn set_rustc_driver_path(sysroot: &str) {
     for file in recursive_read_dir(sysroot) {
         if let Some(ext) = file.extension().and_then(|e| e.to_str()) {
             if matches!(ext, "rlib" | "so" | "dylib" | "dll") {
-                let rel_path = PathBuf::from("runtime").join(file.strip_prefix(sysroot).unwrap());
+                let rel_path = file.strip_prefix(sysroot).unwrap();
                 let file_name = rel_path.file_name().unwrap().to_str().unwrap();
                 if file_name.contains("rustc_driver") {
                     println!(
@@ -94,17 +78,7 @@ fn compress_runtime(sysroot: &str, path: impl AsRef<Path>) {
                         rel_path.parent().unwrap().display()
                     );
                 }
-                tar_builder.append_path_with_name(&file, rel_path).unwrap();
             }
         }
     }
-
-    let enc = tar_builder.into_inner().unwrap();
-    enc.finish().unwrap().flush().unwrap();
-
-    copy(
-        path.as_ref(),
-        format!("{}", path.as_ref().file_name().unwrap().display()),
-    )
-    .unwrap();
 }
