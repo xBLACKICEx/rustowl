@@ -29,8 +29,7 @@ static SYSROOT: LazyLock<PathBuf> = LazyLock::new(|| {
             .unwrap()
             .parent()
             .unwrap()
-            .join("rustowl-runtime")
-            .join(rustowl::toolchain_version::TOOLCHAIN_VERSION),
+            .join("rustowl-runtime"),
     )
 });
 const TARBALL_NAME: &str = env!("RUSTOWL_TARBALL_NAME");
@@ -594,10 +593,6 @@ async fn setup_toolchain() {
     use tar::Archive;
 
     if !SYSROOT.exists() {
-        if create_dir_all(&*SYSROOT).await.is_err() {
-            log::error!("failed to create toolchain directory");
-            std::process::exit(1);
-        }
         let tarball_url = format!(
             "https://github.com/cordx56/rustowl/releases/download/v{}/{TARBALL_NAME}",
             clap::crate_version!(),
@@ -617,6 +612,10 @@ async fn setup_toolchain() {
             log::error!("failed to download runtime tarball");
             std::process::exit(1);
         };
+        if create_dir_all(&*SYSROOT).await.is_err() {
+            log::error!("failed to create toolchain directory");
+            std::process::exit(1);
+        }
         let decoder = GzDecoder::new(&*bytes);
         let mut archive = Archive::new(decoder);
         if let Ok(entries) = archive.entries() {
