@@ -65,7 +65,7 @@ jobs:
           cp ../LICENSE ./
 
           rm -rf ${{ env.tarball_name }}
-          find runtime -type f | grep -E '\.(so|dylib|dll)$' | xargs tar -czvf ${{ env.tarball_name }} README.md LICENSE rustowl*
+          find runtime -type f | grep -E '\.(so|dylib|dll)$' | xargs tar -czvf ${{ env.tarball_name }} README.md LICENSE rustowl* completions/ man/
 
           cp ./rustowl ./rustowl-${{ env.host_tuple }} || cp ./rustowl.exe ./rustowl-${{ env.host_tuple }}.exe
 

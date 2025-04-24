@@ -3,6 +3,8 @@
 //! An LSP server for visualizing ownership and lifetimes in Rust, designed for debugging and optimization.
 
 use rustowl::{lsp::*, models::*, utils};
+use rustowl::shells::Shell;
+use rustowl::cli::cli;
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -16,6 +18,8 @@ use tokio::{
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
+use std::io;
+use clap_complete::{generate};
 
 const RUSTC_DRIVER_DIR: Option<&str> = option_env!("RUSTC_DRIVER_DIR");
 const CONFING_SYSROOT: Option<&str> = option_env!("RUSTOWL_SYSROOT");
@@ -518,26 +522,7 @@ async fn main() {
 
     setup_toolchain().await;
 
-    let matches = clap::Command::new("RustOwl Language Server")
-        .version(clap::crate_version!())
-        .author(clap::crate_authors!())
-        .arg(
-            clap::Arg::new("io")
-                .long("stdio")
-                .required(false)
-                .action(clap::ArgAction::SetTrue),
-        )
-        .subcommand_required(false)
-        .subcommand(
-            clap::Command::new("check").arg(
-                clap::Arg::new("log_level")
-                    .long("log")
-                    .required(false)
-                    .action(clap::ArgAction::Set),
-            ),
-        )
-        .subcommand(clap::Command::new("clean"))
-        .subcommand(clap::Command::new("toolchain").subcommand(clap::Command::new("uninstall")))
+    let matches = cli() 
         .get_matches();
 
     if let Some(arg) = matches.subcommand() {
@@ -564,6 +549,12 @@ async fn main() {
                 if let Some(("uninstall", _)) = matches.subcommand() {
                     uninstall_toolchain().await;
                 }
+            }
+            ("completions", matches) => {
+                let shell = matches
+                    .get_one::<Shell>("shell")
+                    .expect("shell is required by clap");
+                generate(*shell, &mut cli(), "rustowl", &mut io::stdout());
             }
             _ => {}
         }
