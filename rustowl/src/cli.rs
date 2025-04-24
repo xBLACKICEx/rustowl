@@ -1,5 +1,5 @@
 pub fn cli() -> clap::Command {
-    clap::Command::new("RustOwl Language Server")
+clap::Command::new("RustOwl Language Server")
         .version(clap::crate_version!())
         .author(clap::crate_authors!())
         .arg(
@@ -18,7 +18,10 @@ pub fn cli() -> clap::Command {
             ),
         )
         .subcommand(clap::Command::new("clean"))
-        .subcommand(clap::Command::new("toolchain").subcommand(clap::Command::new("uninstall")))
+        .subcommand(
+            clap::Command::new("toolchain")
+                .subcommand(clap::Command::new("install"))
+                .subcommand(clap::Command::new("uninstall")),
         .subcommand(
             clap::Command::new("completions")
             .about("Generate shell completions")
@@ -27,6 +30,5 @@ pub fn cli() -> clap::Command {
                 .help("The shell to generate completions for")
                 .required(true)
                 .value_parser(clap::value_parser!(crate::shells::Shell))
-            )
-                                                                )
+        )
 }
