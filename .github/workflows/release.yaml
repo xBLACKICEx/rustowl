@@ -2,8 +2,8 @@ name: Release RustOwl
 
 on:
   push:
-    tags:
-      - v*
+    #tags:
+    #  - v*
 
 jobs:
   rustowl:
