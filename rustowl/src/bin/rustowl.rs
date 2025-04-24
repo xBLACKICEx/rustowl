@@ -536,7 +536,11 @@ async fn main() {
             ),
         )
         .subcommand(clap::Command::new("clean"))
-        .subcommand(clap::Command::new("toolchain").subcommand(clap::Command::new("uninstall")))
+        .subcommand(
+            clap::Command::new("toolchain")
+                .subcommand(clap::Command::new("install"))
+                .subcommand(clap::Command::new("uninstall")),
+        )
         .get_matches();
 
     if let Some(arg) = matches.subcommand() {
@@ -559,11 +563,15 @@ async fn main() {
                     tokio::fs::remove_dir_all(&target).await.ok();
                 }
             }
-            ("toolchain", matches) => {
-                if let Some(("uninstall", _)) = matches.subcommand() {
+            ("toolchain", matches) => match matches.subcommand() {
+                Some(("install", _)) => {
+                    setup_toolchain().await;
+                }
+                Some(("uninstall", _)) => {
                     uninstall_toolchain().await;
                 }
-            }
+                _ => {}
+            },
             _ => {}
         }
     } else {
@@ -602,6 +610,7 @@ async fn setup_toolchain() {
     use tar::Archive;
 
     if !SYSROOT.exists() {
+        log::info!("sysroot not found; start downloading {TARBALL_NAME}...");
         let tarball_url = format!(
             "https://github.com/cordx56/rustowl/releases/download/v{}/{TARBALL_NAME}",
             clap::crate_version!(),
@@ -621,6 +630,7 @@ async fn setup_toolchain() {
             log::error!("failed to download runtime tarball");
             std::process::exit(1);
         };
+        log::info!("download finished");
         if create_dir_all(&*SYSROOT).await.is_err() {
             log::error!("failed to create toolchain directory");
             std::process::exit(1);
@@ -630,12 +640,13 @@ async fn setup_toolchain() {
         if let Ok(entries) = archive.entries() {
             for mut entry in entries.flatten() {
                 if let Ok(path) = entry.path() {
+                    let path = path.to_path_buf();
                     if path.as_os_str() != "rustowl" {
-                        let out_path = SYSROOT.join(path);
-                        if entry.unpack_in(out_path).unwrap_or(false) {
+                        if !entry.unpack_in(&*SYSROOT).unwrap_or(false) {
                             log::error!("failed to unpack runtime tarball");
                             std::process::exit(1);
                         }
+                        log::info!("{} unpacked", path.display());
                     }
                 }
             }

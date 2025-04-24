@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import path from "node:path";
 import { spawnSync } from "node:child_process";
 import * as vscode from "vscode";
 const version = require("../package.json").version as string;
@@ -18,7 +17,9 @@ export const hostTuple = (): string | null => {
       return "aarch64-apple-darwin";
     }
   } else if (platform === "win32") {
-    if (arch === "x64") {
+    if (arch === "arm64") {
+      return "aarch64-pc-windows-msvc";
+    } else if (arch === "x64") {
       return "x86_64-pc-windows-msvc";
     }
   }
@@ -56,8 +57,9 @@ export const bootstrapRustowl = async (dirPath: string): Promise<string> => {
   if (spawnSync("rustowl", ["--version"]).status !== null) {
     return "rustowl";
   }
-  if (await exists(`${dirPath}/rustowl${exeExt}`)) {
-    return `${dirPath}/rustowl${exeExt}`;
+  const rustowlPath = `${dirPath}/rustowl${exeExt}`;
+  if (await exists(rustowlPath)) {
+    return rustowlPath;
   }
   await fs.mkdir(dirPath, { recursive: true });
 
@@ -70,6 +72,7 @@ export const bootstrapRustowl = async (dirPath: string): Promise<string> => {
     async () => {
       try {
         await downloadRustowl(dirPath);
+        spawnSync(rustowlPath, ["toolchain", "install"]);
       } catch (e) {
         vscode.window.showErrorMessage(`${e}`);
       }
