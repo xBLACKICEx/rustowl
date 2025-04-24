@@ -48,8 +48,10 @@ jobs:
       - name: Build
         run: cargo build --release
 
-      - name: Set host tuple env
-        run: echo "host_tuple=$(rustc --print=host-tuple)" >> $GITHUB_ENV
+      - name: check host tuple
+        run: |
+          echo "host_tuple=$(rustc --print=host-tuple)" >> $GITHUB_ENV
+          ([[ "$(rustc --print=host-tuple)" == *msvc* ]] && echo "exec_ext=.exe" || echo "exec_ext=") >> $GITHUB_ENV
       - name: Set runtime tarball name
         run: echo "tarball_name=runtime-${{ env.host_tuple }}.tar.gz" >> $GITHUB_ENV
 
@@ -58,23 +60,27 @@ jobs:
           rm -rf runtime
           cp -r "$(rustc --print=sysroot)" runtime
 
-          cp target/release/rustowl ./ || cp target/release/rustowl.exe ./
-          cp target/release/rustowlc ./ || cp target/release/rustowlc.exe ./
+          cp target/release/rustowl${{ env.exec_ext }} ./runtime
+          cp target/release/rustowlc${{ env.exec_ext }} ./runtime
 
-          cp ../README.md ./
-          cp ../LICENSE ./
+          cp ../README.md ./runtime
+          cp ../LICENSE ./runtime
 
           rm -rf ${{ env.tarball_name }}
-          find runtime -type f | grep -E '\.(so|dylib|dll)$' | xargs tar -czvf ${{ env.tarball_name }} README.md LICENSE rustowl*
+          cd runtime;
+          ls | \
+            xargs -I % find % -type f | \
+            grep -E '\.(so|dylib|dll)$' | \
+            xargs tar -czvf ../${{ env.tarball_name }} README.md LICENSE rustowl${{ env.exec_ext }} rustowlc${{ env.exec_ext }}
 
-          cp ./rustowl ./rustowl-${{ env.host_tuple }} || cp ./rustowl.exe ./rustowl-${{ env.host_tuple }}.exe
+          cp ./rustowl${{ env.exec_ext }} ../rustowl-${{ env.host_tuple }}${{ env.exec_ext }}
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: rustowl-runtime-${{ env.host_tuple }}
           path: |
-            rustowl/rustowl-*
+            rustowl/rustowl-${{ env.host_tuple }}${{ env.exec_ext }}
             rustowl/${{ env.tarball_name }}
 
 
