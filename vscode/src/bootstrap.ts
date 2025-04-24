@@ -31,7 +31,7 @@ export const downloadRustowl = async (basePath: string) => {
   const baseUrl = `https://github.com/cordx56/rustowl/releases/download/v${version}`;
   const host = hostTuple();
   if (host) {
-    const owl = await fetch(`${baseUrl}/rustowl-${host}`);
+    const owl = await fetch(`${baseUrl}/rustowl-${host}${exeExt}`);
     if (owl.status !== 200) {
       throw Error("RustOwl download error");
     }
@@ -53,14 +53,13 @@ const exists = (path: string) => {
     .catch(() => false);
 };
 export const bootstrapRustowl = async (dirPath: string): Promise<string> => {
-  const basePath = path.join(dirPath, `v${version}`);
   if (spawnSync("rustowl", ["--version"]).status !== null) {
     return "rustowl";
   }
-  if (await exists(`${basePath}/rustowl${exeExt}`)) {
-    return `${basePath}/rustowl${exeExt}`;
+  if (await exists(`${dirPath}/rustowl${exeExt}`)) {
+    return `${dirPath}/rustowl${exeExt}`;
   }
-  await fs.mkdir(basePath, { recursive: true });
+  await fs.mkdir(dirPath, { recursive: true });
 
   await vscode.window.withProgress(
     {
@@ -70,11 +69,11 @@ export const bootstrapRustowl = async (dirPath: string): Promise<string> => {
     },
     async () => {
       try {
-        await downloadRustowl(basePath);
+        await downloadRustowl(dirPath);
       } catch (e) {
         vscode.window.showErrorMessage(`${e}`);
       }
     },
   );
-  return `${basePath}/rustowl${exeExt}`;
+  return `${dirPath}/rustowl${exeExt}`;
 };

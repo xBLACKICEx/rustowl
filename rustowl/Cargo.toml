@@ -1,6 +1,6 @@
 [package]
 name = "rustowl"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 authors = ["cordx56 <cordx56@cordx.cx>"]
 description = "Visualize Ownership and Lifetimes in Rust"
@@ -27,8 +27,6 @@ flate2 = "1.1.1"
 reqwest = "0.12.15"
 
 [build-dependencies]
-tar = "0.4.44"
-flate2 = "1.1.1"
 dunce = "1.0.5"
 
 [target.'cfg(unix)'.dependencies]
