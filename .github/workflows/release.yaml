@@ -70,7 +70,7 @@ jobs:
           cd runtime;
           ls | \
             xargs -I % find % -type f | \
-            grep -E '\.(so|dylib|dll)$' | \
+            grep -E '\.(rlib|so|dylib|dll)$' | \
             xargs tar -czvf ../${{ env.tarball_name }} README.md LICENSE rustowl${{ env.exec_ext }} rustowlc${{ env.exec_ext }}
 
           cp ./rustowl${{ env.exec_ext }} ../rustowl-${{ env.host_tuple }}${{ env.exec_ext }}
