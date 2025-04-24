@@ -552,7 +552,7 @@ async fn main() {
                     uninstall_toolchain().await;
                 }
                 _ => {}
-            }
+            },
             ("completions", matches) => {
                 let shell = matches
                     .get_one::<Shell>("shell")
