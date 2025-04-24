@@ -630,7 +630,7 @@ async fn setup_toolchain() {
         let mut archive = Archive::new(decoder);
         if let Ok(entries) = archive.entries() {
             for mut entry in entries.flatten() {
-                if let Some(path) = entry.path().ok() {
+                if let Ok(path) = entry.path() {
                     if path.as_os_str() != "rustowl" {
                         let out_path = SYSROOT.join(path);
                         if entry.unpack_in(out_path).unwrap_or(false) {

@@ -1,6 +1,5 @@
 use dunce::canonicalize;
 use std::env;
-use std::io::Write;
 use std::process::Command;
 
 fn main() {
