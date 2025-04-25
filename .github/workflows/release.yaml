@@ -66,12 +66,15 @@ jobs:
           cp ../README.md ./runtime
           cp ../LICENSE ./runtime
 
+          cp -r ./completions ./runtime
+          cp -r ./man ./runtime
+
           rm -rf ${{ env.tarball_name }}
           cd runtime;
           ls | \
             xargs -I % find % -type f | \
             grep -E '\.(rlib|so|dylib|dll)$' | \
-            xargs tar -czvf ../${{ env.tarball_name }} README.md LICENSE rustowl${{ env.exec_ext }} rustowlc${{ env.exec_ext }}
+            xargs tar -czvf ../${{ env.tarball_name }} README.md LICENSE rustowl${{ env.exec_ext }} rustowlc${{ env.exec_ext }} completions/ man/
 
           cp ./rustowl${{ env.exec_ext }} ../rustowl-${{ env.host_tuple }}${{ env.exec_ext }}
 

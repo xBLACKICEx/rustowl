@@ -2,9 +2,13 @@
 //!
 //! An LSP server for visualizing ownership and lifetimes in Rust, designed for debugging and optimization.
 
+use clap_complete::generate;
+use rustowl::cli::cli;
+use rustowl::shells::Shell;
 use rustowl::{lsp::*, models::*, utils};
 use std::collections::HashMap;
 use std::env;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 use tokio::{
@@ -517,31 +521,7 @@ async fn main() {
 
     setup_toolchain().await;
 
-    let matches = clap::Command::new("RustOwl Language Server")
-        .version(clap::crate_version!())
-        .author(clap::crate_authors!())
-        .arg(
-            clap::Arg::new("io")
-                .long("stdio")
-                .required(false)
-                .action(clap::ArgAction::SetTrue),
-        )
-        .subcommand_required(false)
-        .subcommand(
-            clap::Command::new("check").arg(
-                clap::Arg::new("log_level")
-                    .long("log")
-                    .required(false)
-                    .action(clap::ArgAction::Set),
-            ),
-        )
-        .subcommand(clap::Command::new("clean"))
-        .subcommand(
-            clap::Command::new("toolchain")
-                .subcommand(clap::Command::new("install"))
-                .subcommand(clap::Command::new("uninstall")),
-        )
-        .get_matches();
+    let matches = cli().get_matches();
 
     if let Some(arg) = matches.subcommand() {
         match arg {
@@ -572,6 +552,12 @@ async fn main() {
                 }
                 _ => {}
             },
+            ("completions", matches) => {
+                let shell = matches
+                    .get_one::<Shell>("shell")
+                    .expect("shell is required by clap");
+                generate(*shell, &mut cli(), "rustowl", &mut io::stdout());
+            }
             _ => {}
         }
     } else {
