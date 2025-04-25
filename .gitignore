@@ -4,3 +4,7 @@ flake.lock
 result*
 .envrc
 .luarc.json
+
+# Ignore completions and man dir, they are generated at build time
+rustowl/completions/
+rustowl/man/

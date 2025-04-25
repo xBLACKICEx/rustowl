@@ -1,9 +1,9 @@
+use clap_complete::generate_to;
 use dunce::canonicalize;
 use std::env;
-use std::process::Command;
-use clap_complete::{generate_to};
-use std::io::Error;
 use std::fs;
+use std::io::Error;
+use std::process::Command;
 
 include!("src/cli.rs");
 include!("src/shells.rs");
@@ -36,12 +36,13 @@ fn main() -> Result<(), Error> {
         generate_to(*shell, &mut cmd, "rustowl", completion_out_dir)?;
     }
     let man_out_dir = Path::new("man");
+    fs::create_dir_all(man_out_dir)?;
     let man = clap_mangen::Man::new(cmd);
     let mut buffer: Vec<u8> = Default::default();
     man.render(&mut buffer)?;
- 
+
     std::fs::write(man_out_dir.join("rustowl.1"), buffer)?;
- 
+
     Ok(())
 }
 

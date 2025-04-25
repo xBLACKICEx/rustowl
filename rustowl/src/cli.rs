@@ -1,5 +1,5 @@
 pub fn cli() -> clap::Command {
-clap::Command::new("RustOwl Language Server")
+    clap::Command::new("RustOwl Language Server")
         .version(clap::crate_version!())
         .author(clap::crate_authors!())
         .arg(
@@ -25,12 +25,12 @@ clap::Command::new("RustOwl Language Server")
         )
         .subcommand(
             clap::Command::new("completions")
-            .about("Generate shell completions")
-            .arg(
-                clap::Arg::new("shell")
-                .help("The shell to generate completions for")
-                .required(true)
-                .value_parser(clap::value_parser!(crate::shells::Shell))
-            )
+                .about("Generate shell completions")
+                .arg(
+                    clap::Arg::new("shell")
+                        .help("The shell to generate completions for")
+                        .required(true)
+                        .value_parser(clap::value_parser!(crate::shells::Shell)),
+                ),
         )
 }

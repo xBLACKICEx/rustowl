@@ -2,11 +2,13 @@
 //!
 //! An LSP server for visualizing ownership and lifetimes in Rust, designed for debugging and optimization.
 
-use rustowl::{lsp::*, models::*, utils};
-use rustowl::shells::Shell;
+use clap_complete::generate;
 use rustowl::cli::cli;
+use rustowl::shells::Shell;
+use rustowl::{lsp::*, models::*, utils};
 use std::collections::HashMap;
 use std::env;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 use tokio::{
@@ -18,8 +20,6 @@ use tokio::{
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
-use std::io;
-use clap_complete::{generate};
 
 const RUSTC_DRIVER_DIR: Option<&str> = option_env!("RUSTC_DRIVER_DIR");
 const CONFING_SYSROOT: Option<&str> = option_env!("RUSTOWL_SYSROOT");
@@ -521,8 +521,7 @@ async fn main() {
 
     setup_toolchain().await;
 
-    let matches = cli() 
-        .get_matches();
+    let matches = cli().get_matches();
 
     if let Some(arg) = matches.subcommand() {
         match arg {
