@@ -65,8 +65,6 @@ jobs:
 
           cp ../README.md ./runtime
           cp ../LICENSE ./runtime
-          cp -r ../completions ./runtime
-          cp -r ../man ./runtime
 
           rm -rf ${{ env.tarball_name }}
           cd runtime;
