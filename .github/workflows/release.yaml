@@ -68,11 +68,11 @@ jobs:
           cp target/release/rustowl${{ env.exec_ext }} ./runtime
           cp target/release/rustowlc${{ env.exec_ext }} ./runtime
 
-          cp ../README.md ./runtime
-          cp ../LICENSE ./runtime
+          cp README.md ./runtime
+          cp LICENSE ./runtime
 
-          cp -r ./completions ./runtime
-          cp -r ./man ./runtime
+          cp -r completions ./runtime
+          cp -r man ./runtime
 
           rm -rf ${{ env.tarball_name }}
           cd runtime;
