@@ -9,14 +9,7 @@ pub fn cli() -> clap::Command {
                 .action(clap::ArgAction::SetTrue),
         )
         .subcommand_required(false)
-        .subcommand(
-            clap::Command::new("check").arg(
-                clap::Arg::new("log_level")
-                    .long("log")
-                    .required(false)
-                    .action(clap::ArgAction::Set),
-            ),
-        )
+        .subcommand(clap::Command::new("check"))
         .subcommand(clap::Command::new("clean"))
         .subcommand(
             clap::Command::new("toolchain")

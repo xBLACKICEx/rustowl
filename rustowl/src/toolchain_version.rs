@@ -1,1 +1,0 @@
-pub const TOOLCHAIN_VERSION: &str = env!("RUSTOWL_TOOLCHAIN");

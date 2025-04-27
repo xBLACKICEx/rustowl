@@ -29,7 +29,7 @@ export const hostTuple = (): string | null => {
 const exeExt = hostTuple()?.includes("windows") ? ".exe" : "";
 
 export const downloadRustowl = async (basePath: string) => {
-  const baseUrl = `https://github.com/cordx56/rustowl/releases/download/v${version}`;
+  const baseUrl = `https://github.com/cordx56/rustowl/releases/download/v${version}pre`;
   const host = hostTuple();
   if (host) {
     const owl = await fetch(`${baseUrl}/rustowl-${host}${exeExt}`);
@@ -39,7 +39,7 @@ export const downloadRustowl = async (basePath: string) => {
     await fs.writeFile(
       `${basePath}/rustowl${exeExt}`,
       Buffer.from(await owl.arrayBuffer()),
-      { flag: "w" },
+      { flag: "w" }
     );
     fs.chmod(`${basePath}/rustowl${exeExt}`, "755");
   } else {
@@ -72,11 +72,13 @@ export const bootstrapRustowl = async (dirPath: string): Promise<string> => {
     async () => {
       try {
         await downloadRustowl(dirPath);
-        spawnSync(rustowlPath, ["toolchain", "install"]);
+        if (spawnSync(rustowlPath, ["toolchain", "install"]).status !== 0) {
+          throw Error("toolchain setup failed");
+        }
       } catch (e) {
         vscode.window.showErrorMessage(`${e}`);
       }
-    },
+    }
   );
   return `${dirPath}/rustowl${exeExt}`;
 };

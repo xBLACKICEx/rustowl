@@ -49,10 +49,6 @@ features = ['unprefixed_malloc_on_supported_platforms']
 default = ["jemalloc"]
 jemalloc = ['dep:tikv-jemalloc-sys']
 
-[[bin]]
-name = "rustowlc"
-path = "src/main.rs"
-
 [profile.release]
 opt-level = 3
 lto = "fat"
