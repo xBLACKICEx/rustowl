@@ -24,12 +24,17 @@ jobs:
       run:
         shell: bash
     env:
-      RUSTUP_TOOLCHAIN: 1.86.0
       RUSTC_BOOTSTRAP: 1
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Set Rust version that RustOwl uses here
+      # Using stable build cause failure to link on Windows ARM
+      - if: ${{ matrix.os != 'windows-11-arm' }}
+        name: Set Rust toolchain
+        run: echo "RUSTUP_TOOLCHAIN=1.86.0" >> $GITHUB_ENV
 
       # We don't have rustup on the Windows 11 Arm64 runner yet, so manually installing it.
       - if: ${{ matrix.os == 'windows-11-arm' }}
