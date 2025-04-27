@@ -1,3 +1,5 @@
+/target
+
 # Nix stuff can be ignored, see https://github.com/cordx56/rustowl/issues/59
 flake.nix
 flake.lock
@@ -6,5 +8,5 @@ result*
 .luarc.json
 
 # Ignore completions and man dir, they are generated at build time
-rustowl/completions/
-rustowl/man/
+completions/
+man/
