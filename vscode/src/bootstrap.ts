@@ -39,7 +39,7 @@ export const downloadRustowl = async (basePath: string) => {
     await fs.writeFile(
       `${basePath}/rustowl${exeExt}`,
       Buffer.from(await owl.arrayBuffer()),
-      { flag: "w" }
+      { flag: "w" },
     );
     fs.chmod(`${basePath}/rustowl${exeExt}`, "755");
   } else {
@@ -78,7 +78,7 @@ export const bootstrapRustowl = async (dirPath: string): Promise<string> => {
       } catch (e) {
         vscode.window.showErrorMessage(`${e}`);
       }
-    }
+    },
   );
   return `${dirPath}/rustowl${exeExt}`;
 };
