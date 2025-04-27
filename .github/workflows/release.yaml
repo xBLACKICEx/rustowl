@@ -47,7 +47,7 @@ jobs:
           fi
 
       - name: Setup Rust
-        run: rustup install
+        run: rustup install --profile minimal -c rustc,rust-std,cargo,rust-src,rustc-dev,llvm-tools
       - name: Build
         run: cargo build --release
 
