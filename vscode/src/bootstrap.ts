@@ -29,7 +29,7 @@ export const hostTuple = (): string | null => {
 const exeExt = hostTuple()?.includes("windows") ? ".exe" : "";
 
 export const downloadRustowl = async (basePath: string) => {
-  const baseUrl = `https://github.com/cordx56/rustowl/releases/download/v${version}pre`;
+  const baseUrl = `https://github.com/cordx56/rustowl/releases/download/v${version}`;
   const host = hostTuple();
   if (host) {
     const owl = await fetch(`${baseUrl}/rustowl-${host}${exeExt}`);
@@ -47,7 +47,7 @@ export const downloadRustowl = async (basePath: string) => {
   }
 };
 
-const exists = (path: string) => {
+const exists = async (path: string) => {
   return fs
     .access(path)
     .then(() => true)
