@@ -1,5 +1,4 @@
 use clap_complete::generate_to;
-use dunce::canonicalize;
 use std::env;
 use std::fs;
 use std::io::Error;
@@ -82,7 +81,7 @@ fn recursive_read_dir(path: impl AsRef<Path>) -> Vec<PathBuf> {
         if path.is_dir() {
             paths.extend_from_slice(&recursive_read_dir(&path));
         } else {
-            paths.push(canonicalize(&path).unwrap());
+            paths.push(path);
         }
     }
     paths

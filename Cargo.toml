@@ -29,7 +29,6 @@ clap_complete_nushell = "4.5.5"
 clap_complete = "4.5.47"
 
 [build-dependencies]
-dunce = "1.0.5"
 clap_complete_nushell = "4.5.5"
 clap_complete = "4.5.47"
 clap_mangen = "0.2.26"
