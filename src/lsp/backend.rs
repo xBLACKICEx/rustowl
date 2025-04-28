@@ -186,6 +186,7 @@ impl Backend {
             command
                 .env("RUSTC", &rustowlc_path)
                 .env("RUSTC_WORKSPACE_WRAPPER", &rustowlc_path)
+                .env("RUSTC_BOOTSTRAP", "1") // Support nightly projects
                 .env(
                     "CARGO_ENCODED_RUSTFLAGS",
                     format!("--sysroot={}", sysroot.display()),
