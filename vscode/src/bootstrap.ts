@@ -4,26 +4,25 @@ import * as vscode from "vscode";
 const version = require("../package.json").version as string;
 
 export const hostTuple = (): string | null => {
-  const platform = process.platform;
-  const arch = process.arch;
-  if (platform === "linux") {
-    if (arch === "arm64") {
-      return "aarch64-unknown-linux-gnu";
-    } else if (arch === "x64") {
-      return "x86_64-unknown-linux-gnu";
-    }
-  } else if (platform === "darwin") {
-    if (arch === "arm64") {
-      return "aarch64-apple-darwin";
-    }
-  } else if (platform === "win32") {
-    if (arch === "arm64") {
-      return "aarch64-pc-windows-msvc";
-    } else if (arch === "x64") {
-      return "x86_64-pc-windows-msvc";
-    }
+  let arch = null;
+  if (process.arch === "arm64") {
+    arch = "aarch64";
+  } else if (process.arch === "x64") {
+    arch = "x86_64";
   }
-  return null;
+  let platform = null;
+  if (process.platform === "linux") {
+    platform = "unknown-linux-gnu";
+  } else if (process.platform === "darwin") {
+    platform = "apple-darwin";
+  } else if (process.platform === "win32") {
+    platform = "pc-windows-msvc";
+  }
+  if (arch && platform) {
+    return `${arch}-${platform}`;
+  } else {
+    return null;
+  }
 };
 
 const exeExt = hostTuple()?.includes("windows") ? ".exe" : "";
@@ -43,7 +42,7 @@ export const downloadRustowl = async (basePath: string) => {
     );
     fs.chmod(`${basePath}/rustowl${exeExt}`, "755");
   } else {
-    throw Error("unsupported host");
+    throw Error("unsupported architecture or platform");
   }
 };
 
