@@ -81,7 +81,7 @@ pub struct MirAnalyzer<'tcx> {
 }
 impl MirAnalyzer<'_> {
     /// initialize analyzer
-    pub fn new<'tcx>(tcx: TyCtxt<'tcx>, fn_id: LocalDefId) -> MirAnalyzeFuture<'tcx> {
+    pub fn new(tcx: TyCtxt<'_>, fn_id: LocalDefId) -> MirAnalyzeFuture<'_> {
         let mut facts =
             get_body_with_borrowck_facts(tcx, fn_id, ConsumerOptions::PoloniusOutputFacts);
         let input = *facts.input_facts.take().unwrap();

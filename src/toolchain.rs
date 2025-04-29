@@ -28,6 +28,13 @@ static RUSTUP_SYSROOT: OnceCell<Option<PathBuf>> = OnceCell::const_new();
 const TARBALL_NAME: &str = env!("RUSTOWL_TARBALL_NAME");
 
 pub async fn get_sysroot() -> PathBuf {
+    let env_var = env::var("RUSTOWL_RUNTIME_DIRS")
+        .unwrap_or(env::var("RUSTOWL_SYSROOTS").unwrap_or_default());
+    for sysroot in env::split_paths(&env_var) {
+        if sysroot.is_dir() {
+            return sysroot;
+        }
+    }
     if DEFAULT_SYSROOT.is_dir() {
         return DEFAULT_SYSROOT.clone();
     }
