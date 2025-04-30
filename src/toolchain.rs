@@ -11,7 +11,7 @@ use tokio::{
 
 pub const TOOLCHAIN_VERSION: &str = env!("RUSTOWL_TOOLCHAIN");
 const CONFING_SYSROOTS: Option<&str> = option_env!("RUSTOWL_SYSROOTS");
-static DEFAULT_SYSROOT: LazyLock<PathBuf> = LazyLock::new(|| {
+static FALLBACK_SYSROOT: LazyLock<PathBuf> = LazyLock::new(|| {
     env::current_exe()
         .unwrap()
         .parent()
@@ -32,14 +32,16 @@ pub async fn get_sysroot() -> PathBuf {
         .unwrap_or(env::var("RUSTOWL_SYSROOTS").unwrap_or_default());
     for sysroot in env::split_paths(&env_var) {
         if sysroot.is_dir() {
+            log::info!("select sysroot from runtime env var: {}", sysroot.display());
             return sysroot;
         }
     }
-    if DEFAULT_SYSROOT.is_dir() {
-        return DEFAULT_SYSROOT.clone();
-    }
     for sysroot in &*CONFIG_SYSROOTS {
         if sysroot.is_dir() {
+            log::info!(
+                "select sysroot from build time env var: {}",
+                sysroot.display()
+            );
             return sysroot.clone();
         }
     }
@@ -66,6 +68,7 @@ pub async fn get_sysroot() -> PathBuf {
         })
         .await
     {
+        log::info!("select sysroot from rustup: {}", sysroot.display());
         return sysroot.to_owned();
     }
 
@@ -81,7 +84,7 @@ pub async fn setup_toolchain() -> Result<PathBuf, ()> {
     use flate2::read::GzDecoder;
     use tar::Archive;
 
-    if !DEFAULT_SYSROOT.exists() {
+    if !FALLBACK_SYSROOT.is_dir() {
         log::info!("sysroot not found; start downloading {TARBALL_NAME}...");
         let tarball_url = format!(
             "https://github.com/cordx56/rustowl/releases/download/v{}/{TARBALL_NAME}",
@@ -107,7 +110,7 @@ pub async fn setup_toolchain() -> Result<PathBuf, ()> {
             }
         };
         log::info!("download finished");
-        if create_dir_all(&*DEFAULT_SYSROOT).await.is_err() {
+        if create_dir_all(&*FALLBACK_SYSROOT).await.is_err() {
             log::error!("failed to create toolchain directory");
             return Err(());
         }
@@ -118,7 +121,7 @@ pub async fn setup_toolchain() -> Result<PathBuf, ()> {
                 if let Ok(path) = entry.path() {
                     let path = path.to_path_buf();
                     if path.as_os_str() != "rustowl" {
-                        if !entry.unpack_in(&*DEFAULT_SYSROOT).unwrap_or(false) {
+                        if !entry.unpack_in(&*FALLBACK_SYSROOT).unwrap_or(false) {
                             log::error!("failed to unpack runtime tarball");
                             return Err(());
                         }
@@ -130,10 +133,11 @@ pub async fn setup_toolchain() -> Result<PathBuf, ()> {
             log::error!("failed to unpack runtime tarball");
             return Err(());
         }
-        log::info!("toolchain setup done in {}", DEFAULT_SYSROOT.display());
+        log::info!("toolchain setup done in {}", FALLBACK_SYSROOT.display());
     }
-    Ok(DEFAULT_SYSROOT.clone())
+    log::info!("select fallback sysroot: {}", FALLBACK_SYSROOT.display());
+    Ok(FALLBACK_SYSROOT.clone())
 }
 pub async fn uninstall_toolchain() {
-    remove_dir_all(&*DEFAULT_SYSROOT).await.unwrap();
+    remove_dir_all(&*FALLBACK_SYSROOT).await.unwrap();
 }
