@@ -27,15 +27,16 @@ fn main() -> Result<(), Error> {
     let sysroot = get_sysroot().unwrap();
     set_rustc_driver_path(&sysroot);
 
+    let out_dir = Path::new(&env::var("OUT_DIR").unwrap()).join("rustowl-build-time-out");
     let mut cmd = cli();
-    let completion_out_dir = Path::new("completions");
-    fs::create_dir_all(completion_out_dir)?;
+    let completion_out_dir = out_dir.join("completions");
+    fs::create_dir_all(&completion_out_dir)?;
 
     for shell in Shell::value_variants() {
-        generate_to(*shell, &mut cmd, "rustowl", completion_out_dir)?;
+        generate_to(*shell, &mut cmd, "rustowl", &completion_out_dir)?;
     }
-    let man_out_dir = Path::new("man");
-    fs::create_dir_all(man_out_dir)?;
+    let man_out_dir = out_dir.join("man");
+    fs::create_dir_all(&man_out_dir)?;
     let man = clap_mangen::Man::new(cmd);
     let mut buffer: Vec<u8> = Default::default();
     man.render(&mut buffer)?;

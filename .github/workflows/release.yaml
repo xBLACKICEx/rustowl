@@ -76,8 +76,9 @@ jobs:
           cp README.md ./runtime
           cp LICENSE ./runtime
 
-          cp -r completions ./runtime
-          cp -r man ./runtime
+          find target -type d | grep -E 'rustowl-build-time-out$' | xargs -I % cp -r % ./
+          cp -r rustowl-build-time-out/completions ./runtime
+          cp -r rustowl-build-time-out/man ./runtime
 
           rm -rf ${{ env.tarball_name }}
           cd runtime;
