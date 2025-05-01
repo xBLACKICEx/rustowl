@@ -3,11 +3,13 @@
 
 ### 🎨 Chores
 - update changelog
+- update changelog
 
 ### 🐞 Bug Fixes
 - **reqwest:** dont depend on openssl-sys, use rustls for lower system deps
 
 ### 🚀 Features
+- use zip instead of tar in windows
 - auto release changelogs, changelog generation
 - shell completions and man pages
 
