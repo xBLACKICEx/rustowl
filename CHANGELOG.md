@@ -1,20 +1,41 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+### 🎨 Chores
+- update changelog
+
 ### 🐞 Bug Fixes
 - **reqwest:** dont depend on openssl-sys, use rustls for lower system deps
 
 ### 🚀 Features
 - auto release changelogs, changelog generation
-- shell completions and man pages
 
+
+<a name="v0.3.0"></a>
+## [v0.3.0] - 2025-04-30
+
+<a name="v0.3.0-alpha.2"></a>
+## [v0.3.0-alpha.2] - 2025-04-30
+### Pull Requests
+- Merge pull request [#88](https://github.com/cordx56/rustowl/issues/88) from yasuo-ozu/fix_build_canonical
+
+
+<a name="v0.3.0-alpha.1"></a>
+## [v0.3.0-alpha.1] - 2025-04-27
+
+<a name="v0.2.3-alpha.1"></a>
+## [v0.2.3-alpha.1] - 2025-04-25
 
 <a name="v0.2.3pre"></a>
-## [v0.2.3pre] - 2025-04-24
+## [v0.2.3pre] - 2025-04-25
+### 🚀 Features
+- shell completions and man pages
+
 ### Reverts
 - test workflow
 
 ### Pull Requests
+- Merge pull request [#85](https://github.com/cordx56/rustowl/issues/85) from MuntasirSZN/main
 - Merge pull request [#80](https://github.com/cordx56/rustowl/issues/80) from siketyan/ci/more-platform
 
 
@@ -158,7 +179,11 @@
 <a name="vpre"></a>
 ## vpre - 2024-11-11
 
-[Unreleased]: https://github.com/cordx56/rustowl/compare/v0.2.3pre...HEAD
+[Unreleased]: https://github.com/cordx56/rustowl/compare/v0.3.0...HEAD
+[v0.3.0]: https://github.com/cordx56/rustowl/compare/v0.3.0-alpha.2...v0.3.0
+[v0.3.0-alpha.2]: https://github.com/cordx56/rustowl/compare/v0.3.0-alpha.1...v0.3.0-alpha.2
+[v0.3.0-alpha.1]: https://github.com/cordx56/rustowl/compare/v0.2.3-alpha.1...v0.3.0-alpha.1
+[v0.2.3-alpha.1]: https://github.com/cordx56/rustowl/compare/v0.2.3pre...v0.2.3-alpha.1
 [v0.2.3pre]: https://github.com/cordx56/rustowl/compare/v0.2.2...v0.2.3pre
 [v0.2.2]: https://github.com/cordx56/rustowl/compare/v0.2.2pre2...v0.2.2
 [v0.2.2pre2]: https://github.com/cordx56/rustowl/compare/v0.2.2pre...v0.2.2pre2
