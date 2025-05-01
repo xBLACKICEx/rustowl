@@ -27,13 +27,13 @@
         rustowl = pkgs.rustPlatform.buildRustPackage ({
           pname = "rustowl";
           version = cargoToml.package.version;
-          src = ./rustowl;
+          src = ./.;
 
           cargoLock.lockFile = ./Cargo.lock;
 
-          nativeBuildInputs = [ rustToolchain ];
+          nativeBuildInputs = [ rustToolchain pkgs.pkg-config];
 
-          buildInputs = [ ];
+          buildInputs = [ pkgs.openssl ];
 
           meta = with pkgs.lib; {
             description = "Visualize ownership and lifetimes in Rust for debugging and optimization";
@@ -57,9 +57,8 @@
 
         devShells.default = pkgs.mkShell ({
           buildInputs = with pkgs; [
-            (rustToolchain.override {
-              extensions = [ "rust-src" "rustfmt" ];
-            })
+            rustToolchain
+            rustfmt
             pkg-config 
             openssl
             # rustowl
