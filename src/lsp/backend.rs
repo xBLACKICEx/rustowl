@@ -1,8 +1,4 @@
-//! # RustOwl cargo-owlsp
-//!
-//! An LSP server for visualizing ownership and lifetimes in Rust, designed for debugging and optimization.
-
-use rustowl::{lsp::*, models::*, utils};
+use crate::{lsp::*, models::*, utils};
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -15,10 +11,9 @@ use tokio::{
 };
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types;
-use tower_lsp::{Client, LanguageServer, LspService, Server};
+use tower_lsp::{Client, LanguageServer, LspService};
 
 const RUSTC_DRIVER_DIR: Option<&str> = option_env!("RUSTC_DRIVER_DIR");
-const TOOLCHAIN_TARBALL_DATA: &[u8] = include_bytes!(env!("TOOLCHAIN_TARBALL_PATH"));
 
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(tag = "reason", rename_all = "kebab-case")]
@@ -31,8 +26,9 @@ enum CargoCheckMessage {
 
 type Subprocess = Option<u32>;
 
+/// RustOwl LSP server backend
 #[derive(Debug)]
-struct Backend {
+pub struct Backend {
     #[allow(unused)]
     client: Client,
     workspaces: Arc<RwLock<Vec<PathBuf>>>,
@@ -45,7 +41,7 @@ struct Backend {
 }
 
 impl Backend {
-    fn new(client: Client) -> Self {
+    pub fn new(client: Client) -> Self {
         Self {
             client,
             workspaces: Arc::new(RwLock::new(Vec::new())),
@@ -120,9 +116,6 @@ impl Backend {
         }
         let roots = { self.roots.read().await.clone() };
 
-        let cargo_path = rustowl::toolchain_version::TOOLCHAIN_DIR
-            .map(|dir| PathBuf::from(dir).join("bin").join("cargo"));
-
         for (root, target) in roots {
             // progress report
             let meta = cargo_metadata::MetadataCommand::new()
@@ -159,9 +152,9 @@ impl Backend {
                 )
             };
 
-            log::info!("start checking {}", root.display());
-            let mut command = if let Some(cargo_path) = &cargo_path {
-                log::info!("using toolchain cargo: {}", cargo_path.display());
+            let sysroot = crate::toolchain::get_sysroot().await;
+            let mut command = if let Ok(cargo_path) = &env::var("CARGO") {
+                log::info!("using toolchain cargo: {}", cargo_path);
                 process::Command::new(cargo_path)
             } else {
                 log::info!("using default cargo",);
@@ -182,19 +175,21 @@ impl Backend {
                 .kill_on_drop(true);
 
             // set rustowlc & library path
-            let self_path = env::current_exe().unwrap();
-            let self_dir = self_path.parent().unwrap().to_path_buf();
-            let rustowlc_path = self_dir.join("rustowlc");
-            let toolchain_path = PathBuf::from(
-                rustowl::toolchain_version::TOOLCHAIN_DIR
-                    .unwrap_or(get_toolchain_path().to_str().unwrap()),
-            );
+            let rustowlc_path = {
+                let under_sysroot = sysroot.join("rustowlc");
+                if under_sysroot.is_file() {
+                    under_sysroot.to_string_lossy().to_string()
+                } else {
+                    "rustowlc".to_owned()
+                }
+            };
             command
                 .env("RUSTC", &rustowlc_path)
                 .env("RUSTC_WORKSPACE_WRAPPER", &rustowlc_path)
+                .env("RUSTC_BOOTSTRAP", "1") // Support nightly projects
                 .env(
                     "CARGO_ENCODED_RUSTFLAGS",
-                    format!("--sysroot={}", toolchain_path.display()),
+                    format!("--sysroot={}", sysroot.display()),
                 );
             if let Some(driver_dir) = RUSTC_DRIVER_DIR {
                 #[cfg(target_os = "linux")]
@@ -202,7 +197,7 @@ impl Backend {
                     let mut paths =
                         env::split_paths(&env::var("LD_LIBRARY_PATH").unwrap_or("".to_owned()))
                             .collect::<std::collections::VecDeque<_>>();
-                    paths.push_front(toolchain_path.join(driver_dir));
+                    paths.push_front(sysroot.join(driver_dir));
                     let paths = env::join_paths(paths).unwrap();
                     command.env("LD_LIBRARY_PATH", paths);
                 }
@@ -212,7 +207,7 @@ impl Backend {
                         &env::var("DYLD_FALLBACK_LIBRARY_PATH").unwrap_or("".to_owned()),
                     )
                     .collect::<std::collections::VecDeque<_>>();
-                    paths.push_front(toolchain_path.join(driver_dir));
+                    paths.push_front(sysroot.join(driver_dir));
                     let paths = env::join_paths(paths).unwrap();
                     command.env("DYLD_FALLBACK_LIBRARY_PATH", paths);
                 }
@@ -220,7 +215,7 @@ impl Backend {
                 {
                     let mut paths = env::split_paths(&env::var_os("Path").unwrap())
                         .collect::<std::collections::VecDeque<_>>();
-                    paths.push_front(toolchain_path.join(driver_dir));
+                    paths.push_front(sysroot.join(driver_dir));
                     let paths = env::join_paths(paths).unwrap();
                     command.env("Path", paths);
                 }
@@ -236,6 +231,7 @@ impl Backend {
             if log::max_level().to_level().is_none() {
                 command.stderr(std::process::Stdio::null());
             }
+            log::info!("start checking {}", root.display());
             let mut child = command.spawn().unwrap();
             let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines();
             let analyzed = self.analyzed.clone();
@@ -353,7 +349,7 @@ impl Backend {
         }
     }
 
-    async fn cursor(
+    pub async fn cursor(
         &self,
         params: decoration::CursorRequest,
     ) -> jsonrpc::Result<decoration::Decorations> {
@@ -393,6 +389,22 @@ impl Backend {
             path: None,
             decorations: Vec::new(),
         })
+    }
+
+    pub async fn check(path: PathBuf) -> bool {
+        let (service, _) = LspService::build(Backend::new).finish();
+        let backend = service.inner();
+        backend.set_workspace(path.clone()).await;
+        backend.set_roots(path).await;
+        backend.analyze().await;
+        while backend.processes.write().await.join_next().await.is_some() {}
+        backend
+            .analyzed
+            .read()
+            .await
+            .as_ref()
+            .map(|v| !v.0.is_empty())
+            .unwrap_or(false)
     }
 }
 
@@ -499,132 +511,4 @@ impl LanguageServer for Backend {
         self.abort_subprocess().await;
         Ok(())
     }
-}
-
-#[tokio::main]
-async fn main() {
-    simple_logger::SimpleLogger::new()
-        .with_colors(true)
-        .init()
-        .unwrap();
-    log::set_max_level(
-        env::var("RUST_LOG")
-            .unwrap_or("off".to_owned())
-            .parse()
-            .unwrap(),
-    );
-
-    setup_toolchain().await;
-
-    let matches = clap::Command::new("RustOwl Language Server")
-        .version(clap::crate_version!())
-        .author(clap::crate_authors!())
-        .arg(
-            clap::Arg::new("io")
-                .long("stdio")
-                .required(false)
-                .action(clap::ArgAction::SetTrue),
-        )
-        .subcommand_required(false)
-        .subcommand(
-            clap::Command::new("check").arg(
-                clap::Arg::new("log_level")
-                    .long("log")
-                    .required(false)
-                    .action(clap::ArgAction::Set),
-            ),
-        )
-        .subcommand(clap::Command::new("clean"))
-        .subcommand(clap::Command::new("toolchain").subcommand(clap::Command::new("uninstall")))
-        .get_matches();
-
-    if let Some(arg) = matches.subcommand() {
-        match arg {
-            ("check", matches) => {
-                let log_level = matches
-                    .get_one::<String>("log_level")
-                    .cloned()
-                    .unwrap_or(env::var("RUST_LOG").unwrap_or("info".to_owned()));
-                log::set_max_level(log_level.parse().unwrap());
-                if check(env::current_dir().unwrap()).await {
-                    std::process::exit(0);
-                } else {
-                    std::process::exit(1);
-                }
-            }
-            ("clean", _) => {
-                if let Ok(meta) = cargo_metadata::MetadataCommand::new().exec() {
-                    let target = meta.target_directory.join("owl");
-                    tokio::fs::remove_dir_all(&target).await.ok();
-                }
-            }
-            ("toolchain", matches) => {
-                if let Some(("uninstall", _)) = matches.subcommand() {
-                    uninstall_toolchain().await;
-                }
-            }
-            _ => {}
-        }
-    } else {
-        eprintln!("RustOwl v{}", clap::crate_version!());
-        eprintln!("This is an LSP server. You can use --help flag to show help.");
-
-        let stdin = tokio::io::stdin();
-        let stdout = tokio::io::stdout();
-
-        let (service, socket) = LspService::build(Backend::new)
-            .custom_method("rustowl/cursor", Backend::cursor)
-            .finish();
-        Server::new(stdin, stdout, socket).serve(service).await;
-    }
-}
-
-async fn check(path: PathBuf) -> bool {
-    let (service, _) = LspService::build(Backend::new).finish();
-    let backend = service.inner();
-    backend.set_workspace(path.clone()).await;
-    backend.set_roots(path).await;
-    backend.analyze().await;
-    while backend.processes.write().await.join_next().await.is_some() {}
-    backend
-        .analyzed
-        .read()
-        .await
-        .as_ref()
-        .map(|v| !v.0.is_empty())
-        .unwrap_or(false)
-}
-
-use tokio::fs::{create_dir_all, remove_dir_all};
-fn get_toolchain_path() -> PathBuf {
-    env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .to_path_buf()
-        .join("owl")
-        .join(rustowl::toolchain_version::TOOLCHAIN_VERSION)
-}
-async fn setup_toolchain() {
-    use flate2::read::GzDecoder;
-    use tar::Archive;
-
-    #[allow(clippy::const_is_empty)]
-    if !TOOLCHAIN_TARBALL_DATA.is_empty() {
-        let output_path = get_toolchain_path();
-        if !output_path.exists() {
-            create_dir_all(&output_path)
-                .await
-                .expect("failed to create toolchain directory");
-            let decoder = GzDecoder::new(TOOLCHAIN_TARBALL_DATA);
-            let mut archive = Archive::new(decoder);
-            archive
-                .unpack(&output_path)
-                .expect("Failed to unpack toolchain");
-            log::info!("toolchain setup done: {}", output_path.display());
-        }
-    }
-}
-async fn uninstall_toolchain() {
-    remove_dir_all(get_toolchain_path()).await.unwrap();
 }

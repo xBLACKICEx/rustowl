@@ -1,50 +1,67 @@
-use dunce::canonicalize;
+use clap_complete::generate_to;
 use std::env;
-use std::fs::OpenOptions;
-use std::io::Write;
+use std::fs;
+use std::io::Error;
 use std::process::Command;
 
-const TOOLCHAIN_TARBALL_NAME: &str = "toolchain.tar.gz";
+include!("src/cli.rs");
+include!("src/shells.rs");
 
-fn main() {
-    println!("cargo::rerun-if-changed={}", TOOLCHAIN_TARBALL_NAME);
-
+fn main() -> Result<(), Error> {
     if let Some(toolchain) = get_toolchain() {
         println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={toolchain}");
     }
 
-    if let Ok(toolchain_dir) = env::var("RUSTOWL_TOOLCHAIN_DIR") {
-        println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN_DIR={toolchain_dir}");
-
-        let _f = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(TOOLCHAIN_TARBALL_NAME)
-            .unwrap();
-        println!(
-            "cargo::rustc-env=TOOLCHAIN_TARBALL_PATH={}",
-            canonicalize(".")
-                .unwrap()
-                .join(TOOLCHAIN_TARBALL_NAME)
-                .display(),
-        );
+    let config_sysroot = if let Ok(runtime_dir) = env::var("RUSTOWL_RUNTIME_DIRS") {
+        Some(runtime_dir)
     } else {
-        let sysroot = get_sysroot().unwrap();
-        compress_toolchain(&sysroot);
+        env::var("RUSTOWL_SYSROOTS").ok()
+    };
+    if let Some(sysroot) = config_sysroot {
+        println!("cargo::rustc-env=RUSTOWL_SYSROOTS={}", sysroot);
     }
+
+    let tarball_name = format!("runtime-{}.tar.gz", get_host_tuple().unwrap());
+    println!("cargo::rustc-env=RUSTOWL_TARBALL_NAME={tarball_name}");
+
+    let sysroot = get_sysroot().unwrap();
+    set_rustc_driver_path(&sysroot);
+
+    let out_dir = Path::new(&env::var("OUT_DIR").unwrap()).join("rustowl-build-time-out");
+    let mut cmd = cli();
+    let completion_out_dir = out_dir.join("completions");
+    fs::create_dir_all(&completion_out_dir)?;
+
+    for shell in Shell::value_variants() {
+        generate_to(*shell, &mut cmd, "rustowl", &completion_out_dir)?;
+    }
+    let man_out_dir = out_dir.join("man");
+    fs::create_dir_all(&man_out_dir)?;
+    let man = clap_mangen::Man::new(cmd);
+    let mut buffer: Vec<u8> = Default::default();
+    man.render(&mut buffer)?;
+
+    std::fs::write(man_out_dir.join("rustowl.1"), buffer)?;
+
+    Ok(())
 }
 
-use std::path::Path;
 // get toolchain
 fn get_toolchain() -> Option<String> {
     if let Ok(toolchain) = env::var("RUSTOWL_TOOLCHAIN") {
         return Some(toolchain);
     }
-
     env::var("RUSTUP_TOOLCHAIN").ok()
 }
-
+fn get_host_tuple() -> Option<String> {
+    match Command::new(env::var("RUSTC").unwrap())
+        .arg("--print=host-tuple")
+        .output()
+    {
+        Ok(v) => Some(String::from_utf8(v.stdout).unwrap().trim().to_string()),
+        Err(_) => None,
+    }
+}
 // output rustc_driver path
 fn get_sysroot() -> Option<String> {
     match Command::new(env::var("RUSTC").unwrap())
@@ -65,23 +82,12 @@ fn recursive_read_dir(path: impl AsRef<Path>) -> Vec<PathBuf> {
         if path.is_dir() {
             paths.extend_from_slice(&recursive_read_dir(&path));
         } else {
-            paths.push(canonicalize(&path).unwrap());
+            paths.push(path);
         }
     }
     paths
 }
-
-fn compress_toolchain(sysroot: &str) {
-    use flate2::Compression;
-    use flate2::write::GzEncoder;
-    use std::fs::File;
-    use tar::Builder;
-
-    let path = canonicalize(".").unwrap().join(TOOLCHAIN_TARBALL_NAME);
-    let tar_gz = File::create(&path).unwrap();
-    let enc = GzEncoder::new(tar_gz, Compression::best());
-    let mut tar_builder = Builder::new(enc);
-
+fn set_rustc_driver_path(sysroot: &str) {
     for file in recursive_read_dir(sysroot) {
         if let Some(ext) = file.extension().and_then(|e| e.to_str()) {
             if matches!(ext, "rlib" | "so" | "dylib" | "dll") {
@@ -93,13 +99,7 @@ fn compress_toolchain(sysroot: &str) {
                         rel_path.parent().unwrap().display()
                     );
                 }
-                tar_builder.append_path_with_name(&file, rel_path).unwrap();
             }
         }
     }
-
-    let enc = tar_builder.into_inner().unwrap();
-    enc.finish().unwrap().flush().unwrap();
-
-    println!("cargo::rustc-env=TOOLCHAIN_TARBALL_PATH={}", path.display());
 }

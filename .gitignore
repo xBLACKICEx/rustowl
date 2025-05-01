@@ -1,3 +1,5 @@
+/target
+
 # Nix stuff can be ignored, see https://github.com/cordx56/rustowl/issues/59
 result*
 .luarc.json

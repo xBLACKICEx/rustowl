@@ -13,6 +13,7 @@ jobs:
           - ubuntu-24.04
           - ubuntu-24.04-arm
           - macos-15
+          - macos-13
           - windows-2022
           - windows-11-arm
 
@@ -21,16 +22,23 @@ jobs:
       contents: write
     defaults:
       run:
-        working-directory: rustowl
+        shell: bash
+    env:
+      RUSTC_BOOTSTRAP: 1
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Set Rust version that RustOwl uses here
+      # Using stable build cause failure to link on Windows ARM
+      - if: ${{ matrix.os != 'windows-11-arm' }}
+        name: Set Rust toolchain
+        run: echo "RUSTUP_TOOLCHAIN=1.86.0" >> $GITHUB_ENV
+
       # We don't have rustup on the Windows 11 Arm64 runner yet, so manually installing it.
       - if: ${{ matrix.os == 'windows-11-arm' }}
         name: Install rustup
-        shell: bash
         run: |
           URL='https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe'
           HASH="$(curl -sSL "${URL}.sha256")"
@@ -44,28 +52,50 @@ jobs:
           fi
 
       - name: Setup Rust
-        run: rustup install
+        run: |
+          rustup install --profile minimal
+          rustup component add rust-src rustc-dev llvm-tools
       - name: Build
         run: cargo build --release
 
-      - name: Set host tuple to env
-        shell: bash
-        run: echo "host_tuple=$(rustc --print=host-tuple)" >> $GITHUB_ENV
-      - name: Rename artifacts
-        shell: bash
+      - name: check host tuple
         run: |
-          mkdir -p bin
-          for f in $(find target/release -maxdepth 1 -perm -111 -type f); do
-            BASENAME="$(basename "$f")"
-            NAME="${BASENAME%%.*}";
-            mv "$f" "bin/$NAME-${{ env.host_tuple }}";
-          done
+          echo "host_tuple=$(rustc --print=host-tuple)" >> $GITHUB_ENV
+          ([[ "$(rustc --print=host-tuple)" == *msvc* ]] && echo "exec_ext=.exe" || echo "exec_ext=") >> $GITHUB_ENV
+      - name: Set runtime tarball name
+        run: echo "tarball_name=runtime-${{ env.host_tuple }}.tar.gz" >> $GITHUB_ENV
+
+      - name: Setup tarball artifacts
+        run: |
+          rm -rf runtime
+          cp -r "$(rustc --print=sysroot)" runtime
+
+          cp target/release/rustowl${{ env.exec_ext }} ./runtime
+          cp target/release/rustowlc${{ env.exec_ext }} ./runtime
+
+          cp README.md ./runtime
+          cp LICENSE ./runtime
+
+          find target -type d | grep -E 'rustowl-build-time-out$' | xargs -I % cp -r % ./
+          cp -r rustowl-build-time-out/completions ./runtime
+          cp -r rustowl-build-time-out/man ./runtime
+
+          rm -rf ${{ env.tarball_name }}
+          cd runtime;
+          ls | \
+            xargs -I % find % -type f | \
+            grep -E '\.(rlib|so|dylib|dll)$' | \
+            xargs tar -czvf ../${{ env.tarball_name }} README.md LICENSE rustowl${{ env.exec_ext }} rustowlc${{ env.exec_ext }} completions/ man/
+
+          cp ./rustowl${{ env.exec_ext }} ../rustowl-${{ env.host_tuple }}${{ env.exec_ext }}
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: rustowl-bin-${{ env.host_tuple }}
-          path: rustowl/bin/*
+          name: rustowl-runtime-${{ env.host_tuple }}
+          path: |
+            rustowl-${{ env.host_tuple }}${{ env.exec_ext }}
+            ${{ env.tarball_name }}
 
 
   vscode:

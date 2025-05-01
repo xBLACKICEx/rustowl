@@ -14,10 +14,10 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
-        rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rustowl/rust-toolchain.toml;
+        rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 
-        rustToolchainToml = builtins.fromTOML (builtins.readFile ./rustowl/rust-toolchain.toml);
-        cargoToml = builtins.fromTOML (builtins.readFile ./rustowl/Cargo.toml);
+        rustToolchainToml = builtins.fromTOML (builtins.readFile ./rust-toolchain.toml);
+        cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
 
         envAttrs = {
           RUSTOWL_TOOLCHAIN = rustToolchainToml.toolchain.channel;
@@ -29,7 +29,7 @@
           version = cargoToml.package.version;
           src = ./rustowl;
 
-          cargoLock.lockFile = ./rustowl/Cargo.lock;
+          cargoLock.lockFile = ./Cargo.lock;
 
           nativeBuildInputs = [ rustToolchain ];
 
@@ -56,11 +56,13 @@
         };
 
         devShells.default = pkgs.mkShell ({
-          buildInputs = [
+          buildInputs = with pkgs; [
             (rustToolchain.override {
               extensions = [ "rust-src" "rustfmt" ];
             })
-            rustowl
+            pkg-config 
+            openssl
+            # rustowl
           ];
 
           shellHook = ''

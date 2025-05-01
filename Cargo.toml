@@ -1,6 +1,6 @@
 [package]
 name = "rustowl"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2024"
 authors = ["cordx56 <cordx56@cordx.cx>"]
 description = "Visualize Ownership and Lifetimes in Rust"
@@ -24,11 +24,15 @@ uuid = { version = "1", features = ["v4"] }
 clap = { version = "4.5.35", features = ["cargo"] }
 tar = "0.4.44"
 flate2 = "1.1.1"
+reqwest = { version = "0.12.15", features = ["rustls-tls"] }
+clap_complete_nushell = "4.5.5"
+clap_complete = "4.5.47"
 
 [build-dependencies]
-tar = "0.4.44"
-flate2 = "1.1.1"
-dunce = "1.0.5"
+clap_complete_nushell = "4.5.5"
+clap_complete = "4.5.47"
+clap_mangen = "0.2.26"
+clap = { version = "4.5.35", features = ["cargo"]  }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.169"
@@ -44,10 +48,6 @@ features = ['unprefixed_malloc_on_supported_platforms']
 default = ["jemalloc"]
 jemalloc = ['dep:tikv-jemalloc-sys']
 
-[[bin]]
-name = "rustowlc"
-path = "src/main.rs"
-
 [profile.release]
 opt-level = 3
 lto = "fat"
@@ -55,3 +55,8 @@ codegen-units = 1
 
 [package.metadata.rust-analyzer]
 rustc_private = true
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ binary-ext }"
+pkg-fmt = "bin"
+disabled-strategies = ["quick-install", "compile"]

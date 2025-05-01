@@ -71,7 +71,7 @@ Minimal setup with [lazy.nvim](https://github.com/folke/lazy.nvim):
 {
   'cordx56/rustowl',
   version = '*', -- Latest stable version
-  build = 'cd rustowl && cargo install --path . --locked',
+  build = 'cargo install --path . --locked',
   lazy = false, -- This plugin is already lazy
   opts = {},
 }
@@ -84,7 +84,7 @@ Minimal setup with [lazy.nvim](https://github.com/folke/lazy.nvim):
 {
   'cordx56/rustowl',
   version = '*', -- Latest stable version
-  build = 'cd rustowl && cargo install --path . --locked',
+  build = 'cargo install --path . --locked',
   lazy = false, -- This plugin is already lazy
   opts = {
     client = {
@@ -135,8 +135,7 @@ Elpaca example:
 (elpaca
   (rustowlsp
     :host github
-    :repo "cordx56/rustowl"
-    :files (:defaults "emacs/*")))
+    :repo "cordx56/rustowl"))
 ```
 
 You have to install RustOwl LSP server manually.
@@ -145,6 +144,12 @@ You have to install RustOwl LSP server manually.
 
 There is a [third-party repository](https://github.com/siketyan/intellij-rustowl) that supports IntelliJ IDEs.
 You have to install RustOwl LSP server manually.
+
+## Architecture / OS / package repositories
+
+### Nix flake
+
+There is a [third-party Nix flake repository](https://github.com/nix-community/rustowl-flake) in the Nix community.
 
 ## Build manually
 
@@ -158,6 +163,8 @@ Here, we describe manual install instructions from source code.
     - You can install `rustup` from [this link](https://rustup.rs/).
     - You need to set up the `PATH` environment variable. To do this, follow the instructions provided by the `rustup` installer.
 
+Building RustOwl requires nightly build of `rustc`. It will automatically installed by `rustup`.
+
 RustOwl has been tested on macOS Sequoia 15.3.2 on arm64 architecture with `rustup` 1.28.1.
 We have not tested the installation of dependencies from other package repositories, such as Homebrew.
 You may need to uninstall any Rust-related packages installed through those repositories first.
@@ -170,7 +177,6 @@ We have confirmed that running `apt install build-essential` is necessary on a f
 #### Build & Run
 
 ```bash
-cd rustowl
 cargo install --path . --locked
 ```
 
