@@ -91,7 +91,7 @@ jobs:
           cd runtime
 
           if [[ "${{ env.is_windows }}" == "true" ]]; then
-            zip -r "../${{ env.archive_name }}" README.md LICENSE "rustowl${{ env.exec_ext }}" "rustowlc${{ env.exec_ext}}" completions man $(find . -name "*.rlib" -o -name "*.dll")
+            zip -r "../${{ env.archive_name }}" README.md LICENSE "rustowl${{ env.exec_ext }}" "rustowlc${{ env.exec_ext }}" completions man $(find . -name "*.rlib" -o -name "*.dll")
           else
             ls | \
               xargs -I % find % -type f | \
