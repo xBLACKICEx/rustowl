@@ -91,10 +91,8 @@ jobs:
           cd runtime
 
           if [[ "${{ env.is_windows }}" == "true" ]]; then
-            # For Windows, use PowerShell's Compress-Archive
-            powershell -Command "Get-ChildItem -Path README.md, LICENSE, rustowl${{ env.exec_ext }}, rustowlc${{ env.exec_ext }}, completions, man | Where-Object { \$_.Name -match '\\.(rlib|dll)\$' -or \$_.Name -in @('README.md', 'LICENSE', 'rustowl${{ env.exec_ext }}', 'rustowlc${{ env.exec_ext }}') -or \$_.PSIsContainer } | Compress-Archive -DestinationPath ../${{ env.archive_name }}"
+            zip -r "../${{ env.archive_name }}" README.md LICENSE "rustowl${{ env.exec_ext }}" "rustowlc${{ env.exec_ext}}" completions man $(find . -name "*.rlib" -o -name "*.dll")
           else
-            # For non-Windows, use tar
             ls | \
               xargs -I % find % -type f | \
               grep -E '\.(rlib|so|dylib)$' | \
