@@ -21,8 +21,13 @@ fn main() -> Result<(), Error> {
         println!("cargo::rustc-env=RUSTOWL_SYSROOTS={}", sysroot);
     }
 
+    #[cfg(not(windows))]
     let tarball_name = format!("runtime-{}.tar.gz", get_host_tuple().unwrap());
-    println!("cargo::rustc-env=RUSTOWL_TARBALL_NAME={tarball_name}");
+
+    #[cfg(windows)]
+    let tarball_name = format!("runtime-{}.zip", get_host_tuple().unwrap());
+
+    println!("cargo::rustc-env=RUSTOWL_ARCHIVE_NAME={tarball_name}");
 
     let sysroot = get_sysroot().unwrap();
     set_rustc_driver_path(&sysroot);
