@@ -1,9 +1,7 @@
 name: Generate Changelog
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   changelogen:

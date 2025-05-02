@@ -149,11 +149,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set node
-        uses: actions/setup-node@v4
-        with:
-          registry-url: https://registry.npmjs.org/
-          node-version: lts/*
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -164,6 +159,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/**/*
-      - run: npx changelogithub
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          draft: true
+          generate_release_notes: true
