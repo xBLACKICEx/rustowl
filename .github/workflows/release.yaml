@@ -67,9 +67,9 @@ jobs:
       - name: Set archive name
         run: |
           if [[ "${{ env.is_windows }}" == "true" ]]; then
-            echo "archive_name=runtime-${{ env.host_tuple }}.zip" >> $GITHUB_ENV
+            echo "archive_name=rustowl-${{ env.host_tuple }}.zip" >> $GITHUB_ENV
           else
-            echo "archive_name=runtime-${{ env.host_tuple }}.tar.gz" >> $GITHUB_ENV
+            echo "archive_name=rustowl-${{ env.host_tuple }}.tar.gz" >> $GITHUB_ENV
           fi
 
       - name: Setup archive artifacts
