@@ -180,6 +180,7 @@ We have confirmed that running `apt install build-essential` is necessary on a f
 cargo install --path . --locked
 ```
 
+You can add runtime directory paths to the search paths by specifying `RUSTOWL_RUNTIME_DIRS` or `RUSTOWL_SYSROOTS`.
 
 ### VSCode extension
 
