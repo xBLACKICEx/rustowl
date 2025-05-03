@@ -27,16 +27,20 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   (async () => {
-    const exec = await bootstrapRustowl(context.globalStorageUri.fsPath);
-    serverOptions.command = exec;
+    try {
+      const exec = await bootstrapRustowl(context.globalStorageUri.fsPath);
+      serverOptions.command = exec;
 
-    client = new LanguageClient(
-      "rustowl",
-      "RustOwl",
-      serverOptions,
-      clientOptions,
-    );
-    client.start();
+      client = new LanguageClient(
+        "rustowl",
+        "RustOwl",
+        serverOptions,
+        clientOptions,
+      );
+      client.start();
+    } catch (e) {
+      vscode.window.showErrorMessage(`Failed to start RustOwl\n${e}`);
+    }
   })();
 
   let activeEditor: vscode.TextEditor | undefined =
