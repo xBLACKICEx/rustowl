@@ -17,9 +17,13 @@ jobs:
           docker pull quay.io/git-chglog/git-chglog:latest
           docker run -v "$PWD":/workdir quay.io/git-chglog/git-chglog -o CHANGELOG.md
 
-      - name: Commit Changelog
-        uses: EndBug/add-and-commit@v9
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
         with:
-          add: "CHANGELOG.md"
-          message: "chore: update changelog"
-          default_author: github_actions
+          add-paths: |
+            CHANGELOG.md
+          author: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
+          base: main
+          branch: create-pull-request/autogenerate-changelog
+          commit-message: "chore: update changelog"
+          title: "Update Changelog"
