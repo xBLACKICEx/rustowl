@@ -9,8 +9,16 @@ use tokio::{
     sync::OnceCell,
 };
 
+#[cfg(not(windows))]
+use flate2::read::GzDecoder;
+#[cfg(not(windows))]
+use tar::Archive;
+#[cfg(windows)]
+use zip::ZipArchive;
+
 pub const TOOLCHAIN_VERSION: &str = env!("RUSTOWL_TOOLCHAIN");
 const CONFING_SYSROOTS: Option<&str> = option_env!("RUSTOWL_SYSROOTS");
+
 static FALLBACK_SYSROOT: LazyLock<PathBuf> = LazyLock::new(|| {
     env::current_exe()
         .unwrap()
@@ -18,24 +26,28 @@ static FALLBACK_SYSROOT: LazyLock<PathBuf> = LazyLock::new(|| {
         .unwrap()
         .join("rustowl-runtime")
 });
+
 static CONFIG_SYSROOTS: LazyLock<Vec<PathBuf>> = LazyLock::new(|| {
     CONFING_SYSROOTS
         .map(|v| env::split_paths(v).collect())
         .unwrap_or_default()
 });
+
 static RUSTUP_SYSROOT: OnceCell<Option<PathBuf>> = OnceCell::const_new();
 
-const TARBALL_NAME: &str = env!("RUSTOWL_TARBALL_NAME");
+const ARCHIVE_NAME: &str = env!("RUSTOWL_ARCHIVE_NAME");
 
 pub async fn get_sysroot() -> PathBuf {
     let env_var = env::var("RUSTOWL_RUNTIME_DIRS")
         .unwrap_or(env::var("RUSTOWL_SYSROOTS").unwrap_or_default());
+
     for sysroot in env::split_paths(&env_var) {
         if sysroot.is_dir() {
             log::info!("select sysroot from runtime env var: {}", sysroot.display());
             return sysroot;
         }
     }
+
     for sysroot in &*CONFIG_SYSROOTS {
         if sysroot.is_dir() {
             log::info!(
@@ -81,63 +93,128 @@ pub async fn get_sysroot() -> PathBuf {
 }
 
 pub async fn setup_toolchain() -> Result<PathBuf, ()> {
-    use flate2::read::GzDecoder;
-    use tar::Archive;
-
     if !FALLBACK_SYSROOT.is_dir() {
-        log::info!("sysroot not found; start downloading {TARBALL_NAME}...");
+        log::info!("sysroot not found; start downloading {ARCHIVE_NAME}...");
         let tarball_url = format!(
-            "https://github.com/cordx56/rustowl/releases/download/v{}/{TARBALL_NAME}",
+            "https://github.com/cordx56/rustowl/releases/download/v{}/{ARCHIVE_NAME}",
             clap::crate_version!(),
         );
+
         let resp = match reqwest::get(&tarball_url)
             .await
             .and_then(|v| v.error_for_status())
         {
             Ok(v) => v,
             Err(e) => {
-                log::error!("failed to download runtime tarball");
+                log::error!("failed to download runtime archive");
                 log::error!("{e:?}");
                 return Err(());
             }
         };
+
         let bytes = match resp.bytes().await {
             Ok(v) => v,
             Err(e) => {
-                log::error!("failed to download runtime tarball");
+                log::error!("failed to download runtime archive");
                 log::error!("{e:?}");
                 return Err(());
             }
         };
         log::info!("download finished");
+
         if create_dir_all(&*FALLBACK_SYSROOT).await.is_err() {
             log::error!("failed to create toolchain directory");
             return Err(());
         }
-        let decoder = GzDecoder::new(&*bytes);
-        let mut archive = Archive::new(decoder);
-        if let Ok(entries) = archive.entries() {
-            for mut entry in entries.flatten() {
-                if let Ok(path) = entry.path() {
-                    let path = path.to_path_buf();
-                    if path.as_os_str() != "rustowl" {
-                        if !entry.unpack_in(&*FALLBACK_SYSROOT).unwrap_or(false) {
-                            log::error!("failed to unpack runtime tarball");
-                            return Err(());
+
+        #[cfg(windows)]
+        {
+            let cursor = std::io::Cursor::new(&*bytes);
+            let mut archive = match ZipArchive::new(cursor) {
+                Ok(archive) => archive,
+                Err(e) => {
+                    log::error!("failed to read ZIP archive");
+                    log::error!("{e:?}");
+                    return Err(());
+                }
+            };
+
+            for i in 0..archive.len() {
+                let mut file = match archive.by_index(i) {
+                    Ok(file) => file,
+                    Err(e) => {
+                        log::error!("failed to read ZIP entry");
+                        log::error!("{e:?}");
+                        continue;
+                    }
+                };
+
+                let outpath = match file.enclosed_name() {
+                    Some(path) => FALLBACK_SYSROOT.join(path),
+                    None => continue,
+                };
+
+                if file.name().ends_with('/') {
+                    if let Err(e) = std::fs::create_dir_all(&outpath) {
+                        log::error!("failed to create directory {}", outpath.display());
+                        log::error!("{e:?}");
+                        continue;
+                    }
+                } else {
+                    if let Some(parent) = outpath.parent() {
+                        if let Err(e) = std::fs::create_dir_all(parent) {
+                            log::error!("failed to create parent directory {}", parent.display());
+                            log::error!("{e:?}");
+                            continue;
                         }
-                        log::info!("{} unpacked", path.display());
+                    }
+                    let mut outfile = match std::fs::File::create(&outpath) {
+                        Ok(file) => file,
+                        Err(e) => {
+                            log::error!("failed to create file {}", outpath.display());
+                            log::error!("{e:?}");
+                            continue;
+                        }
+                    };
+                    if let Err(e) = std::io::copy(&mut file, &mut outfile) {
+                        log::error!("failed to write file {}", outpath.display());
+                        log::error!("{e:?}");
+                        continue;
                     }
                 }
+                log::info!("{} unpacked", outpath.display());
             }
-        } else {
-            log::error!("failed to unpack runtime tarball");
-            return Err(());
         }
+
+        #[cfg(not(windows))]
+        {
+            let decoder = GzDecoder::new(&*bytes);
+            let mut archive = Archive::new(decoder);
+            if let Ok(entries) = archive.entries() {
+                for mut entry in entries.flatten() {
+                    if let Ok(path) = entry.path() {
+                        let path = path.to_path_buf();
+                        if path.as_os_str() != "rustowl" {
+                            if !entry.unpack_in(&*FALLBACK_SYSROOT).unwrap_or(false) {
+                                log::error!("failed to unpack runtime tarball");
+                                return Err(());
+                            }
+                            log::info!("{} unpacked", path.display());
+                        }
+                    }
+                }
+            } else {
+                log::error!("failed to unpack runtime tarball");
+                return Err(());
+            }
+        }
+
         log::info!("toolchain setup done in {}", FALLBACK_SYSROOT.display());
     }
     log::info!("select fallback sysroot: {}", FALLBACK_SYSROOT.display());
     Ok(FALLBACK_SYSROOT.clone())
 }
+
 pub async fn uninstall_toolchain() {
     remove_dir_all(&*FALLBACK_SYSROOT).await.unwrap();
 }

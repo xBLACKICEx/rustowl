@@ -1,0 +1,25 @@
+name: Generate Changelog
+
+on:
+  workflow_dispatch:
+
+jobs:
+  changelogen:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - run: |
+          docker pull quay.io/git-chglog/git-chglog:latest
+          docker run -v "$PWD":/workdir quay.io/git-chglog/git-chglog -o CHANGELOG.md
+
+      - name: Commit Changelog
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: "CHANGELOG.md"
+          message: "chore: update changelog"
+          default_author: github_actions
