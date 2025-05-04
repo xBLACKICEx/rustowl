@@ -148,6 +148,22 @@ You have to install RustOwl LSP server manually.
 
 ## Architecture / OS / package repositories
 
+### Archlinux
+
+We have an AUR package. Run:
+
+```sh
+yay -S rustowl-bin
+```
+
+Replace `yay` with your AUR helper of choice.
+
+We also have a git version, that builds from source:
+
+```sh
+yay -S rustowl-git
+```
+
 ### Nix flake
 
 There is a [third-party Nix flake repository](https://github.com/nix-community/rustowl-flake) in the Nix community.
