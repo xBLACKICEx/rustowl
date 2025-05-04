@@ -1,6 +1,6 @@
 [package]
 name = "rustowl"
-version = "0.3.0"
+version = "0.3.1-alpha.1"
 edition = "2024"
 authors = ["cordx56 <cordx56@cordx.cx>"]
 description = "Visualize Ownership and Lifetimes in Rust"
@@ -57,14 +57,12 @@ codegen-units = 1
 [package.metadata.rust-analyzer]
 rustc_private = true
 
-# edit on next release
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/runtime-{ target }{ archive-suffix }"
-# pkg-url = "{ repo }/releases/download/v{ version }/rustowl-{ target }{ archive-suffix }"
+pkg-url = "{ repo }/releases/download/v{ version }/rustowl-{ target }{ archive-suffix }"
 disabled-strategies = ["quick-install", "compile"]
 
-# [package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
-# pkg-fmt = "zip"
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
 
-# [package.metadata.binstall.overrides.aarch64-pc-windows-msvc]
-# pkg-fmt = "zip"
+[package.metadata.binstall.overrides.aarch64-pc-windows-msvc]
+pkg-fmt = "zip"
