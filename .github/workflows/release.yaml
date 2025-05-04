@@ -55,14 +55,28 @@ jobs:
         run: |
           rustup install --profile minimal
           rustup component add rust-src rustc-dev llvm-tools
-      - name: Build
-        run: cargo build --release
 
       - name: check host tuple
         run: |
           echo "host_tuple=$(rustc --print=host-tuple)" >> $GITHUB_ENV
           ([[ "$(rustc --print=host-tuple)" == *msvc* ]] && echo "exec_ext=.exe" || echo "exec_ext=") >> $GITHUB_ENV
           ([[ "$(rustc --print=host-tuple)" == *windows* ]] && echo "is_windows=true" || echo "is_windows=false") >> $GITHUB_ENV
+          ([[ "$(rustc --print=host-tuple)" == *linux* ]] && echo "is_linux=true" || echo "is_linux=false") >> $GITHUB_ENV
+
+      - name: Install zig
+        if: env.is_linux == 'true'
+        uses: mlugg/setup-zig@v1
+        with:
+          version: latest
+
+      - name: Build
+        run: |
+          if [[ "${{ env.is_linux }}" == "true" ]]; then
+            cargo install --locked cargo-zigbuild
+            cargo zigbuild --target ${{ env.host_tuple }}.2.17 --release
+          else
+            cargo build --release
+          fi
 
       - name: Set archive name
         run: |
