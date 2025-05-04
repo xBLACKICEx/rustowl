@@ -22,10 +22,10 @@ fn main() -> Result<(), Error> {
     }
 
     #[cfg(not(windows))]
-    let tarball_name = format!("runtime-{}.tar.gz", get_host_tuple().unwrap());
+    let tarball_name = format!("rustowl-{}.tar.gz", get_host_tuple().unwrap());
 
     #[cfg(windows)]
-    let tarball_name = format!("runtime-{}.zip", get_host_tuple().unwrap());
+    let tarball_name = format!("rustowl-{}.zip", get_host_tuple().unwrap());
 
     println!("cargo::rustc-env=RUSTOWL_ARCHIVE_NAME={tarball_name}");
 
