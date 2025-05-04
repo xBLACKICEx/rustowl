@@ -92,8 +92,8 @@ jobs:
           cp -r "$(rustc --print=sysroot)" runtime
 
           if [[ "${{ env.is_linux }}" == "true"  ]]; then
-            cp target/${{ env.host_tuple }}/rustowl${{ env.exec_ext }} ./runtime
-            cp target/${{ env.host_tuple }}/rustowlc${{ env.exec_ext }} ./runtime
+            cp target/${{ env.host_tuple }}/release/rustowl${{ env.exec_ext }} ./runtime
+            cp target/${{ env.host_tuple }}/release/rustowlc${{ env.exec_ext }} ./runtime
           else
             cp target/release/rustowl${{ env.exec_ext }} ./runtime
             cp target/release/rustowlc${{ env.exec_ext }} ./runtime
