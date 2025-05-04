@@ -58,6 +58,5 @@ codegen-units = 1
 rustc_private = true
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ binary-ext }"
-pkg-fmt = "bin"
+pkg-url = "{ repo }/releases/download/v{ version }/runtime-{ target }{ archive-suffix }"
 disabled-strategies = ["quick-install", "compile"]

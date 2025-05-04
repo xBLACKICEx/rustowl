@@ -4,6 +4,8 @@ if not vim.g.loaded_rustowl then
   -- Plugin initialization (run only once)
   vim.g.loaded_rustowl = true
 
+  local highlight_style = config.highlight_style or 'undercurl'
+
   local highlights = {
     lifetime = '#00cc00',
     imm_borrow = '#0000cc',
@@ -14,7 +16,14 @@ if not vim.g.loaded_rustowl then
   }
 
   for hl_name, color in pairs(highlights) do
-    local options = { undercurl = true, default = true, sp = color }
+    local options = { default = true, sp = color }
+
+    if highlight_style == 'underline' then
+      options.underline = true
+    else
+      options.undercurl = true --Default config is undercurl
+    end
+
     vim.api.nvim_set_hl(0, hl_name, options)
   end
 

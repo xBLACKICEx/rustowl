@@ -38,7 +38,12 @@ local default_config = {
   ---@type number
   idle_time = 500,
 
+  ---@type string
+  highlight_style = 'undercurl',
+
   ---@class rustowl.internal.ClientConfig: vim.lsp.ClientConfig
+
+  ---
   client = {
 
     ---@type string[]
@@ -66,8 +71,17 @@ vim.validate {
   auto_enable = { config.auto_enable, 'boolean' },
   idle_time = { config.idle_time, 'number' },
   client = { config.client, { 'table' } },
+  highlight_style = { config.highlight_style, 'string' },
 }
 
+-- validation for highlight_style to ensure undercurl or underline
+if config.highlight_style ~= 'undercurl' and config.highlight_style ~= 'underline' then
+  vim.notify(
+    "Rustowl: Invalid highlight_style '" .. config.highlight_style .. "'. Using default 'undercurl'.",
+    vim.log.levels.WARN
+  )
+  config.highlight_style = 'undercurl'
+end
 config.client.name = 'rustowl'
 
 return config
