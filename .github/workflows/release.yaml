@@ -91,8 +91,13 @@ jobs:
           rm -rf runtime
           cp -r "$(rustc --print=sysroot)" runtime
 
-          cp target/release/rustowl${{ env.exec_ext }} ./runtime
-          cp target/release/rustowlc${{ env.exec_ext }} ./runtime
+          if [[ "${{ env.is_linux }}" == "true"  ]]; then
+            cp target/${{ env.host_tuple }}/rustowl${{ env.exec_ext }} ./runtime
+            cp target/${{ env.host_tuple }}/rustowlc${{ env.exec_ext }} ./runtime
+          else
+            cp target/release/rustowl${{ env.exec_ext }} ./runtime
+            cp target/release/rustowlc${{ env.exec_ext }} ./runtime
+          fi
 
           cp README.md ./runtime
           cp LICENSE ./runtime
