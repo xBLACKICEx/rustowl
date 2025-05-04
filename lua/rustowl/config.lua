@@ -77,7 +77,7 @@ vim.validate {
 -- validation for highlight_style to ensure undercurl or underline
 if config.highlight_style ~= 'undercurl' and config.highlight_style ~= 'underline' then
   vim.notify(
-    "Rustown: Invalid highlight_style '" .. config.highlight_style .. "'. Using default 'undercurl'.",
+    "Rustowl: Invalid highlight_style '" .. config.highlight_style .. "'. Using default 'undercurl'.",
     vim.log.levels.WARN
   )
   config.highlight_style = 'undercurl'
