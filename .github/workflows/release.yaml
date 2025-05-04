@@ -67,7 +67,7 @@ jobs:
         if: env.is_linux == 'true'
         uses: mlugg/setup-zig@v1
         with:
-          version: latest
+          version: 0.13.0
 
       - name: Build
         run: |
