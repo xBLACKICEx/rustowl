@@ -115,7 +115,7 @@ jobs:
           cd runtime
 
           if [[ "${{ env.is_windows }}" == "true" ]]; then
-            powershell -c 'tar.exe -a -cf "..\${{ env.archive_name }}" README.md LICENSE "rustowl${{ env.exec_ext }}" "rustowlc${{ env.exec_ext }}" sysroot completions man'
+            powershell -c 'Compress-Archive -Path README.md, LICENSE, "rustowl${{ env.exec_ext }}", "rustowlc${{ env.exec_ext }}", "sysroot", "completions", "man" -DestinationPath "..\${{ env.archive_name }}" -CompressionLevel Optimal'
           else
             tar -czvf ../${{ env.archive_name }} README.md LICENSE rustowl${{ env.exec_ext }} rustowlc${{ env.exec_ext }} sysroot/ completions/ man/
           fi
