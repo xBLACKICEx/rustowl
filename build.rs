@@ -8,17 +8,10 @@ include!("src/cli.rs");
 include!("src/shells.rs");
 
 fn main() -> Result<(), Error> {
-    if let Some(toolchain) = get_toolchain() {
-        println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={toolchain}");
-    }
+    println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={}", get_toolchain());
 
-    let config_sysroot = if let Ok(runtime_dir) = env::var("RUSTOWL_RUNTIME_DIRS") {
-        Some(runtime_dir)
-    } else {
-        env::var("RUSTOWL_SYSROOTS").ok()
-    };
-    if let Some(sysroot) = config_sysroot {
-        println!("cargo::rustc-env=RUSTOWL_SYSROOTS={}", sysroot);
+    if let Ok(sysroot) = env::var("RUSTOWL_RUNTIME_DIRS") {
+        println!("cargo::rustc-env=RUSTOWL_RUNTIME_DIRS={}", sysroot);
     }
 
     #[cfg(not(windows))]
@@ -52,11 +45,8 @@ fn main() -> Result<(), Error> {
 }
 
 // get toolchain
-fn get_toolchain() -> Option<String> {
-    if let Ok(toolchain) = env::var("RUSTOWL_TOOLCHAIN") {
-        return Some(toolchain);
-    }
-    env::var("RUSTUP_TOOLCHAIN").ok()
+fn get_toolchain() -> String {
+    env::var("RUSTUP_TOOLCHAIN").unwrap()
 }
 fn get_host_tuple() -> Option<String> {
     match Command::new(env::var("RUSTC").unwrap())
