@@ -1,6 +1,12 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
+### 🎨 Chores
+- update changelog ([#116](https://github.com/cordx56/rustowl/issues/116))
+
+### 🐞 Bug Fixes
+- change compress script to use sysroot dir ([#125](https://github.com/cordx56/rustowl/issues/125))
+
 
 <a name="v0.3.1-alpha.1"></a>
 ## [v0.3.1-alpha.1] - 2025-05-05
