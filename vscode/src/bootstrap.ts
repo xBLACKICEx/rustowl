@@ -53,6 +53,9 @@ const exists = async (path: string) => {
     .catch(() => false);
 };
 const needUpdated = async (currentVersion: string) => {
+  if (!currentVersion) {
+    return true;
+  }
   console.log(`current RustOwl version: ${currentVersion.trim()}`);
   console.log(`extension version: v${version}`);
   try {
@@ -76,7 +79,7 @@ const needUpdated = async (currentVersion: string) => {
 export const bootstrapRustowl = async (dirPath: string): Promise<string> => {
   if (
     !(await needUpdated(
-      spawnSync("rustowl", ["--version", "--quiet"]).stdout.toString(),
+      spawnSync("rustowl", ["--version", "--quiet"]).stdout?.toString(),
     ))
   ) {
     return "rustowl";
@@ -85,7 +88,7 @@ export const bootstrapRustowl = async (dirPath: string): Promise<string> => {
   if (
     (await exists(rustowlPath)) &&
     !(await needUpdated(
-      spawnSync(rustowlPath, ["--version", "--quiet"]).stdout.toString(),
+      spawnSync(rustowlPath, ["--version", "--quiet"]).stdout?.toString(),
     ))
   ) {
     return rustowlPath;
