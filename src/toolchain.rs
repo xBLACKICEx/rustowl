@@ -14,12 +14,9 @@ use zip::ZipArchive;
 pub const TOOLCHAIN: &str = env!("RUSTOWL_TOOLCHAIN");
 const BUILD_RUNTIME_DIRS: Option<&str> = option_env!("RUSTOWL_RUNTIME_DIRS");
 
-static FALLBACK_RUNTIME: LazyLock<PathBuf> = LazyLock::new(|| {
-    env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("rustowl-runtime")
+static FALLBACK_RUNTIME_DIRS: LazyLock<Vec<PathBuf>> = LazyLock::new(|| {
+    let exec_dir = env::current_exe().unwrap().parent().unwrap().to_path_buf();
+    vec![exec_dir.join("rustowl-runtime"), exec_dir]
 });
 
 static CONFIG_RUNTIME_DIRS: LazyLock<Vec<PathBuf>> = LazyLock::new(|| {
@@ -55,18 +52,24 @@ pub fn rustc_driver_path(sysroot: impl AsRef<Path>) -> Option<PathBuf> {
     None
 }
 
+fn sysroot_from_runtime(runtime: impl AsRef<Path>) -> PathBuf {
+    runtime.as_ref().join("sysroot").join(TOOLCHAIN)
+}
+fn is_valid_runtime_dir(runtime: impl AsRef<Path>) -> bool {
+    rustc_driver_path(sysroot_from_runtime(runtime)).is_some()
+}
 pub fn get_configured_runtime_dir() -> Option<PathBuf> {
     let env_var = env::var("RUSTOWL_RUNTIME_DIRS").unwrap_or_default();
 
     for runtime in env::split_paths(&env_var) {
-        if runtime.is_dir() {
+        if is_valid_runtime_dir(&runtime) {
             log::info!("select runtime dir from env var: {}", runtime.display());
             return Some(runtime);
         }
     }
 
     for runtime in &*CONFIG_RUNTIME_DIRS {
-        if runtime.is_dir() {
+        if is_valid_runtime_dir(runtime) {
             log::info!(
                 "select runtime dir from build time env var: {}",
                 runtime.display()
@@ -78,37 +81,26 @@ pub fn get_configured_runtime_dir() -> Option<PathBuf> {
 }
 pub async fn get_runtime_dir() -> PathBuf {
     if let Some(runtime) = get_configured_runtime_dir() {
-        runtime
-    } else if !FALLBACK_RUNTIME.is_dir() && setup_toolchain().await.is_err() {
-        std::process::exit(1);
-    } else {
-        log::info!(
-            "select runtime from fallback: {}",
-            FALLBACK_RUNTIME.display(),
-        );
-        FALLBACK_RUNTIME.clone()
+        return runtime;
     }
-}
-pub async fn get_sysroot() -> PathBuf {
-    if let Some(runtime) = get_configured_runtime_dir() {
-        let sysroot = runtime.join("sysroot").join(TOOLCHAIN);
-        if sysroot.is_dir() {
-            log::info!(
-                "select sysroot from configured runtime dir: {}",
-                sysroot.display(),
-            );
-            return sysroot;
+    for fallback in &*FALLBACK_RUNTIME_DIRS {
+        if is_valid_runtime_dir(fallback) {
+            log::info!("select runtime from fallback: {}", fallback.display());
+            return fallback.clone();
         }
     }
-    let sysroot = FALLBACK_RUNTIME.join("sysroot").join(TOOLCHAIN);
-    if rustc_driver_path(&sysroot).is_none() {
-        log::info!("rustc_driver not found; start setup toolchain");
-        if setup_toolchain().await.is_err() {
+
+    log::info!("rustc_driver not found; start setup toolchain");
+    match setup_toolchain().await {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!("{e:?}");
             std::process::exit(1);
         }
     }
-    log::info!("select sysroot from fallback: {}", sysroot.display());
-    sysroot
+}
+pub async fn get_sysroot() -> PathBuf {
+    sysroot_from_runtime(get_runtime_dir().await)
 }
 
 pub async fn setup_toolchain() -> Result<PathBuf, ()> {
@@ -140,7 +132,8 @@ pub async fn setup_toolchain() -> Result<PathBuf, ()> {
     };
     log::info!("download finished");
 
-    if create_dir_all(&*FALLBACK_RUNTIME).await.is_err() {
+    let fallback = FALLBACK_RUNTIME_DIRS[0].clone();
+    if create_dir_all(&fallback).await.is_err() {
         log::error!("failed to create toolchain directory");
         return Err(());
     }
@@ -168,7 +161,7 @@ pub async fn setup_toolchain() -> Result<PathBuf, ()> {
             };
 
             let outpath = match file.enclosed_name() {
-                Some(path) => FALLBACK_RUNTIME.join(path),
+                Some(path) => fallback.join(path),
                 None => continue,
             };
 
@@ -204,7 +197,7 @@ pub async fn setup_toolchain() -> Result<PathBuf, ()> {
                 if let Ok(path) = entry.path() {
                     let path = path.to_path_buf();
                     if path.as_os_str() != "rustowl" {
-                        if !entry.unpack_in(&*FALLBACK_RUNTIME).unwrap_or(false) {
+                        if !entry.unpack_in(&fallback).unwrap_or(false) {
                             log::error!("failed to unpack runtime tarball");
                             return Err(());
                         }
@@ -218,10 +211,16 @@ pub async fn setup_toolchain() -> Result<PathBuf, ()> {
         }
     }
 
-    log::info!("runtime setup done in {}", FALLBACK_RUNTIME.display());
-    Ok(FALLBACK_RUNTIME.clone())
+    log::info!("runtime setup done in {}", fallback.display());
+    Ok(fallback)
 }
 
 pub async fn uninstall_toolchain() {
-    remove_dir_all(&*FALLBACK_RUNTIME).await.unwrap();
+    for fallback in &*FALLBACK_RUNTIME_DIRS {
+        let sysroot = sysroot_from_runtime(fallback);
+        if sysroot.is_dir() {
+            log::info!("remove sysroot: {}", sysroot.display());
+            remove_dir_all(&sysroot).await.unwrap();
+        }
+    }
 }
