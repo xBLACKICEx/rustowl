@@ -52,12 +52,42 @@ const exists = async (path: string) => {
     .then(() => true)
     .catch(() => false);
 };
+const needUpdated = async (currentVersion: string) => {
+  console.log(`current RustOwl version: ${currentVersion.trim()}`);
+  console.log(`extension version: v${version}`);
+  try {
+    const semverParser = await import("semver-parser");
+    const current = semverParser.parseSemVer(currentVersion.trim(), false);
+    const self = semverParser.parseSemVer(version, false);
+    if (
+      current.major === self.major &&
+      current.minor === self.minor &&
+      JSON.stringify(current.pre) === JSON.stringify(self.pre)
+    ) {
+      return false;
+    } else {
+      console.log("B");
+      return true;
+    }
+  } catch (_e) {
+    return true;
+  }
+};
 export const bootstrapRustowl = async (dirPath: string): Promise<string> => {
-  if (spawnSync("rustowl", ["--version"]).status !== null) {
+  if (
+    !(await needUpdated(
+      spawnSync("rustowl", ["--version", "--quiet"]).stdout.toString(),
+    ))
+  ) {
     return "rustowl";
   }
   const rustowlPath = `${dirPath}/rustowl${exeExt}`;
-  if (await exists(rustowlPath)) {
+  if (
+    (await exists(rustowlPath)) &&
+    !(await needUpdated(
+      spawnSync(rustowlPath, ["--version", "--quiet"]).stdout.toString(),
+    ))
+  ) {
     return rustowlPath;
   }
   await fs.mkdir(dirPath, { recursive: true });

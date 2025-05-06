@@ -1,7 +1,20 @@
 pub fn cli() -> clap::Command {
-    clap::Command::new("RustOwl Language Server")
-        .version(clap::crate_version!())
+    clap::Command::new("RustOwl")
         .author(clap::crate_authors!())
+        .arg(
+            clap::Arg::new("version")
+                .short('V')
+                .long("version")
+                .required(false)
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            clap::Arg::new("quiet")
+                .short('q')
+                .long("quiet")
+                .required(false)
+                .action(clap::ArgAction::Count),
+        )
         .arg(
             clap::Arg::new("io")
                 .long("stdio")

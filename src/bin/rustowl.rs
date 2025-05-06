@@ -61,6 +61,12 @@ async fn main() {
             }
             _ => {}
         }
+    } else if matches.get_flag("version") {
+        if matches.get_count("quiet") == 0 {
+            print!("RustOwl ");
+        }
+        println!("v{}", clap::crate_version!());
+        return;
     } else {
         set_log_level("warn".parse().unwrap());
         eprintln!("RustOwl v{}", clap::crate_version!());
