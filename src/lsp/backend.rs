@@ -176,9 +176,13 @@ impl Backend {
 
             // set rustowlc & library path
             let rustowlc_path = {
-                let under_sysroot = toolchain::get_runtime_dir().await.join("rustowlc");
-                if under_sysroot.is_file() {
-                    under_sysroot.to_string_lossy().to_string()
+                let runtime_dir = toolchain::get_runtime_dir().await;
+                #[cfg(not(windows))]
+                let rustowlc = runtime_dir.join("rustowlc");
+                #[cfg(windows)]
+                let rustowlc = runtime_dir.join("rustowlc.exe");
+                if rustowlc.is_file() {
+                    rustowlc.to_string_lossy().to_string()
                 } else {
                     "rustowlc".to_owned()
                 }
