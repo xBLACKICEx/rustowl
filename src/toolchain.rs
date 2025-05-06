@@ -174,34 +174,25 @@ pub async fn setup_toolchain() -> Result<PathBuf, ()> {
                 None => continue,
             };
 
-            if file.name().ends_with('/') {
-                if let Err(e) = std::fs::create_dir_all(&outpath) {
-                    log::error!("failed to create directory {}", outpath.display());
-                    log::error!("{e:?}");
-                    continue;
-                }
+            if file.is_dir() {
+                log::info!("File {} extracted to \"{}\"", i, outpath.display());
+                std::fs::create_dir_all(&outpath).unwrap();
             } else {
-                if let Some(parent) = outpath.parent() {
-                    if let Err(e) = std::fs::create_dir_all(parent) {
-                        log::error!("failed to create parent directory {}", parent.display());
-                        log::error!("{e:?}");
-                        continue;
+                log::info!(
+                    "File {} extracted to \"{}\" ({} bytes)",
+                    i,
+                    outpath.display(),
+                    file.size()
+                );
+                if let Some(p) = outpath.parent() {
+                    if !p.exists() {
+                        std::fs::create_dir_all(p).unwrap();
                     }
                 }
-                let mut outfile = match std::fs::File::create(&outpath) {
-                    Ok(file) => file,
-                    Err(e) => {
-                        log::error!("failed to create file {}", outpath.display());
-                        log::error!("{e:?}");
-                        continue;
-                    }
-                };
-                if let Err(e) = std::io::copy(&mut file, &mut outfile) {
-                    log::error!("failed to write file {}", outpath.display());
-                    log::error!("{e:?}");
-                    continue;
-                }
+                let mut outfile = std::fs::File::create(&outpath).unwrap();
+                std::io::copy(&mut file, &mut outfile).unwrap();
             }
+
             log::info!("{} unpacked", outpath.display());
         }
     }
