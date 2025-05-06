@@ -13,8 +13,6 @@ use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types;
 use tower_lsp::{Client, LanguageServer, LspService};
 
-const RUSTC_DRIVER_DIR: Option<&str> = option_env!("RUSTC_DRIVER_DIR");
-
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(tag = "reason", rename_all = "kebab-case")]
 enum CargoCheckMessage {
@@ -157,7 +155,7 @@ impl Backend {
                 log::info!("using toolchain cargo: {}", cargo_path);
                 process::Command::new(cargo_path)
             } else {
-                log::info!("using default cargo",);
+                log::info!("using default cargo");
                 process::Command::new("cargo")
             };
             command
@@ -195,34 +193,34 @@ impl Backend {
                     "CARGO_ENCODED_RUSTFLAGS",
                     format!("--sysroot={}", sysroot.display()),
                 );
-            if let Some(driver_dir) = RUSTC_DRIVER_DIR {
-                #[cfg(target_os = "linux")]
-                {
-                    let mut paths =
-                        env::split_paths(&env::var("LD_LIBRARY_PATH").unwrap_or("".to_owned()))
-                            .collect::<std::collections::VecDeque<_>>();
-                    paths.push_front(sysroot.join(driver_dir));
-                    let paths = env::join_paths(paths).unwrap();
-                    command.env("LD_LIBRARY_PATH", paths);
-                }
-                #[cfg(target_os = "macos")]
-                {
-                    let mut paths = env::split_paths(
-                        &env::var("DYLD_FALLBACK_LIBRARY_PATH").unwrap_or("".to_owned()),
-                    )
-                    .collect::<std::collections::VecDeque<_>>();
-                    paths.push_front(sysroot.join(driver_dir));
-                    let paths = env::join_paths(paths).unwrap();
-                    command.env("DYLD_FALLBACK_LIBRARY_PATH", paths);
-                }
-                #[cfg(target_os = "windows")]
-                {
-                    let mut paths = env::split_paths(&env::var_os("Path").unwrap())
+
+            let driver_dir = toolchain::RUSTC_DRIVER_DIR;
+            #[cfg(target_os = "linux")]
+            {
+                let mut paths =
+                    env::split_paths(&env::var("LD_LIBRARY_PATH").unwrap_or("".to_owned()))
                         .collect::<std::collections::VecDeque<_>>();
-                    paths.push_front(sysroot.join(driver_dir));
-                    let paths = env::join_paths(paths).unwrap();
-                    command.env("Path", paths);
-                }
+                paths.push_front(sysroot.join(driver_dir));
+                let paths = env::join_paths(paths).unwrap();
+                command.env("LD_LIBRARY_PATH", paths);
+            }
+            #[cfg(target_os = "macos")]
+            {
+                let mut paths = env::split_paths(
+                    &env::var("DYLD_FALLBACK_LIBRARY_PATH").unwrap_or("".to_owned()),
+                )
+                .collect::<std::collections::VecDeque<_>>();
+                paths.push_front(sysroot.join(driver_dir));
+                let paths = env::join_paths(paths).unwrap();
+                command.env("DYLD_FALLBACK_LIBRARY_PATH", paths);
+            }
+            #[cfg(target_os = "windows")]
+            {
+                let mut paths = env::split_paths(&env::var_os("Path").unwrap())
+                    .collect::<std::collections::VecDeque<_>>();
+                paths.push_front(sysroot.join(driver_dir));
+                let paths = env::join_paths(paths).unwrap();
+                command.env("Path", paths);
             }
 
             #[cfg(unix)]

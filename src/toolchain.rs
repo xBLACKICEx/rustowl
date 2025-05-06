@@ -1,13 +1,7 @@
 use std::env;
 use std::path::PathBuf;
-use std::process::Stdio;
 use std::sync::LazyLock;
-use tokio::{
-    fs::{create_dir_all, remove_dir_all},
-    io::AsyncReadExt,
-    process::Command,
-    sync::OnceCell,
-};
+use tokio::fs::{create_dir_all, remove_dir_all};
 
 #[cfg(not(windows))]
 use flate2::read::GzDecoder;
@@ -33,7 +27,8 @@ static CONFIG_RUNTIME_DIRS: LazyLock<Vec<PathBuf>> = LazyLock::new(|| {
         .unwrap_or_default()
 });
 
-static RUSTUP_SYSROOT: OnceCell<Option<PathBuf>> = OnceCell::const_new();
+pub const RUSTC_DRIVER_NAME: &str = env!("RUSTC_DRIVER_NAME");
+pub const RUSTC_DRIVER_DIR: &str = env!("RUSTC_DRIVER_DIR");
 
 const ARCHIVE_NAME: &str = env!("RUSTOWL_ARCHIVE_NAME");
 
@@ -64,6 +59,10 @@ pub async fn get_runtime_dir() -> PathBuf {
     } else if !FALLBACK_RUNTIME.is_dir() && setup_toolchain().await.is_err() {
         std::process::exit(1);
     } else {
+        log::info!(
+            "select runtime from fallback: {}",
+            FALLBACK_RUNTIME.display(),
+        );
         FALLBACK_RUNTIME.clone()
     }
 }
@@ -73,43 +72,23 @@ pub async fn get_sysroot() -> PathBuf {
         if sysroot.is_dir() {
             log::info!(
                 "select sysroot from configured runtime dir: {}",
-                sysroot.display()
+                sysroot.display(),
             );
             return sysroot;
         }
     }
-    if let Some(sysroot) = RUSTUP_SYSROOT
-        .get_or_init(|| async {
-            if let Ok(mut child) = Command::new("rustup")
-                .args(["run", TOOLCHAIN, "rustc", "--print=sysroot"])
-                .stdout(Stdio::piped())
-                .stderr(Stdio::null())
-                .spawn()
-            {
-                let mut stdout = child.stdout.take().unwrap();
-                if let Ok(status) = child.wait().await {
-                    if status.success() {
-                        let mut output = String::new();
-                        if stdout.read_to_string(&mut output).await.is_ok() {
-                            return Some(PathBuf::from(output.trim()));
-                        }
-                    }
-                }
-            }
-            None
-        })
-        .await
-    {
-        log::info!("select sysroot from rustup: {}", sysroot.display());
-        return sysroot.to_owned();
-    }
     let sysroot = FALLBACK_RUNTIME.join("sysroot").join(TOOLCHAIN);
-    if !sysroot.is_dir() {
+    if !sysroot
+        .join(RUSTC_DRIVER_DIR)
+        .join(RUSTC_DRIVER_NAME)
+        .is_file()
+    {
         log::info!("sysroot not found; start setup toolchain");
         if setup_toolchain().await.is_err() {
             std::process::exit(1);
         }
     }
+    log::info!("select sysroot from fallback: {}", sysroot.display());
     sysroot
 }
 

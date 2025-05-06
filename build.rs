@@ -89,6 +89,7 @@ fn set_rustc_driver_path(sysroot: &str) {
                 let rel_path = file.strip_prefix(sysroot).unwrap();
                 let file_name = rel_path.file_name().unwrap().to_str().unwrap();
                 if file_name.contains("rustc_driver") {
+                    println!("cargo::rustc-env=RUSTC_DRIVER_NAME={file_name}");
                     println!(
                         "cargo::rustc-env=RUSTC_DRIVER_DIR={}",
                         rel_path.parent().unwrap().display()
