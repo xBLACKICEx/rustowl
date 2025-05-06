@@ -194,7 +194,11 @@ impl Backend {
                     format!("--sysroot={}", sysroot.display()),
                 );
 
-            let driver_dir = toolchain::RUSTC_DRIVER_DIR;
+            let driver_dir = toolchain::rustc_driver_path(&sysroot)
+                .unwrap()
+                .parent()
+                .unwrap()
+                .to_path_buf();
             #[cfg(target_os = "linux")]
             {
                 let mut paths =

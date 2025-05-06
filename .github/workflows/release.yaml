@@ -95,6 +95,7 @@ jobs:
           cp -r "$(rustc --print=sysroot)" runtime/sysroot/${{ env.active_toolchain }}
           find runtime/sysroot -type f | grep -v -E '\.(rlib|so|dylib|dll)$' | xargs rm -rf
           find runtime/sysroot -depth -type d -empty -exec rm -rf {} \;
+          find runtime/sysroot -type f | grep 'rustc_driver-' | tail +2 | xargs rm -rf
 
           if [[ "${{ env.is_linux }}" == "true"  ]]; then
             cp target/${{ env.host_tuple }}/release/rustowl${{ env.exec_ext }} ./runtime

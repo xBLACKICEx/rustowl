@@ -1,5 +1,6 @@
 use std::env;
-use std::path::PathBuf;
+use std::fs::read_dir;
+use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use tokio::fs::{create_dir_all, remove_dir_all};
 
@@ -27,10 +28,32 @@ static CONFIG_RUNTIME_DIRS: LazyLock<Vec<PathBuf>> = LazyLock::new(|| {
         .unwrap_or_default()
 });
 
-pub const RUSTC_DRIVER_NAME: &str = env!("RUSTC_DRIVER_NAME");
-pub const RUSTC_DRIVER_DIR: &str = env!("RUSTC_DRIVER_DIR");
-
 const ARCHIVE_NAME: &str = env!("RUSTOWL_ARCHIVE_NAME");
+
+pub const RUSTC_DRIVER_NAME: &str = env!("RUSTC_DRIVER_NAME");
+fn recursive_read_dir(path: impl AsRef<Path>) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if path.as_ref().is_dir() {
+        for entry in read_dir(&path).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                paths.extend_from_slice(&recursive_read_dir(&path));
+            } else {
+                paths.push(path);
+            }
+        }
+    }
+    paths
+}
+pub fn rustc_driver_path(sysroot: impl AsRef<Path>) -> Option<PathBuf> {
+    for file in recursive_read_dir(sysroot) {
+        if file.file_name().unwrap().to_string_lossy() == RUSTC_DRIVER_NAME {
+            log::info!("rustc_driver found: {}", file.display());
+            return Some(file);
+        }
+    }
+    None
+}
 
 pub fn get_configured_runtime_dir() -> Option<PathBuf> {
     let env_var = env::var("RUSTOWL_RUNTIME_DIRS").unwrap_or_default();
@@ -78,12 +101,8 @@ pub async fn get_sysroot() -> PathBuf {
         }
     }
     let sysroot = FALLBACK_RUNTIME.join("sysroot").join(TOOLCHAIN);
-    if !sysroot
-        .join(RUSTC_DRIVER_DIR)
-        .join(RUSTC_DRIVER_NAME)
-        .is_file()
-    {
-        log::info!("sysroot not found; start setup toolchain");
+    if rustc_driver_path(&sysroot).is_none() {
+        log::info!("rustc_driver not found; start setup toolchain");
         if setup_toolchain().await.is_err() {
             std::process::exit(1);
         }
