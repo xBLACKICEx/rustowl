@@ -6,7 +6,11 @@ on:
       - v*
 
 jobs:
+  check:
+    uses: ./.github/workflows/check.yaml
   rustowl:
+    needs:
+      - check
     strategy:
       matrix:
         os:
@@ -102,11 +106,11 @@ jobs:
           find runtime/sysroot -type f | grep 'rustc_driver-' | tail +2 | xargs rm -rf
 
           if [[ "${{ env.is_linux }}" == "true"  ]]; then
-            cp target/${{ env.host_tuple }}/release/rustowl${{ env.exec_ext }} ./runtime
-            cp target/${{ env.host_tuple }}/release/rustowlc${{ env.exec_ext }} ./runtime
+            cp target/${{ env.host_tuple }}/${{ env.build_profile }}/rustowl${{ env.exec_ext }} ./runtime
+            cp target/${{ env.host_tuple }}/${{ env.build_profile }}/rustowlc${{ env.exec_ext }} ./runtime
           else
-            cp target/release/rustowl${{ env.exec_ext }} ./runtime
-            cp target/release/rustowlc${{ env.exec_ext }} ./runtime
+            cp target/${{ env.build_profile }}/rustowl${{ env.exec_ext }} ./runtime
+            cp target/${{ env.build_profile }}/rustowlc${{ env.exec_ext }} ./runtime
           fi
 
           cp README.md ./runtime
@@ -136,6 +140,8 @@ jobs:
             ${{ env.archive_name }}
 
   vscode:
+    needs:
+      - check
     runs-on: ubuntu-latest
     permissions:
       contents: write
