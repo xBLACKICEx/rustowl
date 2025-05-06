@@ -24,17 +24,21 @@ jobs:
       run:
         shell: bash
     env:
+      RUSTUP_TOOLCHAIN: 1.86.0
       RUSTC_BOOTSTRAP: 1
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Set Rust version that RustOwl uses here
-      # Using stable build cause failure to link on Windows ARM
-      - if: ${{ matrix.os != 'windows-11-arm' }}
-        name: Set Rust toolchain
-        run: echo "RUSTUP_TOOLCHAIN=1.86.0" >> $GITHUB_ENV
+      # Using fat LTO causes failure to link on Windows ARM
+      - name: Set build profile
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-11-arm" ]]; then
+            echo "build_profile=arm-windows-release" >> $GITHUB_ENV
+          else
+            echo "build_profile=release" >> $GITHUB_ENV
+          fi
 
       # We don't have rustup on the Windows 11 Arm64 runner yet, so manually installing it.
       - if: ${{ matrix.os == 'windows-11-arm' }}
@@ -74,9 +78,9 @@ jobs:
         run: |
           if [[ "${{ env.is_linux }}" == "true" ]]; then
             cargo install --locked cargo-zigbuild
-            cargo zigbuild --target ${{ env.host_tuple }}.2.17 --release
+            cargo zigbuild --target ${{ env.host_tuple }}.2.17 --profile=${{ env.build_profile }}
           else
-            cargo build --release
+            cargo build --profile=${{ env.build_profile }}
           fi
 
       - name: Set archive name
