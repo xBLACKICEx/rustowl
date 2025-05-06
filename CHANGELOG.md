@@ -1,16 +1,37 @@
 <a name="unreleased"></a>
 ## [Unreleased]
 
-### 🎨 Chores
-- update changelog ([#116](https://github.com/cordx56/rustowl/issues/116))
-
 ### 🐞 Bug Fixes
-- change compress script to use sysroot dir ([#125](https://github.com/cordx56/rustowl/issues/125))
+- email
+- **aur:** add cd lines as it errors
+- **windows:** unzip
+
+
+<a name="v0.3.1-alpha.3"></a>
+## [v0.3.1-alpha.3] - 2025-05-06
+### 🐞 Bug Fixes
+- rustowlc ext for Windows
+
+
+<a name="v0.3.1-alpha.2"></a>
+## [v0.3.1-alpha.2] - 2025-05-06
+### 🐞 Bug Fixes
+- dont use tar, use Compress-Archive instead
+
+### 🚀 Features
+- add a pr template
+- add a code of conduct and security file
+
+### Pull Requests
+- Merge pull request [#129](https://github.com/cordx56/rustowl/issues/129) from MuntasirSZN/feat/community-standards
+- Merge pull request [#128](https://github.com/cordx56/rustowl/issues/128) from MuntasirSZN/main
 
 
 <a name="v0.3.1-alpha.1"></a>
 ## [v0.3.1-alpha.1] - 2025-05-05
 ### 🎨 Chores
+- update changelog
+- update changelog ([#116](https://github.com/cordx56/rustowl/issues/116))
 - update changelog ([#112](https://github.com/cordx56/rustowl/issues/112))
 - update changelog ([#104](https://github.com/cordx56/rustowl/issues/104))
 - add comments to cargo.toml on next release changes
@@ -20,6 +41,7 @@
 - update changelog
 
 ### 🐞 Bug Fixes
+- change compress script to use sysroot dir ([#125](https://github.com/cordx56/rustowl/issues/125))
 - add release on top of cp
 - use target name in cp command
 - pr permission for changelog
@@ -36,6 +58,9 @@
 - **archive:** implement zipping for windows
 
 ### Pull Requests
+- Merge pull request [#126](https://github.com/cordx56/rustowl/issues/126) from cordx56/create-pull-request/autogenerate-changelog
+- Merge pull request [#124](https://github.com/cordx56/rustowl/issues/124) from MuntasirSZN/main
+- Merge pull request [#123](https://github.com/cordx56/rustowl/issues/123) from MuntasirSZN/main
 - Merge pull request [#115](https://github.com/cordx56/rustowl/issues/115) from MuntasirSZN/main
 - Merge pull request [#114](https://github.com/cordx56/rustowl/issues/114) from MuntasirSZN/main
 - Merge pull request [#113](https://github.com/cordx56/rustowl/issues/113) from MuntasirSZN/main
@@ -219,7 +244,9 @@
 <a name="vpre"></a>
 ## vpre - 2024-11-11
 
-[Unreleased]: https://github.com/cordx56/rustowl/compare/v0.3.1-alpha.1...HEAD
+[Unreleased]: https://github.com/cordx56/rustowl/compare/v0.3.1-alpha.3...HEAD
+[v0.3.1-alpha.3]: https://github.com/cordx56/rustowl/compare/v0.3.1-alpha.2...v0.3.1-alpha.3
+[v0.3.1-alpha.2]: https://github.com/cordx56/rustowl/compare/v0.3.1-alpha.1...v0.3.1-alpha.2
 [v0.3.1-alpha.1]: https://github.com/cordx56/rustowl/compare/v0.3.0...v0.3.1-alpha.1
 [v0.3.0]: https://github.com/cordx56/rustowl/compare/v0.3.0-alpha.2...v0.3.0
 [v0.3.0-alpha.2]: https://github.com/cordx56/rustowl/compare/v0.3.0-alpha.1...v0.3.0-alpha.2
