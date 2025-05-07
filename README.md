@@ -52,7 +52,7 @@ We tested this guide on macOS Sequoia 15.3.2 on arm64 architecture with VS Code 
 ### VS Code
 
 You can install VS Code extension from [this link](https://marketplace.visualstudio.com/items?itemName=cordx56.rustowl-vscode).
-RustOwl will install automatically when the extension is activated.
+RustOwl will be installed automatically when the extension is activated.
 
 After installation, the extension will automatically run RustOwl when you save any Rust program in cargo workspace.
 The initial analysis may take some time, but from the second run onward, compile caching is used to reduce the analysis time.
@@ -60,6 +60,8 @@ The initial analysis may take some time, but from the second run onward, compile
 ## Other editor support
 
 We support Neovim and Emacs.
+You have to [install RustOwl](docs/installation.md) before using RustOwl with other editors.
+
 You can also create your own LSP client.
 If you would like to implement a client, please refer to the [The RustOwl LSP specification](docs/lsp-spec.md).
 
@@ -71,7 +73,7 @@ Minimal setup with [lazy.nvim](https://github.com/folke/lazy.nvim):
 {
   'cordx56/rustowl',
   version = '*', -- Latest stable version
-  build = 'cargo install --path . --locked',
+  build = 'cargo binstall rustowl',
   lazy = false, -- This plugin is already lazy
   opts = {},
 }
@@ -84,7 +86,7 @@ Minimal setup with [lazy.nvim](https://github.com/folke/lazy.nvim):
 {
   'cordx56/rustowl',
   version = '*', -- Latest stable version
-  build = 'cargo install --path . --locked',
+  build = 'cargo binstall rustowl',
   lazy = false, -- This plugin is already lazy
   opts = {
     client = {
