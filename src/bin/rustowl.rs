@@ -8,6 +8,7 @@ use rustowl::shells::Shell;
 use rustowl::*;
 use std::env;
 use std::io;
+use std::path::PathBuf;
 use tower_lsp::{LspService, Server};
 
 fn set_log_level(default: log::LevelFilter) {
@@ -30,8 +31,12 @@ async fn main() {
     let matches = cli().get_matches();
     if let Some(arg) = matches.subcommand() {
         match arg {
-            ("check", _) => {
-                if Backend::check(env::current_dir().unwrap()).await {
+            ("check", matches) => {
+                let path = matches
+                    .get_one::<String>("path")
+                    .map(PathBuf::from)
+                    .unwrap_or(env::current_dir().unwrap());
+                if Backend::check(&path).await {
                     log::info!("Successfully analyzed");
                     std::process::exit(0);
                 } else {
@@ -46,7 +51,13 @@ async fn main() {
                 }
             }
             ("toolchain", matches) => match matches.subcommand() {
-                Some(("install", _)) => if rustowl::toolchain::setup_toolchain().await.is_err() {},
+                Some(("install", _)) => {
+                    if toolchain::check_fallback_dir().is_none()
+                        && rustowl::toolchain::setup_toolchain().await.is_err()
+                    {
+                        std::process::exit(1);
+                    }
+                }
                 Some(("uninstall", _)) => {
                     rustowl::toolchain::uninstall_toolchain().await;
                 }
@@ -61,6 +72,12 @@ async fn main() {
             }
             _ => {}
         }
+    } else if matches.get_flag("version") {
+        if matches.get_count("quiet") == 0 {
+            print!("RustOwl ");
+        }
+        println!("v{}", clap::crate_version!());
+        return;
     } else {
         set_log_level("warn".parse().unwrap());
         eprintln!("RustOwl v{}", clap::crate_version!());

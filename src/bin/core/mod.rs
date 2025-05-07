@@ -3,7 +3,7 @@
 mod analyze;
 
 use analyze::MirAnalyzer;
-use rustc_hir::def_id::LocalDefId;
+use rustc_hir::def_id::{LOCAL_CRATE, LocalDefId};
 use rustc_interface::interface;
 use rustc_middle::{
     mir::BorrowCheckResult, query::queries::mir_borrowck::ProvidedValue, ty::TyCtxt,
@@ -66,6 +66,7 @@ fn mir_borrowck(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ProvidedValue<'_> {
         log::info!("borrow checked: {} / {}", current, mir_len);
         (current, mir_len)
     };
+    let crate_name = tcx.crate_name(LOCAL_CRATE).to_string();
     if current == mir_len {
         RUNTIME.lock().unwrap().block_on(async move {
             while let Some(task) = { TASKS.lock().unwrap().join_next().await } {
@@ -77,10 +78,7 @@ fn mir_borrowck(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ProvidedValue<'_> {
                         items: vec![analyzed],
                     },
                 )]));
-                let ws = Workspace(HashMap::from([(
-                    std::env::var("CARGO_CRATE_NAME").unwrap(),
-                    krate,
-                )]));
+                let ws = Workspace(HashMap::from([(crate_name.clone(), krate)]));
                 println!("{}", serde_json::to_string(&ws).unwrap());
             }
         })

@@ -1,4 +1,4 @@
-use crate::{lsp::*, models::*, utils};
+use crate::{lsp::*, models::*, toolchain, utils};
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -12,8 +12,6 @@ use tokio::{
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types;
 use tower_lsp::{Client, LanguageServer, LspService};
-
-const RUSTC_DRIVER_DIR: Option<&str> = option_env!("RUSTC_DRIVER_DIR");
 
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(tag = "reason", rename_all = "kebab-case")]
@@ -34,7 +32,7 @@ pub struct Backend {
     workspaces: Arc<RwLock<Vec<PathBuf>>>,
     roots: Arc<RwLock<HashMap<PathBuf, PathBuf>>>,
     status: Arc<RwLock<progress::AnalysisStatus>>,
-    analyzed: Arc<RwLock<Option<Workspace>>>,
+    analyzed: Arc<RwLock<Option<Crate>>>,
     processes: Arc<RwLock<JoinSet<()>>>,
     subprocesses: Arc<RwLock<Vec<Subprocess>>>,
     work_done_progress: Arc<RwLock<bool>>,
@@ -53,21 +51,21 @@ impl Backend {
             work_done_progress: Arc::new(RwLock::new(false)),
         }
     }
-    /// returns `true` if the root was not registered
-    async fn set_roots(&self, path: PathBuf) -> bool {
-        let dir = if path.is_dir() {
-            path
+    /// returns `true` if the root is registered
+    async fn set_roots(&self, path: impl AsRef<Path>) -> bool {
+        let dir = if path.as_ref().is_dir() {
+            path.as_ref().to_path_buf()
         } else {
-            path.parent().unwrap().to_path_buf()
+            path.as_ref().parent().unwrap().to_path_buf()
         };
         for w in &*self.workspaces.read().await {
             if dir.starts_with(w) {
-                let mut write = self.roots.write().await;
                 if let Ok(metadata) = cargo_metadata::MetadataCommand::new()
                     .current_dir(&dir)
                     .exec()
                 {
                     let path = metadata.workspace_root;
+                    let mut write = self.roots.write().await;
                     if !write.contains_key(path.as_std_path()) {
                         log::info!("add {} to watch list", path);
 
@@ -79,8 +77,8 @@ impl Backend {
                         tokio::fs::create_dir_all(&target).await.unwrap();
 
                         write.insert(path.as_std_path().to_path_buf(), target);
-                        return true;
                     }
+                    return true;
                 }
             }
         }
@@ -152,12 +150,12 @@ impl Backend {
                 )
             };
 
-            let sysroot = crate::toolchain::get_sysroot().await;
+            let sysroot = toolchain::get_sysroot().await;
             let mut command = if let Ok(cargo_path) = &env::var("CARGO") {
                 log::info!("using toolchain cargo: {}", cargo_path);
                 process::Command::new(cargo_path)
             } else {
-                log::info!("using default cargo",);
+                log::info!("using default cargo");
                 process::Command::new("cargo")
             };
             command
@@ -175,59 +173,12 @@ impl Backend {
                 .kill_on_drop(true);
 
             // set rustowlc & library path
-            let rustowlc_path = {
-                let under_sysroot = sysroot.join("rustowlc");
-                if under_sysroot.is_file() {
-                    under_sysroot.to_string_lossy().to_string()
-                } else {
-                    "rustowlc".to_owned()
-                }
-            };
+            let rustowlc_path = toolchain::get_rustowlc_path().await;
             command
                 .env("RUSTC", &rustowlc_path)
-                .env("RUSTC_WORKSPACE_WRAPPER", &rustowlc_path)
-                .env("RUSTC_BOOTSTRAP", "1") // Support nightly projects
-                .env(
-                    "CARGO_ENCODED_RUSTFLAGS",
-                    format!("--sysroot={}", sysroot.display()),
-                );
-            if let Some(driver_dir) = RUSTC_DRIVER_DIR {
-                #[cfg(target_os = "linux")]
-                {
-                    let mut paths =
-                        env::split_paths(&env::var("LD_LIBRARY_PATH").unwrap_or("".to_owned()))
-                            .collect::<std::collections::VecDeque<_>>();
-                    paths.push_front(sysroot.join(driver_dir));
-                    let paths = env::join_paths(paths).unwrap();
-                    command.env("LD_LIBRARY_PATH", paths);
-                }
-                #[cfg(target_os = "macos")]
-                {
-                    let mut paths = env::split_paths(
-                        &env::var("DYLD_FALLBACK_LIBRARY_PATH").unwrap_or("".to_owned()),
-                    )
-                    .collect::<std::collections::VecDeque<_>>();
-                    paths.push_front(sysroot.join(driver_dir));
-                    let paths = env::join_paths(paths).unwrap();
-                    command.env("DYLD_FALLBACK_LIBRARY_PATH", paths);
-                }
-                #[cfg(target_os = "windows")]
-                {
-                    let mut paths = env::split_paths(&env::var_os("Path").unwrap())
-                        .collect::<std::collections::VecDeque<_>>();
-                    paths.push_front(sysroot.join(driver_dir));
-                    let paths = env::join_paths(paths).unwrap();
-                    command.env("Path", paths);
-                }
-            }
+                .env("RUSTC_WORKSPACE_WRAPPER", &rustowlc_path);
+            toolchain::set_rustc_env(&mut command, &sysroot);
 
-            #[cfg(unix)]
-            unsafe {
-                command.pre_exec(|| {
-                    libc::setsid();
-                    Ok(())
-                });
-            }
             if log::max_level().to_level().is_none() {
                 command.stderr(std::process::Stdio::null());
             }
@@ -255,10 +206,12 @@ impl Backend {
                     }
                     if let Ok(ws) = serde_json::from_str::<Workspace>(&line) {
                         let write = &mut *analyzed.write().await;
-                        if let Some(write) = write {
-                            write.merge(ws);
-                        } else {
-                            *write = Some(ws);
+                        for krate in ws.0.into_values() {
+                            if let Some(write) = write {
+                                write.merge(krate);
+                            } else {
+                                *write = Some(krate);
+                            }
                         }
                     }
                 }
@@ -306,6 +259,75 @@ impl Backend {
         }
     }
 
+    async fn analyze_single_file(&self, path: impl AsRef<Path>) {
+        let sysroot = toolchain::get_sysroot().await;
+        let rustowlc_path = toolchain::get_rustowlc_path().await;
+
+        let mut command = process::Command::new(&rustowlc_path);
+        command
+            .arg(&rustowlc_path) // rustowlc triggers when first arg is the path of itself
+            .arg(format!("--sysroot={}", sysroot.display()))
+            .arg("--crate-type=lib");
+        #[cfg(unix)]
+        command.arg("-o/dev/null");
+        #[cfg(windows)]
+        command.arg("-oNUL");
+        command
+            .arg(path.as_ref())
+            .stdout(std::process::Stdio::piped())
+            .kill_on_drop(true);
+
+        toolchain::set_rustc_env(&mut command, &sysroot);
+
+        if log::max_level().to_level().is_none() {
+            command.stderr(std::process::Stdio::null());
+        }
+
+        log::info!("start analyzing {}", path.as_ref().display());
+        let mut child = command.spawn().unwrap();
+        let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines();
+        let analyzed = self.analyzed.clone();
+        let mut join = self.processes.write().await;
+
+        join.spawn(async move {
+            while let Ok(Some(line)) = stdout.next_line().await {
+                if let Ok(ws) = serde_json::from_str::<Workspace>(&line) {
+                    let write = &mut *analyzed.write().await;
+                    for krate in ws.0.into_values() {
+                        if let Some(write) = write {
+                            write.merge(krate);
+                        } else {
+                            *write = Some(krate);
+                        }
+                    }
+                }
+            }
+        });
+
+        let pid = child.id();
+        let subprocesses = self.subprocesses.clone();
+        let analyzed = self.analyzed.clone();
+        let status = self.status.clone();
+        join.spawn(async move {
+            let _ = child.wait().await;
+            log::info!("analysis finished");
+            let analyzed = &*analyzed.read().await;
+            let mut write = subprocesses.write().await;
+            *write = write.iter().filter(|v| **v != pid).copied().collect();
+            if write.is_empty() {
+                let mut status = status.write().await;
+                if *status != progress::AnalysisStatus::Error {
+                    if analyzed.as_ref().map(|v| v.0.len()).unwrap_or(0) == 0 {
+                        *status = progress::AnalysisStatus::Error;
+                    } else {
+                        *status = progress::AnalysisStatus::Finished;
+                    }
+                }
+            }
+        });
+        self.subprocesses.write().await.push(pid);
+    }
+
     async fn decos(
         &self,
         filepath: &Path,
@@ -314,26 +336,22 @@ impl Backend {
         let mut selected = decoration::SelectLocal::new(position);
         let mut error = progress::AnalysisStatus::Error;
         if let Some(analyzed) = &*self.analyzed.read().await {
-            for (_crate_name, krate) in analyzed.0.iter() {
-                for (filename, file) in krate.0.iter() {
-                    if filepath == PathBuf::from(filename) {
-                        if !file.items.is_empty() {
-                            error = progress::AnalysisStatus::Finished;
-                        }
-                        for item in &file.items {
-                            utils::mir_visit(item, &mut selected);
-                        }
+            for (filename, file) in analyzed.0.iter() {
+                if filepath == PathBuf::from(filename) {
+                    if !file.items.is_empty() {
+                        error = progress::AnalysisStatus::Finished;
+                    }
+                    for item in &file.items {
+                        utils::mir_visit(item, &mut selected);
                     }
                 }
             }
 
             let mut calc = decoration::CalcDecos::new(selected.selected().iter().copied());
-            for (_crate_name, krate) in analyzed.0.iter() {
-                for (filename, file) in krate.0.iter() {
-                    if filepath == PathBuf::from(filename) {
-                        for item in &file.items {
-                            utils::mir_visit(item, &mut calc);
-                        }
+            for (filename, file) in analyzed.0.iter() {
+                if filepath == PathBuf::from(filename) {
+                    for item in &file.items {
+                        utils::mir_visit(item, &mut calc);
                     }
                 }
             }
@@ -391,12 +409,18 @@ impl Backend {
         })
     }
 
-    pub async fn check(path: PathBuf) -> bool {
+    pub async fn check(path: impl AsRef<Path>) -> bool {
+        let path = path.as_ref();
         let (service, _) = LspService::build(Backend::new).finish();
         let backend = service.inner();
-        backend.set_workspace(path.clone()).await;
-        backend.set_roots(path).await;
-        backend.analyze().await;
+
+        if path.is_dir() {
+            backend.set_workspace(path.to_path_buf()).await;
+            backend.set_roots(path).await;
+            backend.analyze().await;
+        } else {
+            backend.analyze_single_file(&path).await;
+        }
         while backend.processes.write().await.join_next().await.is_some() {}
         backend
             .analyzed
@@ -489,17 +513,25 @@ impl LanguageServer for Backend {
         self.analyze().await;
     }
     async fn did_open(&self, params: lsp_types::DidOpenTextDocumentParams) {
-        if params.text_document.language_id == "rust"
-            && self
-                .set_roots(params.text_document.uri.to_file_path().unwrap())
-                .await
-        {
-            self.analyze().await;
+        if let Ok(path) = params.text_document.uri.to_file_path() {
+            if params.text_document.language_id == "rust" {
+                if self.set_roots(&path).await {
+                    self.analyze().await;
+                } else {
+                    self.analyze_single_file(&path).await;
+                }
+            }
         }
     }
 
-    async fn did_save(&self, _params: lsp_types::DidSaveTextDocumentParams) {
-        self.analyze().await;
+    async fn did_save(&self, params: lsp_types::DidSaveTextDocumentParams) {
+        if let Ok(path) = params.text_document.uri.to_file_path() {
+            if self.set_roots(&path).await {
+                self.analyze().await;
+            } else {
+                self.analyze_single_file(&path).await;
+            }
+        }
     }
     async fn did_change(&self, _params: lsp_types::DidChangeTextDocumentParams) {
         *self.analyzed.write().await = None;

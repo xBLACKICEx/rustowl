@@ -1,6 +1,6 @@
 [package]
 name = "rustowl"
-version = "0.3.0"
+version = "0.3.2-alpha.1"
 edition = "2024"
 authors = ["cordx56 <cordx56@cordx.cx>"]
 description = "Visualize Ownership and Lifetimes in Rust"
@@ -16,7 +16,7 @@ serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.135"
 log = "0.4.22"
 simple_logger = { version = "5.0.0", features = ["stderr"] }
-tokio = { version = "1.43.0", features = ["rt", "rt-multi-thread", "macros", "sync", "time", "io-std", "io-util", "process", "fs"] }
+tokio = { version = "1.45.0", features = ["rt", "rt-multi-thread", "macros", "sync", "time", "io-std", "io-util", "process", "fs"] }
 tower-lsp = "0.20.0"
 process_alive = "0.1.1"
 cargo_metadata = "0.19.2"
@@ -24,13 +24,14 @@ uuid = { version = "1", features = ["v4"] }
 clap = { version = "4.5.35", features = ["cargo"] }
 tar = "0.4.44"
 flate2 = "1.1.1"
-reqwest = { version = "0.12.15", features = ["rustls-tls"] }
+reqwest = { version = "0.12.15", default-features = false, features = ["http2", "rustls-tls"] }
 clap_complete_nushell = "4.5.5"
-clap_complete = "4.5.47"
+clap_complete = "4.5.50"
+zip = "2.6.1"
 
 [build-dependencies]
 clap_complete_nushell = "4.5.5"
-clap_complete = "4.5.47"
+clap_complete = "4.5.50"
 clap_mangen = "0.2.26"
 clap = { version = "4.5.35", features = ["cargo"]  }
 
@@ -53,10 +54,19 @@ opt-level = 3
 lto = "fat"
 codegen-units = 1
 
+[profile.arm-windows-release]
+inherits = "release"
+lto = "off"
+
 [package.metadata.rust-analyzer]
 rustc_private = true
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ binary-ext }"
-pkg-fmt = "bin"
+pkg-url = "{ repo }/releases/download/v{ version }/rustowl-{ target }{ archive-suffix }"
 disabled-strategies = ["quick-install", "compile"]
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+
+[package.metadata.binstall.overrides.aarch64-pc-windows-msvc]
+pkg-fmt = "zip"
