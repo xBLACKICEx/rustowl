@@ -79,15 +79,21 @@ pub fn get_configured_runtime_dir() -> Option<PathBuf> {
     }
     None
 }
+pub fn check_fallback_dir() -> Option<PathBuf> {
+    for fallback in &*FALLBACK_RUNTIME_DIRS {
+        if is_valid_runtime_dir(fallback) {
+            log::info!("select runtime from fallback: {}", fallback.display());
+            return Some(fallback.clone());
+        }
+    }
+    None
+}
 pub async fn get_runtime_dir() -> PathBuf {
     if let Some(runtime) = get_configured_runtime_dir() {
         return runtime;
     }
-    for fallback in &*FALLBACK_RUNTIME_DIRS {
-        if is_valid_runtime_dir(fallback) {
-            log::info!("select runtime from fallback: {}", fallback.display());
-            return fallback.clone();
-        }
+    if let Some(fallback) = check_fallback_dir() {
+        return fallback;
     }
 
     log::info!("rustc_driver not found; start setup toolchain");
@@ -110,7 +116,7 @@ pub async fn setup_toolchain() -> Result<PathBuf, ()> {
         clap::crate_version!(),
     );
 
-    let resp = match reqwest::get(&tarball_url)
+    let mut resp = match reqwest::get(&tarball_url)
         .await
         .and_then(|v| v.error_for_status())
     {
@@ -122,14 +128,24 @@ pub async fn setup_toolchain() -> Result<PathBuf, ()> {
         }
     };
 
-    let bytes = match resp.bytes().await {
+    let content_length = resp.content_length().unwrap_or(200_000_000) as usize;
+    let mut data = Vec::with_capacity(content_length);
+    let mut received = 0;
+    while let Some(chunk) = match resp.chunk().await {
         Ok(v) => v,
         Err(e) => {
             log::error!("failed to download runtime archive");
             log::error!("{e:?}");
             return Err(());
         }
-    };
+    } {
+        data.extend_from_slice(&chunk);
+        let current = data.len() * 100 / content_length;
+        if received != current {
+            received = current;
+            log::info!("{received:>3}% received");
+        }
+    }
     log::info!("download finished");
 
     let fallback = FALLBACK_RUNTIME_DIRS[0].clone();
@@ -140,7 +156,7 @@ pub async fn setup_toolchain() -> Result<PathBuf, ()> {
 
     #[cfg(windows)]
     {
-        let cursor = std::io::Cursor::new(&*bytes);
+        let cursor = std::io::Cursor::new(&*data);
         let mut archive = match ZipArchive::new(cursor) {
             Ok(archive) => archive,
             Err(e) => {
@@ -190,7 +206,7 @@ pub async fn setup_toolchain() -> Result<PathBuf, ()> {
 
     #[cfg(not(windows))]
     {
-        let decoder = GzDecoder::new(&*bytes);
+        let decoder = GzDecoder::new(&*data);
         let mut archive = Archive::new(decoder);
         if let Ok(entries) = archive.entries() {
             for mut entry in entries.flatten() {
@@ -222,5 +238,76 @@ pub async fn uninstall_toolchain() {
             log::info!("remove sysroot: {}", sysroot.display());
             remove_dir_all(&sysroot).await.unwrap();
         }
+    }
+}
+
+pub async fn get_rustowlc_path() -> String {
+    let mut current_rustowlc = env::current_exe().unwrap();
+    #[cfg(not(windows))]
+    current_rustowlc.set_file_name("rustowlc");
+    #[cfg(windows)]
+    current_rustowlc.set_file_name("rustowlc.exe");
+    if current_rustowlc.is_file() {
+        return current_rustowlc.to_string_lossy().to_string();
+    }
+
+    let runtime_dir = get_runtime_dir().await;
+    #[cfg(not(windows))]
+    let rustowlc = runtime_dir.join("rustowlc");
+    #[cfg(windows)]
+    let rustowlc = runtime_dir.join("rustowlc.exe");
+    if rustowlc.is_file() {
+        rustowlc.to_string_lossy().to_string()
+    } else {
+        "rustowlc".to_owned()
+    }
+}
+
+pub fn set_rustc_env(command: &mut tokio::process::Command, sysroot: &Path) {
+    command
+        .env("RUSTC_BOOTSTRAP", "1") // Support nightly projects
+        .env(
+            "CARGO_ENCODED_RUSTFLAGS",
+            format!("--sysroot={}", sysroot.display()),
+        );
+
+    let driver_dir = rustc_driver_path(sysroot)
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
+
+    #[cfg(target_os = "linux")]
+    {
+        let mut paths = env::split_paths(&env::var("LD_LIBRARY_PATH").unwrap_or("".to_owned()))
+            .collect::<std::collections::VecDeque<_>>();
+        paths.push_front(sysroot.join(driver_dir));
+        let paths = env::join_paths(paths).unwrap();
+        command.env("LD_LIBRARY_PATH", paths);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let mut paths =
+            env::split_paths(&env::var("DYLD_FALLBACK_LIBRARY_PATH").unwrap_or("".to_owned()))
+                .collect::<std::collections::VecDeque<_>>();
+        paths.push_front(sysroot.join(driver_dir));
+        let paths = env::join_paths(paths).unwrap();
+        command.env("DYLD_FALLBACK_LIBRARY_PATH", paths);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let mut paths = env::split_paths(&env::var_os("Path").unwrap())
+            .collect::<std::collections::VecDeque<_>>();
+        paths.push_front(sysroot.join(driver_dir));
+        let paths = env::join_paths(paths).unwrap();
+        command.env("Path", paths);
+    }
+
+    #[cfg(unix)]
+    unsafe {
+        command.pre_exec(|| {
+            libc::setsid();
+            Ok(())
+        });
     }
 }

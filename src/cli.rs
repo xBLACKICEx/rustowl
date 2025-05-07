@@ -22,7 +22,10 @@ pub fn cli() -> clap::Command {
                 .action(clap::ArgAction::SetTrue),
         )
         .subcommand_required(false)
-        .subcommand(clap::Command::new("check"))
+        .subcommand(
+            clap::Command::new("check")
+                .arg(clap::Arg::new("path").required(false).value_name("path")),
+        )
         .subcommand(clap::Command::new("clean"))
         .subcommand(
             clap::Command::new("toolchain")
