@@ -2,7 +2,7 @@
   "name": "rustowl-vscode",
   "displayName": "RustOwl VSCode",
   "description": "Visualize ownership and lifetimes in Rust",
-  "version": "0.3.2-alpha.1",
+  "version": "0.3.1",
   "author": "cordx56 <cordx56@cordx.cx>",
   "publisher": "cordx56",
   "engines": {
@@ -93,7 +93,7 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.9",
-    "@types/node": "^22.15.14",
+    "@types/node": "^22.15.16",
     "@types/vscode": "^1.95.0",
     "@typescript-eslint/eslint-plugin": "^8.32.0",
     "@typescript-eslint/parser": "^8.32.0",
