@@ -21,7 +21,7 @@
 
         envAttrs = {
           RUSTOWL_TOOLCHAIN = rustToolchainToml.toolchain.channel;
-          RUSTOWL_TOOLCHAIN_DIR = "${rustToolchain}";
+          RUSTOWL_SYSROOT = "${rustToolchain}";
         };
 
         rustowl = pkgs.rustPlatform.buildRustPackage ({
@@ -61,7 +61,7 @@
             rustfmt
             pkg-config 
             openssl
-            # rustowl
+            rustowl
           ];
 
           shellHook = ''

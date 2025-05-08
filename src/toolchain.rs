@@ -53,7 +53,11 @@ pub fn rustc_driver_path(sysroot: impl AsRef<Path>) -> Option<PathBuf> {
 }
 
 fn sysroot_from_runtime(runtime: impl AsRef<Path>) -> PathBuf {
-    runtime.as_ref().join("sysroot").join(TOOLCHAIN)
+    if let Ok(custom_sysroot) = env::var("RUSTOWL_SYSROOT") {
+        PathBuf::from(custom_sysroot)
+    } else {
+        runtime.as_ref().join("sysroot").join(TOOLCHAIN)
+    }
 }
 fn is_valid_runtime_dir(runtime: impl AsRef<Path>) -> bool {
     rustc_driver_path(sysroot_from_runtime(runtime)).is_some()
@@ -106,7 +110,11 @@ pub async fn get_runtime_dir() -> PathBuf {
     }
 }
 pub async fn get_sysroot() -> PathBuf {
-    sysroot_from_runtime(get_runtime_dir().await)
+    if let Ok(custom_sysroot) = env::var("RUSTOWL_SYSROOT") {
+        PathBuf::from(custom_sysroot)
+    } else {
+        sysroot_from_runtime(get_runtime_dir().await)
+    }
 }
 
 pub async fn setup_toolchain() -> Result<PathBuf, ()> {

@@ -8,7 +8,9 @@ include!("src/cli.rs");
 include!("src/shells.rs");
 
 fn main() -> Result<(), Error> {
-    println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={}", get_toolchain());
+    if env::var("RUSTOWL_TOOLCHAIN").is_err() {
+        println!("cargo::rustc-env=RUSTOWL_TOOLCHAIN={}", get_toolchain());
+    }
 
     if let Ok(sysroot) = env::var("RUSTOWL_RUNTIME_DIRS") {
         println!("cargo::rustc-env=RUSTOWL_RUNTIME_DIRS={}", sysroot);
@@ -22,7 +24,7 @@ fn main() -> Result<(), Error> {
 
     println!("cargo::rustc-env=RUSTOWL_ARCHIVE_NAME={tarball_name}");
 
-    let sysroot = get_sysroot().unwrap();
+    let sysroot = env::var("RUSTOWL_SYSROOT").unwrap_or_else(|_| get_sysroot().unwrap());
     set_rustc_driver_path(&sysroot);
 
     let out_dir = Path::new(&env::var("OUT_DIR").expect("OUT_DIR unset. Expected path."))
